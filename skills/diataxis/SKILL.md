@@ -136,26 +136,6 @@ docs/
 - `references/templates.md` — Templates for each documentation type
 - `references/anti-patterns.md` — Common mistakes and how to avoid them
 
-## Auto-Loading
-
-This skill should be loaded proactively when the user:
-
-- Asks to write, create, or add documentation
-- Mentions tutorials, how-to guides, reference docs, or explanations
-- Wants to organize or restructure existing docs
-- Creates a new project and needs documentation structure
-- Asks about documentation best practices
-- Writes or edits files in a `docs/` directory
-
-**Trigger phrases**:
-- "write documentation", "create docs", "document this"
-- "add a tutorial", "write a how-to guide"
-- "reference documentation", "API docs"
-- "organize the docs", "restructure documentation"
-- "README", "docs folder", "documentation structure"
-
-Load the skill early to ensure documentation follows Diataxis principles from the start.
-
 ## See Also
 
 - [Diataxis Documentation](https://diataxis.fr/)

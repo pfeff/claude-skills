@@ -26,7 +26,6 @@ claude --plugin-dir /path/to/claude-skills
 This plugin was influenced by and borrows ideas from:
 
 - **[compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin)** (EveryInc, MIT) — The Brainstorm → Plan → Work → Review → Compound workflow. Our `compound` skill draws from their knowledge capture approach.
-- **[gstack](https://github.com/garrytan/gstack)** (Garry Tan, MIT) — Virtual engineering team organized as 28 skills. The `/retro` and `/ship` patterns informed our lessons-learned and finish workflows.
 
 ## License
 
