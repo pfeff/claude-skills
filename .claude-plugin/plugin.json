@@ -1,13 +1,14 @@
 {
   "name": "claude-skills",
   "version": "1.0.0",
-  "description": "Engineering skills for Claude Code: TDD without mocks, Diataxis documentation, CI feedback loops, and compound knowledge capture",
+  "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, and compound knowledge capture",
   "author": {
     "name": "pfeff"
   },
   "repository": "https://github.com/pfeff/claude-skills",
   "license": "MIT",
   "keywords": [
+    "git",
     "tdd",
     "testing",
     "documentation",
