@@ -2,7 +2,21 @@
 name: review
 description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. Use when the user requests a code review or invokes /review.
 argument-hint: "[PR number, branch name, or blank for current branch]"
-allowed-tools: Bash(git diff:*), Bash(gh pr diff:*), Bash(git rev-parse:*), Bash(git branch:*), Bash(git log:*), Bash(git merge-base:*), Bash(mkdir:*), Bash(gh api:*), Bash(gh repo view:*), Task, Read, Write, Grep, Glob
+allowed-tools:
+  - Bash(git diff:*)
+  - Bash(gh pr diff:*)
+  - Bash(git rev-parse:*)
+  - Bash(git branch:*)
+  - Bash(git log:*)
+  - Bash(git merge-base:*)
+  - Bash(mkdir:*)
+  - Bash(gh api:*)
+  - Bash(gh repo view:*)
+  - Task
+  - Read
+  - Write
+  - Grep
+  - Glob
 version: 0.3.0
 ---
 
