@@ -62,18 +62,21 @@ Extract each finding line from the review output. Findings follow this format:
 ```
 
 For each finding, extract:
-- `file`: the file path
-- `line`: the line number (integer)
+- `file`: the file path (strip any leading `./` for normalization)
+- `line`: the line number (must be a positive integer)
 - `agent`: the agent name in brackets
 - `category`: the category in italics
 - `description`: the remaining text
+
+If a finding line doesn't match the expected format, or `line` is not a positive integer, classify it as **body-only** (Step 6) — do not discard it.
 
 ## Step 6: Classify by Diff Presence
 
 For each finding, determine its comment placement:
 
-1. **Line comment**: `(file, line)` exists in the diff line map → use `path` + `line` + `side: "RIGHT"` in the comments array.
-2. **Body-only**: `(file, line)` is not in the diff line map → include the finding text in the review body instead of the comments array.
+1. **Normalize paths**: Strip any leading `./` from the finding's `file` path before lookup. The diff line map paths from Step 4 have no `./` prefix (they are stripped from `+++ b/<path>`).
+2. **Line comment**: `(file, line)` exists in the diff line map → use `path` + `line` + `side: "RIGHT"` in the comments array.
+3. **Body-only**: `(file, line)` is not in the diff line map → include the finding text in the review body instead of the comments array. This includes malformed findings from Step 5.
 
 ## Step 7: Build Review Body
 
