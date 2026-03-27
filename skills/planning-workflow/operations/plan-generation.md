@@ -133,9 +133,9 @@ Fill each section using context from prior phases:
   - Task requirements (explicit)
   - SpecFlow-generated criteria (discovered edge cases)
   - Prior solution prevention guidance (avoid known pitfalls)
-  - Standard completion criteria (always included, deduplicated):
+  - Standard completion criteria (included by default, deduplicated — omit if not applicable to the task):
     - `Documentation updated to reflect changes (DESIGN.md, README, docs/, or inline as appropriate)`
-    - `Interactive walkthrough performed using browser/MCP tools to validate deliverable is demonstrable`
+    - `Deliverable validated via walkthrough or demonstration`
   - **Deduplication**: Before appending standard criteria, check if existing criteria (from task requirements or SpecFlow) already cover documentation or demo. If a criterion already addresses docs or walkthrough/demo, skip the corresponding standard criterion.
 - **Phases**: Group related acceptance criteria into logical phases (A Lot only)
 - **Alternatives**: From research findings (A Lot only)

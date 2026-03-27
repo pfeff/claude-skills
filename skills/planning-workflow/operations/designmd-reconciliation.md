@@ -2,7 +2,7 @@
 
 After problem validation, compare the workspace DESIGN.md against two layers of truth: problem validation findings and repo-level docs. Surfaces contradictions and gaps before downstream planning phases operate on stale assumptions.
 
-> **Extension point**: Additional reconciliation layers (e.g., strategic doc validation) can be added by augmenting this phase.
+> **Extension point**: Additional reconciliation layers can be added by appending steps to this phase.
 
 ## Parameters
 
