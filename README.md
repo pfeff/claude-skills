@@ -1,6 +1,6 @@
 # claude-skills
 
-A Claude Code plugin with five engineering skills for git workflows, test-driven development, documentation, CI automation, and knowledge capture.
+A Claude Code plugin with six engineering skills for git workflows, code review, test-driven development, documentation, CI automation, and knowledge capture.
 
 ## Installation
 
@@ -20,6 +20,7 @@ claude --plugin-dir /path/to/claude-skills
 | **testing-without-mocks** | `/claude-skills:testing-without-mocks` | TDD using the Testing Without Mocks pattern language. Nullables instead of mocking frameworks. Supports Python, Go, and Elixir. |
 | **diataxis** | `/claude-skills:diataxis` | Project documentation using the Diataxis methodology. Scaffold, write, or audit docs by type (tutorial, how-to, reference, explanation). |
 | **compound** | `/claude-skills:compound` | Capture solved problems as searchable solution documents with YAML frontmatter for agent discovery. |
+| **review** | `/claude-skills:review` | Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. |
 | **ci-feedback-loop** | `/claude-skills:ci-feedback-loop` | Monitor PR check status after push, auto-diagnose CI failures, attempt fixes, and escalate when unable to resolve. |
 
 ## Attribution
