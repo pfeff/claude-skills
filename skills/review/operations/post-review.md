@@ -35,9 +35,23 @@ gh pr diff $PR_NUMBER
 
 Parse the unified diff to build a set of valid `(file, line)` pairs on the **right side** of the diff. These are lines that exist in the PR's changed files and can receive line-level comments.
 
-For each hunk header (`@@ -a,b +c,d @@`), track the right-side line numbers. A line is in the set if it appears in the diff as an added line (`+`) or context line (` `). Removed lines (`-`) are NOT valid targets.
+### Parsing algorithm
 
-Also collect the set of files present in the diff (for fallback classification).
+1. **Extract file paths**: When you encounter a `+++ b/<path>` line, strip the `b/` prefix to get the current file path. Skip lines starting with `--- ` (left-side header). If the line is `+++ /dev/null` (file deleted), skip the entire file — deleted files have no right-side lines.
+
+2. **Track line numbers per hunk**: For each hunk header `@@ -a,b +c,d @@`, set `right_line = c` (the starting line number on the right side). Then for each subsequent line until the next hunk header or file header:
+   - **Context line** (starts with ` `): Add `(file, right_line)` to the set. Increment `right_line`.
+   - **Added line** (starts with `+`): Add `(file, right_line)` to the set. Increment `right_line`.
+   - **Removed line** (starts with `-`): Do NOT add to the set. Do NOT increment `right_line`.
+   - **No-newline marker** (`\ No newline at end of file`): Skip, do not modify counters.
+
+3. **Collect file set**: Track all file paths encountered (for fallback classification in Step 6).
+
+### Edge cases
+
+- **Binary files**: Lines like `Binary files ... differ` have no hunks — skip them.
+- **Rename-only diffs**: `rename from`/`rename to` with no hunks — skip, no commentable lines.
+- **Multiple hunks in one file**: Each `@@` header resets `right_line` to the new `c` value.
 
 ## Step 5: Parse Findings
 
