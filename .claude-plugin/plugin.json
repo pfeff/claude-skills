@@ -1,7 +1,7 @@
 {
   "name": "claude-skills",
   "version": "1.0.0",
-  "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, and compound knowledge capture",
+  "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, compound knowledge capture, and structured planning workflows",
   "author": {
     "name": "pfeff"
   },
@@ -14,6 +14,8 @@
     "documentation",
     "diataxis",
     "ci",
-    "knowledge-capture"
+    "knowledge-capture",
+    "planning",
+    "workflow"
   ]
 }
