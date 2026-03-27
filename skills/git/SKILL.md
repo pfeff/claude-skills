@@ -1,7 +1,25 @@
 ---
 name: git
 description: Git usage patterns and conventions. Use when the user requests commits or git operations. Enforces compact commit messages (headline + 1-2 sentences), conventional commit format, no Claude annotations, and focuses on WHY not WHAT in summaries.
-allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git rev-parse:*), Bash(git branch:*), Bash(git remote:*), Bash(git config --get:*), Bash(git ls-files:*), Bash(git describe:*), Bash(git rev-list:*), Bash(git cat-file:*), Bash(git worktree list:*), Bash(git fetch:*), Bash(git pull:*), Bash(gh pr view:*), Bash(gh pr merge:*), Bash(git push origin --delete:*), Bash(gh api repos:*)
+allowed-tools:
+  - Bash(git status:*)
+  - Bash(git diff:*)
+  - Bash(git log:*)
+  - Bash(git show:*)
+  - Bash(git rev-parse:*)
+  - Bash(git branch:*)
+  - Bash(git remote:*)
+  - Bash(git config --get:*)
+  - Bash(git ls-files:*)
+  - Bash(git describe:*)
+  - Bash(git rev-list:*)
+  - Bash(git cat-file:*)
+  - Bash(git worktree list:*)
+  - Bash(git fetch:*)
+  - Bash(git pull:*)
+  - Bash(gh pr view:*)
+  - Bash(gh pr merge:*)
+  - Bash(gh api repos:*)
 version: 1.2.0
 ---
 
@@ -51,7 +69,7 @@ Heuristic: "Can I write a meaningful commit message? If yes, commit. If I'd writ
 
 **When**: User requests a PR for the current branch.
 
-**Implementation**: Use `gh pr create` with title and body.
+**Implementation**: Inline — PR creation is a single command, no progressive disclosure needed.
 
 ```bash
 gh pr create --title "..." --body "..."
@@ -104,12 +122,8 @@ initialization steps.
 
 Load only what you need:
 
-**Operations**:
 - `operations/commit.md` - Commit workflow implementation
 - `operations/merge-pr.md` - Worktree-aware PR merge
-
-**Templates**:
-- `templates/commit-message.tmpl` - Message structure template
 
 ## See Also
 

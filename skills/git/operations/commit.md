@@ -102,14 +102,11 @@ git add <file1> <file2> ...
 
 ### 5. Create Commit
 
-Use HEREDOC for proper formatting:
+Pass the message as a quoted multi-line string:
 ```bash
-git commit -m "$(cat <<'EOF'
-<type>: <headline>
+git commit -m "<type>: <headline>
 
-<summary sentences>
-EOF
-)"
+<summary sentences>"
 ```
 
 **NEVER include**:
@@ -130,34 +127,25 @@ Show user the commit was created successfully.
 ### Bug Fix Commit
 ```bash
 git add init-script.sh
-git commit -m "$(cat <<'EOF'
-fix: correct AD username variable escaping
+git commit -m "fix: correct AD username variable escaping
 
-The username was rendered without proper quotes, causing AD registration failures.
-EOF
-)"
+The username was rendered without proper quotes, causing AD registration failures."
 ```
 
 ### Feature Commit
 ```bash
 git add src/auth/oauth.py src/auth/__init__.py
-git commit -m "$(cat <<'EOF'
-feat: add OAuth2 authentication provider
+git commit -m "feat: add OAuth2 authentication provider
 
-Enables token-based auth for external API integrations.
-EOF
-)"
+Enables token-based auth for external API integrations."
 ```
 
 ### Refactor Commit
 ```bash
 git add src/database/connection.py
-git commit -m "$(cat <<'EOF'
-refactor: extract connection pool into separate class
+git commit -m "refactor: extract connection pool into separate class
 
-Improves testability and makes pool configuration more explicit.
-EOF
-)"
+Improves testability and makes pool configuration more explicit."
 ```
 
 ## Edge Cases
@@ -165,18 +153,7 @@ EOF
 | Case | Response |
 |------|----------|
 | Symlinked files | Resolve symlinks, run git in actual repository |
-| No changes to commit | Report "No changes to commit" |
 | Secrets in staged files | Warn and ask for confirmation |
-| Pre-commit hook fails | Show error, let user decide next steps |
-| Merge conflict markers | Abort and ask user to resolve |
-| Detached HEAD | Warn user about state |
-
-## Integration Points
-
-- **Conventional Commits**: Uses standard type prefixes
-- **User preferences**: Respects CLAUDE.md commit guidelines
-- **Pre-commit hooks**: Runs without --no-verify unless explicitly requested
-- **Git history**: Checks recent commits for style consistency
 
 ## Anti-Patterns to Avoid
 
