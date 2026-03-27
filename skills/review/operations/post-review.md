@@ -132,5 +132,15 @@ After posting, report success to the user with the review event type and number 
 | `$PR_NUMBER` not a positive integer | Report error, stop |
 | `gh repo view` fails | Report error, stop |
 | `gh pr diff` fails | Report error, stop |
-| Review API returns 422 | Log the error body. Common cause: a comment targets a line not in the diff. Remove the offending comment and retry with remaining comments. |
+| Review API returns 422 | See 422 recovery procedure below. |
 | Review API returns other error | Report the error to the user |
+
+### 422 Recovery Procedure
+
+A 422 typically means a comment targets a line not in the diff (despite the diff line map check — this can happen with stale diffs or GitHub API inconsistencies).
+
+1. **Log the error body** — the API response usually identifies the problematic field.
+2. **Identify the offending comment** — parse the error message for a path or line reference. If the error doesn't identify a specific comment, remove all inline comments as a batch.
+3. **Move offending comments to the review body** — append them under the `### Findings outside this diff` heading (same as body-only findings).
+4. **Retry once** — resubmit the payload with the remaining inline comments (or body-only if all were moved).
+5. **If the retry also returns 422** — post a body-only review (no `comments` field) with all findings in the body. Do not retry further.
