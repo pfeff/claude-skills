@@ -1,6 +1,6 @@
 # claude-skills
 
-A Claude Code plugin with six engineering skills for git workflows, code review, test-driven development, documentation, CI automation, and knowledge capture.
+A Claude Code plugin with seven engineering skills for git workflows, code review, test-driven development, documentation, CI automation, knowledge capture, and structured planning.
 
 ## Installation
 
@@ -22,6 +22,7 @@ claude --plugin-dir /path/to/claude-skills
 | **compound** | `/claude-skills:compound` | Capture solved problems as searchable solution documents with YAML frontmatter for agent discovery. |
 | **review** | `/claude-skills:review` | Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. |
 | **ci-feedback-loop** | `/claude-skills:ci-feedback-loop` | Monitor PR check status after push, auto-diagnose CI failures, attempt fixes, and escalate when unable to resolve. |
+| **planning-workflow** | `/claude-skills:planning-workflow` | Structured planning that validates the problem, reconciles DESIGN.md, searches past solutions, calibrates research depth, analyzes edge cases via SpecFlow, and generates living plans with checkable criteria. |
 
 ## Attribution
 
