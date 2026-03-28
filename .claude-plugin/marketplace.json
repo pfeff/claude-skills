@@ -1,0 +1,28 @@
+{
+  "name": "claude-skills",
+  "owner": {
+    "name": "pfeff"
+  },
+  "metadata": {
+    "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, compound knowledge capture, and structured planning workflows",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-skills",
+      "description": "Engineering skills for Claude Code including git workflows, TDD, documentation, CI feedback, knowledge capture, code review, task management, and structured planning",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/ci-feedback-loop",
+        "./skills/compound",
+        "./skills/diataxis",
+        "./skills/git",
+        "./skills/planning-workflow",
+        "./skills/review",
+        "./skills/task-workflow",
+        "./skills/testing-without-mocks"
+      ]
+    }
+  ]
+}
