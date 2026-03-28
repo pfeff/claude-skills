@@ -11,7 +11,7 @@ Sets up a new task workspace with standardized structure, git worktrees, documen
 **Use the bootstrap script for deterministic workspace creation:**
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-workspace.sh \
+scripts/create-workspace.sh \
   --task-id <ID> \
   --epic <EPIC> \
   --headline "<HEADLINE>" \
@@ -131,7 +131,7 @@ Worktree creation includes a post-creation verification step. After each worktre
 ## Example
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-workspace.sh \
+scripts/create-workspace.sh \
   --task-id 19 \
   --epic my-project \
   --headline "Implement retry logic for webhook handler" \
@@ -143,13 +143,13 @@ Worktree creation includes a post-creation verification step. After each worktre
 ```
 Creating workspace for task 19...
   Slug: implement-retry-logic
-  Path: /home/user/src/work/my-project/19-implement-retry-logic
+  Path: ~/src/work/my-project/19-implement-retry-logic
 
 Checking prerequisites...
   Prerequisites OK
 
 Creating workspace directory...
-  Created: /home/user/src/work/my-project/19-implement-retry-logic
+  Created: ~/src/work/my-project/19-implement-retry-logic
 
 Rendering templates...
   DESIGN.md: created
@@ -159,8 +159,8 @@ Rendering templates...
 
 Creating git worktrees...
   my-app:
-    Source: /home/user/src/github/user/my-app
-    Worktree: /home/user/src/work/my-project/19-implement-retry-logic/my-app
+    Source: ~/src/github/user/my-app
+    Worktree: ~/src/work/my-project/19-implement-retry-logic/my-app
     Branch: 19/implement-retry-logic
     Created worktree
 
@@ -190,7 +190,7 @@ All verification checks passed!
 Workspace created successfully!
 ==========================================
 
-  Path:         /home/user/src/work/my-project/19-implement-retry-logic
+  Path:         ~/src/work/my-project/19-implement-retry-logic
   Task List ID: my-project-19
   Tmux Session: 19- Implement retry logic for webhook handler
 

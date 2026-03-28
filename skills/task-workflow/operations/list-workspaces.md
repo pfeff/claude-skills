@@ -35,13 +35,13 @@ Run both data extraction scripts to gather workspace information:
 
 **Primary source** - Claude native task lists:
 ```bash
-~/.claude/skills/task-workflow/scripts/scan-task-dirs.sh
+scripts/scan-task-dirs.sh
 ```
 Output: `task_list_id|status|pending|in_progress|completed|total|workspace`
 
 **Fallback source** - PLAN.md-based tracking (for legacy workspaces):
 ```bash
-~/.claude/skills/task-workflow/scripts/list-tasks.sh
+scripts/list-tasks.sh
 ```
 Output: `status|epic|task_id|headline|checked|total|workspace`
 

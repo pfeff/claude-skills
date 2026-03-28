@@ -180,7 +180,7 @@ session_name="$task_id_extracted: $headline"
 
 Create session using script:
 ```bash
-~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh "$session_name" "$workspace_path"
+scripts/create-tmuxp-session.sh "$session_name" "$workspace_path"
 ```
 
 **Session creation does**:

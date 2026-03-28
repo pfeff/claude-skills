@@ -241,7 +241,7 @@ Dispatches a single task to a subagent via the Task tool and returns a structure
 > **CRITICAL**: NEVER create tmux sessions manually with `tmux new-session`. ALWAYS use the script below.
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh "<session-name>" <workspace-dir>
+scripts/create-tmuxp-session.sh "<session-name>" <workspace-dir>
 ```
 
 The script:
@@ -251,13 +251,13 @@ The script:
 - Uses tmuxp for reliable session creation
 
 **Wrong**: `tmux new-session -d -s "DO-361"` (creates only 1 window, no processes)
-**Right**: `~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh "DO-361: headline" ~/src/work/epic/task`
+**Right**: `scripts/create-tmuxp-session.sh "DO-361: headline" ~/src/work/epic/task`
 
-**Symlink Resolution**: When editing files referenced by `~/.claude/` paths, always resolve via `realpath` first and edit the worktree copy if one exists.
+**Symlink Resolution**: When editing skill files, always resolve via `realpath` first and edit the worktree copy if one exists.
 
 ```bash
 # Before editing, resolve the actual path
-REAL_PATH=$(realpath ~/.claude/skills/my-skill/SKILL.md)
+REAL_PATH=$(realpath path/to/SKILL.md)
 # If a worktree copy exists, edit there instead
 ```
 
@@ -267,18 +267,18 @@ The skill requires these bash commands for workspace management:
 
 | Permission | Commands | Purpose |
 |------------|----------|---------|
-| create tmux sessions | `~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh` | Create 3-window session via tmuxp |
+| create tmux sessions | `scripts/create-tmuxp-session.sh` | Create 3-window session via tmuxp |
 | list tmux sessions | `tmux list-sessions` | Discover existing sessions |
 | check tmux session existence | `tmux has-session -t "<session-name>"` | Verify session before creating |
 | kill tmux sessions | `tmux kill-session -t "<session-name>"` | Clean up session on workspace close |
 | remove git worktrees | `git worktree remove <path>` | Clean up worktrees on workspace close |
 | create archive tarballs | `tar -czf <archive> <dir>` | Archive workspace artifacts |
 | extract archive tarballs | `tar -xzf <archive> -C <dir>` | Restore workspace from archive |
-| render task dependency graph | `~/.claude/skills/task-workflow/scripts/render_deps.py` | Visualize task blocking relationships |
+| render task dependency graph | `scripts/render_deps.py` | Visualize task blocking relationships |
 | run project tests | `pytest`, `go test`, `mix test`, `npm test`, `make test`, `cargo test` | Execute project test suite during validation |
 | run lint and format checks | `pre-commit run`, `ruff check`, `npx eslint`, `mix format`, `gofmt`, `make lint` | Execute lint/format checks during validation |
 | check existing workspaces | `ls ~/src/work/*/<id>-*/CLAUDE.md` | Detect existing workspace before creation |
-| create workspace from script | `~/.claude/skills/task-workflow/scripts/create-workspace.sh` | Bootstrap workspace directory, worktrees, tmux |
+| create workspace from script | `scripts/create-workspace.sh` | Bootstrap workspace directory, worktrees, tmux |
 | check git status | `git -C <repo> status --porcelain` | Detect uncommitted changes during /finish |
 | view GitHub PRs | `gh pr view --json url,state` | Check for existing PR during /finish and auto-advance |
 | check GitHub PR CI status | `gh pr checks --watch --fail-fast` | Poll CI checks after auto-advance PR creation |
@@ -333,7 +333,7 @@ Load only what you need:
 
 ## Scripts
 
-All scripts are in `~/.claude/skills/task-workflow/scripts/`:
+All scripts are in `scripts/`:
 
 - `create-tmuxp-session.sh "<session-name>" <workspace-dir>` - **Required** for tmux session creation
 - `create-workspace.sh` - Bootstrap workspace directory, worktrees, tmux

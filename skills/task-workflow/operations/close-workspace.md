@@ -108,7 +108,7 @@ Report the script's output to the user. On failure, relay the exit code meaning:
 ```
 User: /close-workspace
 
-> Runs: close-workspace.sh --caller-cwd /home/user/src --force
+> Runs: close-workspace.sh --caller-cwd ~/src --force
 
 Workspace: ~/src/work/platform/TOOS-24-fix-auth
   Task:     TOOS-24 - Fix authentication bug
@@ -133,7 +133,7 @@ Workspace closed successfully!
 ```
 User: /close-workspace --no-close-issue
 
-> Runs: close-workspace.sh --no-close-issue --caller-cwd /home/user/src --force
+> Runs: close-workspace.sh --no-close-issue --caller-cwd ~/src --force
 Skipping issue close (--no-close-issue)
 ```
 
@@ -141,7 +141,7 @@ Skipping issue close (--no-close-issue)
 ```
 User: /close-workspace 94 --no-archive
 
-> Runs: close-workspace.sh 94 --no-archive --caller-cwd /home/user/src --force
+> Runs: close-workspace.sh 94 --no-archive --caller-cwd ~/src --force
 ```
 
 ## Integration Points

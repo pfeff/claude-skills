@@ -39,12 +39,12 @@ Determine which task list to visualize:
 
 **ASCII output**:
 ```bash
-~/.claude/skills/task-workflow/scripts/render_deps.py --task-list-id "$CLAUDE_CODE_TASK_LIST_ID"
+scripts/render_deps.py --task-list-id "$CLAUDE_CODE_TASK_LIST_ID"
 ```
 
 **Mermaid output**:
 ```bash
-~/.claude/skills/task-workflow/scripts/render_deps.py --task-list-id "$CLAUDE_CODE_TASK_LIST_ID" --mermaid
+scripts/render_deps.py --task-list-id "$CLAUDE_CODE_TASK_LIST_ID" --mermaid
 ```
 
 ### 4. Handle Edge Cases

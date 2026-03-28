@@ -66,7 +66,7 @@ Wait for user confirmation before beginning implementation.
 
 - Only one task should be `in_progress` at a time
 - The commit checkpoint is non-blocking — if the user declines, proceed anyway
-- During implementation, apply the git skill's **Incremental Commits** principle (see `~/.claude/skills/git/SKILL.md`) — commit at logical boundaries, don't wait until the task is fully complete
+- During implementation, apply the git skill's **Incremental Commits** principle (see the git skill's SKILL.md) — commit at logical boundaries, don't wait until the task is fully complete
 
 ## Output Format
 
