@@ -1,0 +1,173 @@
+# Workspace Structure Reference
+
+Standard layout for task workspaces.
+
+## Structure
+
+```
+~/src/work/<project-slug>/<issue-slug>/
+├── .envrc              # direnv config with task list ID
+├── DESIGN.md           # Task requirements and architecture
+├── .tmuxp.yaml         # Tmux session configuration
+├── <repo-1>/           # Git worktree for repository 1
+│   └── docs/solutions/ # Solution documentation (see below)
+├── <repo-2>/           # Git worktree for repository 2
+│   └── docs/solutions/
+└── ...
+```
+
+## .envrc Format
+
+Each workspace includes a `.envrc` file for environment configuration:
+
+```bash
+export CLAUDE_CODE_TASK_LIST_ID="<epic>-<task-id>"
+
+# Optional: auto-advance configuration
+# export AUTO_ADVANCE_MAX_RETRIES=2
+# export AUTO_ADVANCE_USE_SUBAGENTS=true
+```
+
+- `CLAUDE_CODE_TASK_LIST_ID` - Links workspace to Claude Code native task list
+
+**Important**: Run `direnv allow` after workspace creation to activate the environment.
+
+## DESIGN.md Format
+
+First line must contain task metadata:
+```markdown
+# TASK-ID: Task Headline
+```
+
+Example:
+```markdown
+# DO-242: Implement OAuth Authentication
+```
+
+## Task Management
+
+Workspaces use Claude Code's native task tools for progress tracking. Tasks persist in `~/.claude/tasks/<task-list-id>.json` and are linked via `CLAUDE_CODE_TASK_LIST_ID` in `.envrc`.
+
+### Task Tools
+
+| Tool | Purpose |
+|------|---------|
+| `TaskList` | View all tasks with status and dependencies |
+| `TaskCreate` | Add new task with subject, description, activeForm |
+| `TaskUpdate` | Change status, set dependencies, mark complete |
+| `TaskGet` | Retrieve full task details by ID |
+
+### Task Workflow
+
+1. **Starting work**: `TaskUpdate(taskId, status: "in_progress")`
+2. **Completing work**: `TaskUpdate(taskId, status: "completed")`
+3. **Adding tasks**: `TaskCreate(subject, description, activeForm)`
+4. **Checking progress**: `TaskList`
+
+### Task States
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Not yet started |
+| `in_progress` | Currently being worked on |
+| `completed` | Finished and verified |
+| `deleted` | Removed (permanent) |
+
+### Dependencies
+
+Tasks can block other tasks:
+- `addBlockedBy` - This task waits for listed tasks
+- `addBlocks` - Listed tasks wait for this task
+
+### Task Storage
+
+Tasks are stored in JSON files at `~/.claude/tasks/`:
+```
+~/.claude/tasks/
+├── <epic>-<task-id>.json    # Workspace-specific task list
+└── ...
+```
+
+The `scan-task-dirs.sh` script scans these files to determine workspace status for `/list-workspaces`.
+
+## Solution Documentation
+
+Each repo worktree includes a `docs/solutions/` directory for documenting solved problems. Created automatically by `create-workspace.sh`.
+
+```
+docs/solutions/
+├── build-errors/
+├── test-failures/
+├── performance-issues/
+├── runtime-errors/
+├── integration-issues/
+├── workflow-issues/
+├── best-practices/
+└── patterns/
+```
+
+See `templates/solution.md.tmpl` for the frontmatter schema and file format.
+
+## Git Worktrees
+
+Repositories are checked out as git worktrees from their main clones:
+```bash
+git worktree add ~/src/work/<project>/<task>/<repo> <branch>
+```
+
+## Submodule Management
+
+Repositories using git submodules (like dotfiles with cursor-rules) require special attention.
+
+### Detached HEAD Issue
+
+After `git submodule update --init --recursive` or dotbot install, submodules are often in **detached HEAD** state:
+
+```bash
+$ cd cursor-rules
+$ git status
+HEAD detached at abc1234
+```
+
+This means:
+- Local changes won't be on a branch
+- Content from main may not be visible
+- New file creation may conflict with existing files on main
+
+### Sync Before Work Pattern
+
+**Always sync submodules before creating new content**:
+
+```bash
+# Check current state
+git -C cursor-rules status
+
+# Sync to main branch
+git -C cursor-rules checkout main
+git -C cursor-rules pull origin main
+```
+
+### When to Sync
+
+Perform submodule sync:
+1. **Before creating new skills** - Prevents duplicates
+2. **After dotfiles install** - Restores branch tracking
+3. **Before committing changes** - Ensures you're on correct branch
+4. **When files seem missing** - May be on different branch
+
+### Verification
+
+```bash
+# Verify branch state
+git -C cursor-rules branch -v
+
+# Should show:
+# * main  abc1234 [ahead N] Latest commit message
+```
+
+### Workspace-Specific Submodule Notes
+
+When workspaces involve cursor-rules changes:
+1. Create a task noting cursor-rules modifications are involved
+2. Include submodule sync step in task plan
+3. Commit cursor-rules changes first, then update parent repo's submodule reference
