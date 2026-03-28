@@ -35,9 +35,23 @@ gh pr diff $PR_NUMBER
 
 Parse the unified diff to build a set of valid `(file, line)` pairs on the **right side** of the diff. These are lines that exist in the PR's changed files and can receive line-level comments.
 
-For each hunk header (`@@ -a,b +c,d @@`), track the right-side line numbers. A line is in the set if it appears in the diff as an added line (`+`) or context line (` `). Removed lines (`-`) are NOT valid targets.
+### Parsing algorithm
 
-Also collect the set of files present in the diff (for fallback classification).
+1. **Extract file paths**: When you encounter a `+++ b/<path>` line, strip the `b/` prefix to get the current file path. Skip lines starting with `--- ` (left-side header). If the line is `+++ /dev/null` (file deleted), skip the entire file — deleted files have no right-side lines.
+
+2. **Track line numbers per hunk**: For each hunk header `@@ -a,b +c,d @@`, set `right_line = c` (the starting line number on the right side). Then for each subsequent line until the next hunk header or file header:
+   - **Context line** (starts with ` `): Add `(file, right_line)` to the set. Increment `right_line`.
+   - **Added line** (starts with `+`): Add `(file, right_line)` to the set. Increment `right_line`.
+   - **Removed line** (starts with `-`): Do NOT add to the set. Do NOT increment `right_line`.
+   - **No-newline marker** (`\ No newline at end of file`): Skip, do not modify counters.
+
+3. **Collect file set**: Track all file paths encountered (for fallback classification in Step 6).
+
+### Edge cases
+
+- **Binary files**: Lines like `Binary files ... differ` have no hunks — skip them.
+- **Rename-only diffs**: `rename from`/`rename to` with no hunks — skip, no commentable lines.
+- **Multiple hunks in one file**: Each `@@` header resets `right_line` to the new `c` value.
 
 ## Step 5: Parse Findings
 
@@ -48,18 +62,21 @@ Extract each finding line from the review output. Findings follow this format:
 ```
 
 For each finding, extract:
-- `file`: the file path
-- `line`: the line number (integer)
+- `file`: the file path (strip any leading `./` for normalization)
+- `line`: the line number (must be a positive integer)
 - `agent`: the agent name in brackets
 - `category`: the category in italics
 - `description`: the remaining text
+
+If a finding line doesn't match the expected format, or `line` is not a positive integer, classify it as **body-only** (Step 6) — do not discard it.
 
 ## Step 6: Classify by Diff Presence
 
 For each finding, determine its comment placement:
 
-1. **Line comment**: `(file, line)` exists in the diff line map → use `path` + `line` + `side: "RIGHT"` in the comments array.
-2. **Body-only**: `(file, line)` is not in the diff line map → include the finding text in the review body instead of the comments array.
+1. **Normalize paths**: Strip any leading `./` from the finding's `file` path before lookup. The diff line map paths from Step 4 have no `./` prefix (they are stripped from `+++ b/<path>`).
+2. **Line comment**: `(file, line)` exists in the diff line map → use `path` + `line` + `side: "RIGHT"` in the comments array.
+3. **Body-only**: `(file, line)` is not in the diff line map → include the finding text in the review body instead of the comments array. This includes malformed findings from Step 5.
 
 ## Step 7: Build Review Body
 
@@ -115,5 +132,15 @@ After posting, report success to the user with the review event type and number 
 | `$PR_NUMBER` not a positive integer | Report error, stop |
 | `gh repo view` fails | Report error, stop |
 | `gh pr diff` fails | Report error, stop |
-| Review API returns 422 | Log the error body. Common cause: a comment targets a line not in the diff. Remove the offending comment and retry with remaining comments. |
+| Review API returns 422 | See 422 recovery procedure below. |
 | Review API returns other error | Report the error to the user |
+
+### 422 Recovery Procedure
+
+A 422 typically means a comment targets a line not in the diff (despite the diff line map check — this can happen with stale diffs or GitHub API inconsistencies).
+
+1. **Log the error body** — the API response usually identifies the problematic field.
+2. **Identify the offending comment** — parse the error message for a path or line reference. If the error doesn't identify a specific comment, remove all inline comments as a batch.
+3. **Move offending comments to the review body** — append them under the `### Findings outside this diff` heading (same as body-only findings).
+4. **Retry once** — resubmit the payload with the remaining inline comments (or body-only if all were moved).
+5. **If the retry also returns 422** — post a body-only review (no `comments` field) with all findings in the body. Do not retry further.
