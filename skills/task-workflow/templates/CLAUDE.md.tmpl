@@ -1,0 +1,41 @@
+# ${TASK_ID}: ${HEADLINE}
+
+## Task Details
+
+- **Task ID**: ${TASK_ID}
+- **Epic**: ${EPIC}
+- **State**: IN_PROGRESS
+- **GitHub Issue**: ${ISSUE_REF}
+
+## Description
+
+${DESCRIPTION}
+
+## Links
+
+- Workspace: ${WORKSPACE_PATH}
+- Issue: ${ISSUE_URL}
+
+## Relevant Repositories
+
+${REPOS_LIST}
+
+## Notes
+
+- Consult DESIGN.md for architecture and requirements
+- Use `TaskList` to see TODO tracking and progress
+- Document key decisions and discoveries here
+- Session tasks are implementation steps for this issue. Do not create separate GitHub issues for implementation steps.
+- When creating PRs, the `GitHub Issue` reference above is used to auto-populate `Closes #N` in the PR body
+
+## Auto-Advance
+
+This workspace uses auto-advance: after `/init-workspace` creates the task list, the agent autonomously cycles through tasks (implement → validate → commit → next). No per-task human prompts needed.
+
+**The loop stops when**:
+- All tasks are complete
+- A task fails validation after retries
+- The agent encounters an ambiguous decision
+- A commit fails
+
+On pause, review the output and provide guidance. On completion, run `/finish` to create the PR.

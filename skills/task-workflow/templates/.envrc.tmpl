@@ -1,0 +1,21 @@
+export CLAUDE_CODE_TASK_LIST_ID="${TASK_LIST_ID}"
+
+# Optional: override validation retry budget (default: 2)
+# export AUTO_ADVANCE_MAX_RETRIES=2
+
+# Optional: dispatch tasks to subagents for reduced context consumption (default: false)
+# export AUTO_ADVANCE_USE_SUBAGENTS=true
+
+# Optional: max retries for transient errors with exponential backoff (default: 3)
+# Separate from AUTO_ADVANCE_MAX_RETRIES which governs validation fix-and-retry.
+# export AUTO_ADVANCE_TRANSIENT_RETRIES=3
+
+# Optional: max backoff delay in seconds for transient retries (default: 60)
+# export AUTO_ADVANCE_BACKOFF_CEILING=60
+
+# Optional: Coordinator API integration
+# When set, task-workflow operations mirror state to the coordinator for visibility.
+# export COORDINATOR_URL="${COORDINATOR_URL}"
+# export COORDINATOR_TOKEN="${COORDINATOR_TOKEN}"
+# export COORDINATOR_MISSION_ID="${COORDINATOR_MISSION_ID}"
+# export COORDINATOR_TASK_ID="${COORDINATOR_TASK_ID}"
