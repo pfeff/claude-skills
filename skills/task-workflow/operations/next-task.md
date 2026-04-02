@@ -11,16 +11,10 @@ Finds the next pending task and transitions to it, with a commit checkpoint to p
 If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_TASK_ID` are set, mirror status changes to the coordinator API.
 
 ```bash
-coord_sync_status() {
-  local task_id="$1" status="$2"
-  if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" && -n "${COORDINATOR_TASK_ID:-}" ]]; then
-    curl -s -X PATCH "${COORDINATOR_URL}/api/tasks/${COORDINATOR_TASK_ID}" \
-      -H "Authorization: Bearer ${COORDINATOR_TOKEN}" \
-      -H "Content-Type: application/json" \
-      -d "{\"task\":{\"status\":\"${status}\"}}" > /dev/null
-  fi
-}
+source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
 ```
+
+This provides `coord_sync_status` and other helpers. All are no-ops when coordinator env vars are unset.
 
 ## Implementation Steps
 
@@ -66,7 +60,7 @@ Wait for user confirmation before beginning implementation.
 
 - Only one task should be `in_progress` at a time
 - The commit checkpoint is non-blocking — if the user declines, proceed anyway
-- During implementation, apply the git skill's **Incremental Commits** principle (see the git skill's SKILL.md) — commit at logical boundaries, don't wait until the task is fully complete
+- During implementation, apply the git skill's **Incremental Commits** principle (see `${CLAUDE_PLUGIN_ROOT}/skills/git/SKILL.md`) — commit at logical boundaries, don't wait until the task is fully complete
 
 ## Output Format
 

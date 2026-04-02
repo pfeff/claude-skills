@@ -9,7 +9,8 @@ Opens an existing task workspace by locating the directory, extracting metadata,
 ## Inputs
 
 - **task-id** or **path** (required): Either a task identifier (e.g., `TOOS-24`, `DO-242`, `skills-workflow`) or a full path to a workspace directory
-- **epic-slug** (optional): Epic slug to narrow search when using task-id (e.g., `ad-hoc`, `tooling`)
+- **epic-slug** (optional): Epic slug to narrow search when using task-id (e.g., `ad-hoc`, `tooling`, `DO-202-outsource`)
+- **--verify** (optional): Check GitHub issue status via `gh issue view`
 
 ## Implementation Steps
 
@@ -180,7 +181,7 @@ session_name="$task_id_extracted: $headline"
 
 Create session using script:
 ```bash
-scripts/create-tmuxp-session.sh "$session_name" "$workspace_path"
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-tmuxp-session.sh "$session_name" "$workspace_path"
 ```
 
 **Session creation does**:
@@ -202,6 +203,71 @@ Tmux session: "$session_name"
 Attach with: tmux attach -t "$session_name"
 ```
 
+### 8. Detect and Suggest Skills
+
+Scan workspace for known repositories and suggest relevant skills.
+
+**Repository-to-skill mapping**:
+
+| Repository | Skill | Trigger |
+|------------|-------|---------|
+| Octopus | octopus | Directory named `Octopus` exists |
+| GitHub | - | Directory named `GitHub` exists |
+
+> **Note**: Dev-Stacks operational knowledge is now in `Dev-Stacks/CLAUDE.md` and `Dev-Stacks/docs/`. No skill loading needed — the repo's CLAUDE.md is loaded automatically when working within the repo directory.
+
+**Detection logic**:
+```bash
+detected_skills=""
+
+if [ -d "$workspace_path/Octopus" ]; then
+  detected_skills="$detected_skills octopus"
+fi
+```
+
+**Implementation note**: After displaying suggestions, the Claude instance should use the Skill tool to invoke each detected skill. For Dev-Stacks, read the repo's CLAUDE.md directly instead.
+
+### 9. Verify GitHub Issue (if --verify flag)
+
+If `--verify` flag is provided, check GitHub issue status.
+
+**Extract issue reference from DESIGN.md**:
+```bash
+issue_ref=$(grep "^- GitHub Issue:" "$workspace_path/DESIGN.md" | sed 's/^- GitHub Issue: *//')
+```
+
+**Skip if no issue reference**:
+```bash
+if [ -z "$issue_ref" ] || [ "$issue_ref" = "\$ISSUE" ]; then
+  echo "No GitHub issue linked to this workspace"
+  exit 0
+fi
+```
+
+**Fetch issue status**:
+```bash
+gh issue view "$issue_ref" --json state,title,assignees,labels,milestone
+```
+
+**Display issue status**:
+```
+GitHub Issue Status:
+  Issue: $issue_ref
+  Title: $title
+  State: $state
+  Assignees: $assignees
+  Labels: $labels
+  Milestone: $milestone
+```
+
+**Handle errors**:
+```bash
+if ! gh issue view "$issue_ref" --json state 2>/dev/null; then
+  echo "Warning: Could not fetch GitHub issue: $issue_ref"
+  echo "Check that the issue exists and you have access"
+fi
+```
+
 ## Error Handling
 
 | Error | Response |
@@ -213,6 +279,8 @@ Attach with: tmux attach -t "$session_name"
 | Cannot parse DESIGN.md | Use task-id as fallback for session name |
 | Tmux creation fails | Report error from script |
 | Archive extraction fails | Report error with tarball path |
+| No GitHub issue linked | Show message that no issue is linked (--verify) |
+| GitHub issue fetch fails | Show warning with issue ref and access hint (--verify) |
 
 ## Examples
 
@@ -232,6 +300,39 @@ Searches: ~/src/work/platform/TOOS-24-*/
 Output: Same as above
 ```
 
+### Resume by full path
+```
+User: /open-workspace ~/src/work/tooling/TOOS-24-fix-auth/
+Path detected, skips search
+Output: Task resumed: TOOS-24 - Fix authentication bug
+        Workspace: ~/src/work/tooling/TOOS-24-fix-auth/
+        Tmux session: "TOOS-24: Fix authentication bug"
+```
+
+### Resume from current directory
+```
+User: /open-workspace .
+Path detected (starts with .)
+Output: Task resumed: TOOS-24 - Fix authentication bug
+        Workspace: /current/working/directory/
+        Tmux session: "TOOS-24: Fix authentication bug"
+```
+
+### Handle multiple matches
+```
+User: /open-workspace DO-242
+Output: Multiple workspaces found for DO-242:
+        ~/src/work/ad-hoc/DO-242-first-task/
+        ~/src/work/platform/DO-242-second-task/
+
+        Please specify epic slug to narrow search:
+        /open-workspace DO-242 <epic-slug>
+
+User: /open-workspace DO-242 ad-hoc
+Output: Task resumed: DO-242 - First task
+        Workspace: ~/src/work/ad-hoc/DO-242-first-task/
+```
+
 ### Re-hydrate from archive
 ```
 User: /open-workspace TOOS-24
@@ -247,6 +348,36 @@ Output: Workspace not found in active workspaces
         Attach with: tmux attach -t "TOOS-24: Fix authentication bug"
 ```
 
+### Verify GitHub issue status
+```
+User: /open-workspace TOOS-24 --verify
+Output: Task resumed: TOOS-24 - Fix authentication bug
+        Workspace: ~/src/work/platform/TOOS-24-fix-auth-bug/
+        Tmux session: "TOOS-24: Fix authentication bug"
+
+        GitHub Issue Status:
+          Issue: pfeff/project#24
+          Title: Fix authentication bug
+          State: open
+          Assignees: pfeff
+          Labels: bug, priority:high
+          Milestone: v2.0
+
+        Attach with: tmux attach -t "TOOS-24: Fix authentication bug"
+```
+
+### Verify with no linked issue
+```
+User: /open-workspace skills-workflow --verify
+Output: Task resumed: skills-workflow - Refactor workflow system
+        Workspace: ~/src/work/tooling/skills-workflow/
+        Tmux session: "skills-workflow: Refactor workflow system"
+
+        No GitHub issue linked to this workspace
+
+        Attach with: tmux attach -t "skills-workflow: Refactor workflow system"
+```
+
 ## Integration Points
 
 - **Workspace structure**: Uses standard `~/src/work/<epic>/<task-id>-<slug>/` layout
@@ -258,7 +389,7 @@ Output: Workspace not found in active workspaces
 
 When implementing this operation:
 
-1. Parse user request for task-id/path and optional epic-slug
+1. Parse user request for task-id/path, optional epic-slug, and --verify flag
 2. Detect if argument is path (contains `/`, starts with `~` or `.`) or task-id
 3. If path: validate it exists, resolve to absolute path
 4. If task-id: use Bash tool to find workspace with `find` command
@@ -269,3 +400,5 @@ When implementing this operation:
 9. Use Bash tool to extract metadata from DESIGN.md
 10. Use Bash tool to invoke `scripts/create-tmuxp-session.sh`
 11. Display summary with workspace path and attach command
+12. **Detect relevant skills**: Scan workspace for known repository directories (Dev-Stacks, DWH-TF, DevExtTFEnv, Octopus, etc.) and invoke corresponding skills using the Skill tool
+13. If --verify flag: extract GitHub issue ref from DESIGN.md and run `gh issue view`

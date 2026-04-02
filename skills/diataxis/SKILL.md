@@ -62,11 +62,11 @@ The Diataxis framework categorizes documentation into four types based on two ax
 ## Invocation
 
 ```
-/diataxis                    # Interactive — asks what you want to do
-/diataxis scaffold           # Create docs folder structure
-/diataxis write              # Write a new document (interactive)
-/diataxis write tutorial     # Write a tutorial
-/diataxis audit              # Audit existing docs
+/claude-skills:diataxis                    # Interactive — asks what you want to do
+/claude-skills:diataxis scaffold           # Create docs folder structure
+/claude-skills:diataxis write              # Write a new document (interactive)
+/claude-skills:diataxis write tutorial     # Write a tutorial
+/claude-skills:diataxis audit              # Audit existing docs
 ```
 
 ## Execution
@@ -135,6 +135,26 @@ docs/
 - `references/framework.md` — Detailed Diataxis framework explanation
 - `references/templates.md` — Templates for each documentation type
 - `references/anti-patterns.md` — Common mistakes and how to avoid them
+
+## Auto-Loading
+
+This skill should be loaded proactively when the user:
+
+- Asks to write, create, or add documentation
+- Mentions tutorials, how-to guides, reference docs, or explanations
+- Wants to organize or restructure existing docs
+- Creates a new project and needs documentation structure
+- Asks about documentation best practices
+- Writes or edits files in a `docs/` directory
+
+**Trigger phrases**:
+- "write documentation", "create docs", "document this"
+- "add a tutorial", "write a how-to guide"
+- "reference documentation", "API docs"
+- "organize the docs", "restructure documentation"
+- "README", "docs folder", "documentation structure"
+
+Load the skill early to ensure documentation follows Diataxis principles from the start.
 
 ## See Also
 

@@ -91,7 +91,8 @@ Determine whether the task is a **document/plan task** (where the issue content 
 1. Count document signals and code signals in the issue title and body
 2. If only document signals found → classify as **document task** (high confidence)
 3. If only code signals found → classify as **code task** (high confidence)
-4. Otherwise (both or neither) → **low confidence**, ask the user
+4. If both signal types found → **low confidence** (hybrid)
+5. If neither signal type found → **low confidence** (ambiguous)
 
 **When confidence is low**, ask the user:
 
@@ -128,7 +129,7 @@ AskUserQuestion:
 ```
 Planning paused — issue content flagged for revision.
 
-Revise the issue content, then re-run /planning-workflow to continue.
+Revise the issue content, then re-run /claude-skills:planning-workflow to continue.
 ```
 
 Do not proceed to downstream phases.

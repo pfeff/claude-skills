@@ -7,6 +7,7 @@ allowed-tools:
   - Grep
   - Glob
   - Write
+  - AskUserQuestion
   - WebSearch
   - WebFetch
 version: 1.0.0
@@ -21,12 +22,13 @@ Structured planning that validates the problem and mines past knowledge before i
 The planning workflow runs these phases in order:
 
 1. **Problem validation** — validate who, what pain, current workflow, and success criteria; for document tasks, gate on content correctness before proceeding
-2. **DESIGN.md reconciliation** — compare workspace DESIGN.md against problem validation and repo docs
+2. **DESIGN.md reconciliation** — compare workspace DESIGN.md against problem validation, repo docs, and strategic docs
 3. **Solution search** — search `docs/solutions/` for relevant prior solutions
 4. **Research gating** — decide if external research is needed based on risk
 5. **SpecFlow analysis** — walk user flows to find edge cases
 6. **Detail level selection** — choose plan depth based on complexity
 7. **Plan generation** — produce markdown plan with checkable criteria
+8. **ADR propagation** — propagate superseding decisions to strategic docs, issues, and project board
 
 ## Operations
 
@@ -36,7 +38,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/problem-validation.md`
 
-**Quick summary**: Validates four dimensions (user, pain, current workflow, success criteria), classifies task type (document vs. code), and gates document tasks on content correctness.
+**Quick summary**: Scans the task description for four dimensions (user, pain, current workflow, success criteria). Extracts what's covered, infers what's implied, and interviews the user for anything missing. Then classifies the task as document/plan vs. code implementation using keyword heuristics (with confidence fallback to user). For document tasks, presents an interactive content gate — "Content is correct" proceeds; "Needs revision" stops the workflow. Produces a "Problem Validation" section that grounds all downstream phases.
 
 ### 2. DESIGN.md Reconciliation
 
@@ -44,7 +46,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/designmd-reconciliation.md`
 
-**Quick summary**: Two-layer check of DESIGN.md against problem validation and repo docs. Surfaces contradictions and gaps for user approval.
+**Quick summary**: Three-layer validation of workspace DESIGN.md against problem validation findings, repo-level docs (CLAUDE.md, docs/), and strategic docs (guardian REQUIREMENTS.md, ARCHITECTURE.md, PROJECT.md). Surfaces contradictions and gaps for user approval. Bidirectional conflict resolution for strategic docs — changes may flow down (update DESIGN.md) or up (flag strategic doc update). Produces a "DESIGN.md Reconciliation" section for the plan.
 
 ### 2a. Fast Path Gate
 
@@ -60,7 +62,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/solution-search.md`
 
-**Quick summary**: Searches `docs/solutions/` frontmatter for relevant prior solutions and loads critical patterns.
+**Quick summary**: Grep-searches `docs/solutions/` frontmatter (tags, symptoms, module, component) for relevant prior solutions. Always loads `critical-patterns.md`. Surfaces findings as "Prior Solutions" context for downstream phases.
 
 ### 4. Research Gating
 
@@ -68,7 +70,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/research-gating.md`
 
-**Quick summary**: Classifies task risk and local knowledge strength to decide whether external research is needed.
+**Quick summary**: Classifies task risk (high/low/uncertain), evaluates local knowledge strength, and decides whether external research is needed. High-risk topics always get external research; low-risk with strong local knowledge skips it.
 
 ### 5. SpecFlow Analysis
 
@@ -76,7 +78,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/specflow-analysis.md`
 
-**Quick summary**: Walks user/operational flows to discover edge cases, spec gaps, and generate acceptance criteria.
+**Quick summary**: Systematically walks all user/operational flows, maps decision points, enumerates error states and edge cases, identifies specification gaps, and generates acceptance criteria from findings.
 
 ### 6. Detail Level Selection
 
@@ -84,7 +86,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/detail-level.md`
 
-**Quick summary**: Scores complexity signals to select Minimal, More, or A Lot detail level for the plan.
+**Quick summary**: Scores complexity signals (flows, edge cases, spec gaps, files affected) and selects Minimal, More, or A Lot detail level. Determines which sections the plan generator includes.
 
 ### 7. Plan Generation
 
@@ -92,7 +94,15 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/plan-generation.md`
 
-**Quick summary**: Assembles PLAN.md with checkable acceptance criteria, populated from all prior phase findings.
+**Quick summary**: Generates PLAN.md using the selected detail level template, populated with findings from all prior phases. Acceptance criteria use `[ ]`/`[x]` checkboxes for progress tracking during implementation. Standard documentation and demo criteria are always included (with deduplication against task-specific criteria).
+
+### 8. ADR Propagation
+
+**When**: After plan generation — propagates superseding design decisions to downstream artifacts.
+
+**Implementation**: Load `operations/adr-propagation.md`
+
+**Quick summary**: Consumes upstream flags from DESIGN.md reconciliation. For strategic docs (PROJECT.md, REQUIREMENTS.md, ARCHITECTURE.md), proposes specific edits and applies with user approval. For GitHub issues and project board items, generates actionable checklist entries. Skips cleanly when no upstream flags exist.
 
 ## End-to-End Flow
 
@@ -122,7 +132,7 @@ Task Description
       ▼
 ┌─────────────┐
 │ 2. DESIGN.md │──→ DESIGN.md Reconciliation section
-│  Reconcile   │     (2-layer check: validation, repo docs)
+│  Reconcile   │     (3-layer check: validation, repo docs, strategic docs)
 └─────────────┘
       │
       ▼
@@ -164,6 +174,12 @@ Task Description
 │ 7. Plan      │──→ PLAN.md
 │  Generation  │     (living plan with checkable criteria)
 └─────────────┘
+      │
+      ▼
+┌─────────────┐
+│ 8. ADR       │──→ ADR Propagation section
+│  Propagation │     (strategic doc edits + issue/board checklist)
+└─────────────┘
 ```
 
 ### Output
@@ -172,6 +188,7 @@ Task Description
 - Plan body (sections per detail level)
 - Acceptance criteria with `[ ]` checkboxes
 - Planning context appendix (outputs from phases 1-7)
+- ADR propagation section (strategic doc changes applied + issue/board checklist)
 
 ## Fast Path
 
@@ -215,10 +232,11 @@ Full path remains the default. The fast path gate evaluates criteria and routes 
 Load only what you need:
 
 - `operations/problem-validation.md` — Problem validation, user interview, task type classification, and interactive content gate
-- `operations/designmd-reconciliation.md` — DESIGN.md two-layer reconciliation
+- `operations/designmd-reconciliation.md` — DESIGN.md three-layer reconciliation
 - `operations/fast-path-gate.md` — Fast path criteria evaluation and routing
 - `operations/solution-search.md` — Solution search implementation details
 - `operations/research-gating.md` — Research gating decision logic
 - `operations/specflow-analysis.md` — SpecFlow edge case analysis
 - `operations/detail-level.md` — Detail level selection logic
 - `operations/plan-generation.md` — Plan generation with checkable criteria
+- `operations/adr-propagation.md` — Post-ADR propagation to strategic docs, issues, and board

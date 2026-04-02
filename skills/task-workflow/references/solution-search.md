@@ -79,7 +79,7 @@ Critical patterns: checked (<N matches | no matches>)
 
 ## Frontmatter Fields Reference
 
-See `templates/solution.md.tmpl` for the complete field schema.
+See [guardian/docs/solutions/SCHEMA.md](https://github.com/pfeff/guardian/blob/main/docs/solutions/SCHEMA.md) for the complete field schema.
 
 | Field | Type | Searchable | Description |
 |-------|------|-----------|-------------|
