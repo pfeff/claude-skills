@@ -299,7 +299,7 @@ Write a CLAUDE.md in the project directory. This file is the agent's primary con
 
 ## Workflow
 This is a goal-tree project. Load the skill before doing anything:
-  Read(~/.claude/skills/goal-tree/SKILL.md)
+  Read(${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/SKILL.md)
 
 **Hard rules** (always apply — derive behavior from these principles):
 
@@ -346,7 +346,7 @@ To continue the OODA loop: `/project:next`
 **Always use the scripted session creation** — even in bootstrap mode. Do not use raw `tmux new-session`.
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh \
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-tmuxp-session.sh \
   "<project-slug>" \
   "<project-dir>"
 ```

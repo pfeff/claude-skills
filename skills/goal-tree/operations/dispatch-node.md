@@ -178,7 +178,7 @@ The coordinator API manages this project's goal tree. The tree ID is ${TREE_ID} 
 ## Instructions
 
 1. Read the planning-workflow skill and run it for this task:
-   Read(~/.claude/skills/planning-workflow/SKILL.md)
+   Read(${CLAUDE_PLUGIN_ROOT}/skills/planning-workflow/SKILL.md)
 2. Implement the changes following the generated plan
 3. If a test runner is available, run tests
 4. If a linter is available, run lint
@@ -249,7 +249,7 @@ Write CLAUDE.md for the sub-session in the node workspace with coordinator conte
 #### 2. Spawn Session
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-tmuxp-session.sh \
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-tmuxp-session.sh \
   "${NODE_ID}: ${NODE_TITLE}" \
   "${NODE_DIR}"
 ```
@@ -290,7 +290,7 @@ Read: dependency results from coordinator (query dependent nodes)
 Run planning-workflow for the task. This is a **hard gate** — do not proceed to implementation without a plan.
 
 ```
-Read: ~/.claude/skills/planning-workflow/SKILL.md
+Read: ${CLAUDE_PLUGIN_ROOT}/skills/planning-workflow/SKILL.md
 ```
 
 Run the planning pipeline (problem-validation → plan-generation) scoped to this task.

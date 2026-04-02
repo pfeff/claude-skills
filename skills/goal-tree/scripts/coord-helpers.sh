@@ -8,7 +8,7 @@
 #
 # Or from operations that reference the goal-tree skill:
 #
-#   source ~/.claude/skills/goal-tree/scripts/coord-helpers.sh
+#   source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
 #
 # All functions are no-ops when coordinator env vars are unset,
 # making them safe to call unconditionally. Failures are non-blocking
