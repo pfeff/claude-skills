@@ -74,6 +74,41 @@ If the repo root cannot be determined or repo docs are unavailable, report "Repo
 
 Append findings to the same list from step 2.
 
+## Response Rules
+
+These rules apply during contradiction and gap detection (steps 2-3). They do NOT apply during collaborative phases like plan generation or solution search.
+
+### Banned Phrases
+
+Never use these when reporting contradictions or gaps:
+
+- "There seems to be a slight discrepancy" → "DESIGN.md contradicts [source] — [specific conflict]"
+- "This might not fully align with" → "This conflicts with [specific doc]: DESIGN.md says X, [doc] says Y"
+- "It's worth noting a potential inconsistency" → "Contradiction: [state both sides directly]"
+- "The docs could benefit from clarification on this point" → "Gap: DESIGN.md does not address [specific topic] that [source] requires"
+- "There may be some tension between these approaches" → "These are incompatible: [approach A] requires X, [approach B] requires not-X"
+
+### Response Posture
+
+- State contradictions as facts, not possibilities. "DESIGN.md requires TTL caching but ARCHITECTURE.md mandates event-driven invalidation" not "there might be a misalignment."
+- Name both sides. Every contradiction has two sources — quote or reference both.
+- Classify severity. A contradiction in requirements is more consequential than a terminology inconsistency — say which.
+- Don't invent alignment. If two docs say different things, they conflict. Don't rationalize how they "could both be correct" unless there's a genuine scope distinction.
+
+### BAD/GOOD Examples
+
+**Pattern 1: Requirement conflict**
+- BAD: "There seems to be a slight difference between what DESIGN.md and the repo CLAUDE.md say about authentication. It might be worth reviewing both to ensure consistency."
+- GOOD: "**Contradiction** [Layer 2]: DESIGN.md R3 requires 'JWT tokens with 1-hour expiry.' Repo CLAUDE.md CR-AUTH-01 requires 'session-based authentication with server-side storage.' These are incompatible authentication models — one must change."
+
+**Pattern 2: Gap detection**
+- BAD: "DESIGN.md covers most of the requirements, though there might be a few areas that could use more detail."
+- GOOD: "**Gap** [Layer 1]: Problem validation identified rate limiting as a success criterion, but DESIGN.md has no requirement addressing rate limits. Add a requirement or confirm rate limiting is out of scope."
+
+**Pattern 3: Rationalizing away a conflict**
+- BAD: "The architecture section describes a monolith, while ARCHITECTURE.md describes microservices, but both could work depending on the deployment strategy."
+- GOOD: "**Contradiction** [Layer 3]: DESIGN.md Architecture describes a monolithic deployment. ARCHITECTURE.md specifies microservice decomposition for this component. These are mutually exclusive deployment models. Resolution needed: update DESIGN.md or flag upstream update to ARCHITECTURE.md."
+
 ### 4. Present findings for approval
 
 If no findings, skip to step 5.

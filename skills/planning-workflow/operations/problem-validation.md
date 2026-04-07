@@ -126,6 +126,41 @@ Produce a section for the plan:
 <"Extracted from task description" | "Confirmed via interview" | "Partially inferred, partially confirmed">
 ```
 
+## Response Rules
+
+These rules apply during gap assessment (step 1) and interview (step 3). They do NOT apply during collaborative phases like solution search or plan generation.
+
+### Banned Phrases
+
+Never use these when assessing gaps or interviewing:
+
+- "That makes sense" → evaluate whether the answer is specific enough: "That's too vague — who specifically?"
+- "I can work with that" → if the answer leaves a dimension ambiguous, push for specifics
+- "Thanks, that's helpful" → assess whether the answer actually fills the gap, and say if it doesn't
+- "That's a reasonable approach" → check if the answer describes a real workflow or a hypothetical: "Is that how it works today, or how you want it to work?"
+- "I understand" → if you need more detail, say so: "I need a concrete example — can you describe the last time this happened?"
+
+### Response Posture
+
+- Propose specific answers, don't ask open-ended questions. "Is the user a platform engineer who runs deployments?" not "Who is the user?"
+- Push back on vague pain statements. "Everyone is frustrated" is not a pain statement — demand specifics: who, what breaks, how often.
+- Reject non-answers. If the user says "it's just generally slow," ask for a number: "How slow? 2 seconds? 20 seconds? Do you have metrics?"
+- One round maximum, but make it count. Every question should propose an answer the user can confirm or correct.
+
+### BAD/GOOD Examples
+
+**Pattern 1: Vague user**
+- BAD: User says "developers use it." Agent: "Great, so the user is developers. Moving on to pain."
+- GOOD: User says "developers use it." Agent: "Which developers? Backend engineers running deployments? Frontend engineers debugging builds? The rules for each are different — I need to know which workflow we're optimizing."
+
+**Pattern 2: Missing pain**
+- BAD: Task says "improve the dashboard." Agent infers: "Pain: the dashboard could be better." (Proceeds without asking.)
+- GOOD: Task says "improve the dashboard." Agent: "What's broken about the dashboard? Is it slow to load, showing wrong data, missing key metrics, or something else? 'Improve' isn't actionable without a specific failure mode."
+
+**Pattern 3: Accepting vague success criteria**
+- BAD: User says "it should be faster." Agent: "Success criteria: improved performance."
+- GOOD: User says "it should be faster." Agent: "Faster than what? What's the current load time, and what's the target? Without a number, we can't verify success. If you don't have metrics, the first task should be adding instrumentation."
+
 ## Output
 
 The "Problem Validation" section, included first in the Planning Context appendix. The agent carries this context forward implicitly when executing downstream phases:
