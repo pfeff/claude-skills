@@ -1,0 +1,36 @@
+# Node: ${NODE_ID} - ${HEADLINE}
+
+## Workspace
+
+- **Path**: ${WORKSPACE_PATH}
+- **Project**: ${PROJECT_DIR}
+- **Branch**: ${NODE_BRANCH}
+
+## Repos
+
+${REPOS_LIST}
+
+## Context
+
+- **Project**: ${PROJECT_SLUG}
+- **Integration branch**: ${PROJECT_BRANCH}
+- **Node branch**: ${NODE_BRANCH}
+
+## Instructions
+
+- See **DESIGN.md** for requirements and acceptance criteria
+- Use `TaskList` to see implementation progress
+- Return to project root: `cd ${PROJECT_DIR}`
+- Check project state: `Read(${PROJECT_DIR}/GOAL.md)`
+
+## Auto-Advance
+
+This workspace uses auto-advance: after `/init-workspace` creates the task list, the agent autonomously cycles through tasks (implement → validate → commit → next).
+
+**The loop stops when**:
+- All tasks are complete
+- A task fails validation after retries
+- The agent encounters an ambiguous decision
+- A commit fails
+
+On pause, review the output and provide guidance. On completion, run `/finish` to create the PR.
