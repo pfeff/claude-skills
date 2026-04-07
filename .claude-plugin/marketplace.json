@@ -21,7 +21,8 @@
         "./skills/planning-workflow",
         "./skills/review",
         "./skills/task-workflow",
-        "./skills/testing-without-mocks"
+        "./skills/testing-without-mocks",
+        "./skills/goal-tree"
       ]
     }
   ]
