@@ -1,0 +1,655 @@
+#!/usr/bin/env bash
+#
+# coord — CLI client for the agent-coordinator goal tree API.
+#
+# Configuration (checked in order):
+#   1. COORDINATOR_URL / COORDINATOR_TOKEN environment variables
+#   2. ~/.config/coord/config file (KEY=VALUE format)
+#
+# Exit codes:
+#   0  Success
+#   1  Client error (bad arguments, 4xx response)
+#   2  Server error (5xx response)
+#   3  Connection failure
+#
+
+set -euo pipefail
+
+# Load config file if it exists (env vars take precedence)
+COORD_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/coord/config"
+if [[ -f "$COORD_CONFIG" ]]; then
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    key=$(echo "$key" | xargs)
+    value=$(echo "$value" | xargs)
+    case "$key" in
+      COORDINATOR_URL)   : "${COORDINATOR_URL:=$value}" ;;
+      COORDINATOR_TOKEN) : "${COORDINATOR_TOKEN:=$value}" ;;
+    esac
+  done < "$COORD_CONFIG"
+fi
+
+: "${COORDINATOR_URL:=http://localhost:4000}"
+
+# Allow help without token
+if [[ "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" || -z "${1:-}" ]]; then
+  COORDINATOR_TOKEN="${COORDINATOR_TOKEN:-}"
+else
+  : "${COORDINATOR_TOKEN:?COORDINATOR_TOKEN is required. Set it in $COORD_CONFIG or as an env var.}"
+fi
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+die()  { echo "error: $*" >&2; exit 1; }
+usage_die() { echo "error: $*" >&2; echo "Run 'coord help' for usage." >&2; exit 1; }
+
+# Global flag: --id-only strips response to just .data.id
+ID_ONLY=false
+
+# HTTP request via curl. Outputs response body; sets COORD_HTTP_CODE.
+# Usage: api METHOD path [body]
+api() {
+  local method="$1" path="$2" body="${3:-}"
+  local url="${COORDINATOR_URL}${path}"
+  local tmp
+  tmp=$(mktemp)
+
+  local curl_args=(
+    -s -w '\n%{http_code}'
+    -X "$method"
+    -H "Authorization: Bearer ${COORDINATOR_TOKEN}"
+    -H "Content-Type: application/json"
+    -H "Accept: application/json"
+  )
+
+  if [[ -n "$body" ]]; then
+    curl_args+=(-d "$body")
+  fi
+
+  local raw
+  if ! raw=$(curl "${curl_args[@]}" "$url" 2>"$tmp"); then
+    local err
+    err=$(cat "$tmp")
+    rm -f "$tmp"
+    echo "{\"error\":\"connection_failed\",\"detail\":\"$err\"}" >&2
+    exit 3
+  fi
+  rm -f "$tmp"
+
+  # Last line is HTTP status code
+  COORD_HTTP_CODE=$(echo "$raw" | tail -n1)
+  local response
+  response=$(echo "$raw" | sed '$d')
+
+  echo "$response"
+
+  case "$COORD_HTTP_CODE" in
+    2[0-9][0-9]) return 0 ;;
+    4[0-9][0-9]) return 1 ;;
+    5[0-9][0-9]) return 2 ;;
+    *)           return 1 ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# tree subcommands
+# ---------------------------------------------------------------------------
+
+tree_create() {
+  local title="" context="" guardian_issue="" status="pending"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --title)          title="$2"; shift 2 ;;
+      --context)        context="$2"; shift 2 ;;
+      --guardian-issue) guardian_issue="$2"; shift 2 ;;
+      --status)         status="$2"; shift 2 ;;
+      *) usage_die "tree create: unknown option '$1'" ;;
+    esac
+  done
+  [[ -n "$title" ]] || usage_die "tree create: --title is required"
+
+  local body
+  body=$(jq -n \
+    --arg title "$title" \
+    --arg context "$context" \
+    --arg guardian_issue "$guardian_issue" \
+    --arg status "$status" \
+    '{goal_tree: {title: $title, context: $context, guardian_issue_ref: $guardian_issue, status: $status}}')
+
+  local response
+  response=$(api POST /api/goal_trees "$body") || { echo "$response"; return $?; }
+  if [[ "$ID_ONLY" == "true" ]]; then
+    echo "$response" | jq -r '.data.id'
+  else
+    echo "$response"
+  fi
+}
+
+tree_list() {
+  api GET /api/goal_trees
+}
+
+tree_show() {
+  local tree_id="${1:-}"
+  [[ -n "$tree_id" ]] || usage_die "tree show: <tree-id> is required"
+  api GET "/api/goal_trees/${tree_id}"
+}
+
+tree_update() {
+  local tree_id="${1:-}"; shift || usage_die "tree update: <tree-id> is required"
+
+  local status="" title="" context="" guardian_issue=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --status)         status="$2"; shift 2 ;;
+      --title)          title="$2"; shift 2 ;;
+      --context)        context="$2"; shift 2 ;;
+      --guardian-issue) guardian_issue="$2"; shift 2 ;;
+      *) usage_die "tree update: unknown option '$1'" ;;
+    esac
+  done
+
+  local body
+  body=$(jq -n \
+    --arg status "$status" \
+    --arg title "$title" \
+    --arg context "$context" \
+    --arg guardian_issue "$guardian_issue" \
+    '{goal_tree: {}}
+    | if $status != "" then .goal_tree.status = $status else . end
+    | if $title != "" then .goal_tree.title = $title else . end
+    | if $context != "" then .goal_tree.context = $context else . end
+    | if $guardian_issue != "" then .goal_tree.guardian_issue_ref = $guardian_issue else . end')
+
+  api PUT "/api/goal_trees/${tree_id}" "$body"
+}
+
+tree_ready() {
+  local tree_id="${1:-}"
+  [[ -n "$tree_id" ]] || usage_die "tree ready: <tree-id> is required"
+  api GET "/api/goal_trees/${tree_id}/ready"
+}
+
+tree_sync() {
+  local tree_id="${1:-}"
+  [[ -n "$tree_id" ]] || usage_die "tree sync: <tree-id> is required"
+
+  local json
+  json=$(api GET "/api/goal_trees/${tree_id}") || exit $?
+
+  echo "$json" | jq -r '
+    # Build db_id -> node_id lookup for dependency resolution
+    (.data.nodes | map({(.id | tostring): .node_id}) | add // {}) as $id_map |
+
+    # --- Helper: compute depth of a node by walking parent_id chain ---
+    # Build db_id -> parent_id lookup
+    (.data.nodes | map({(.id | tostring): .parent_id}) | add // {}) as $parent_map |
+
+    # Recursive depth function
+    def depth:
+      if . == null then 0
+      else (tostring | $parent_map[.]) as $pid |
+        if $pid == null then 0
+        else ($pid | depth) + 1
+        end
+      end;
+
+    # --- YAML Frontmatter ---
+    "---",
+    "title: \"\(.data.title)\"",
+    (if .data.guardian_issue_ref != null and .data.guardian_issue_ref != ""
+     then "guardian_issue: \"\(.data.guardian_issue_ref)\""
+     else empty end),
+    "repos:",
+    # Collect unique repos from root-level nodes (parent_id == null)
+    ([.data.nodes[] | select(.parent_id == null) | .repos[]?] | unique | .[] |
+      "  - \(.)"),
+    "status: \(.data.status)",
+    "---",
+    "",
+
+    # --- Root heading and context ---
+    "# \(.data.title)",
+    "",
+    (if .data.context != null and .data.context != ""
+     then .data.context, ""
+     else empty end),
+
+    # --- Nodes ---
+    # Depth-first traversal: parent before children, siblings sorted by node_id
+
+    # Build parent_id -> [child repos] for inheritance check
+    (.data.nodes | map({(.id | tostring): .repos}) | add // {}) as $node_repos |
+
+    # Build parent db_id -> sorted children map
+    (.data.nodes | group_by(.parent_id | tostring) |
+      map({
+        key: (.[0].parent_id | if . == null then "root" else tostring end),
+        value: (sort_by(.node_id | split(".") | map(
+          if test("^[0-9]+$") then (tonumber + 1000 | tostring) else . end
+        )))
+      }) | from_entries
+    ) as $children_map |
+
+    # Recursive DFS: emit node, then its children
+    def dfs:
+      ., ((.id | tostring) as $pid | ($children_map[$pid] // []) | .[] | dfs);
+
+    # Start from root nodes (parent_id == null)
+    (($children_map["root"] // []) | .[] | dfs) |
+
+    # Compute heading level from depth
+    (.id | depth) as $d |
+    (("#" * ($d + 2)) + " ") as $heading |
+
+    # Node heading
+    "\($heading)\(.node_id). \(.title) [status: \(.status)]",
+    "",
+
+    # Optional body: repos (only if different from parent)
+    (if .parent_id != null then
+      (.parent_id | tostring) as $pid |
+      ($node_repos[$pid] // []) as $parent_repos |
+      if .repos != $parent_repos and (.repos | length) > 0 then
+        "**repos**: \(.repos | join(", "))", ""
+      else empty end
+    else
+      if (.repos | length) > 0 then
+        "**repos**: \(.repos | join(", "))", ""
+      else empty end
+    end),
+
+    # Optional body: depends_on (resolve db_ids to node_ids)
+    (if (.dependencies | length) > 0 then
+      "**depends_on**: \([.dependencies[].depends_on_node_id | tostring | $id_map[.] // "unknown"] | join(", "))", ""
+    else empty end),
+
+    # Optional body: description
+    (if .description != null and .description != "" then
+      .description, ""
+    else empty end),
+
+    # Optional body: criteria
+    (if (.criteria | length) > 0 then
+      "**Acceptance Criteria**:",
+      (.criteria[] |
+        if type == "object" then
+          if .checked then "- [x] \(.text)"
+          else "- [ ] \(.text)" end
+        else "- [ ] \(.)" end
+      ),
+      ""
+    else empty end),
+
+    # Optional body: result
+    (if .result != null and .result != "" then
+      "**result**: \(.result)", ""
+    else empty end)
+  '
+
+  # Results log
+  local results_section
+  results_section=$(echo "$json" | jq -r '
+    [.data.nodes[] | select(.results | length > 0) |
+      . as $node | .results[] | {node_id: $node.node_id, title: $node.title, result: .}
+    ] |
+    if length == 0 then empty
+    else
+      "---",
+      "## Results Log",
+      "",
+      (.[] |
+        "### \(.node_id) \(.title)",
+        "- **Status**: \(.result.status // "unknown")",
+        "- **Dispatch**: \(.result.dispatch_method // "unknown")",
+        (if (.result.files_modified | length) > 0 then
+          "- **Files**: \(.result.files_modified | join(", "))"
+        else empty end),
+        (if .result.commit_hash != null and .result.commit_hash != "" then
+          "- **Commit**: \(.result.commit_hash)"
+        else empty end),
+        "- **Summary**: \(.result.changes_summary // "—")",
+        ""
+      )
+    end
+  ')
+
+  if [[ -n "$results_section" ]]; then
+    echo ""
+    echo "$results_section"
+  fi
+}
+
+cmd_tree() {
+  local subcmd="${1:-help}"; shift || true
+  case "$subcmd" in
+    create) tree_create "$@" ;;
+    list)   tree_list "$@" ;;
+    show)   tree_show "$@" ;;
+    update) tree_update "$@" ;;
+    ready)  tree_ready "$@" ;;
+    sync)   tree_sync "$@" ;;
+    help)   usage_tree ;;
+    *)      usage_die "tree: unknown subcommand '$subcmd'" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# node subcommands
+# ---------------------------------------------------------------------------
+
+node_create() {
+  local tree_id="${1:-}"; shift || usage_die "node create: <tree-id> is required"
+  local node_id="" title="" description="" status="pending" repos="" parent_id="" position=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --node-id)      node_id="$2"; shift 2 ;;
+      --title)        title="$2"; shift 2 ;;
+      --description)  description="$2"; shift 2 ;;
+      --status)       status="$2"; shift 2 ;;
+      --repos)        repos="$2"; shift 2 ;;
+      --parent-id)    parent_id="$2"; shift 2 ;;
+      --position)     position="$2"; shift 2 ;;
+      *) usage_die "node create: unknown option '$1'" ;;
+    esac
+  done
+  [[ -n "$node_id" ]] || usage_die "node create: --node-id is required"
+  [[ -n "$title" ]]   || usage_die "node create: --title is required"
+
+  local body
+  body=$(jq -n \
+    --arg node_id "$node_id" \
+    --arg title "$title" \
+    --arg description "$description" \
+    --arg status "$status" \
+    --arg repos "$repos" \
+    --arg parent_id "$parent_id" \
+    --arg position "$position" \
+    '{node: {
+        node_id: $node_id,
+        title: $title,
+        description: $description,
+        status: $status
+      }
+    }
+    | if $repos != "" then .node.repos = ($repos | split(",")) else . end
+    | if $parent_id != "" then .node.parent_id = ($parent_id | tonumber) else . end
+    | if $position != "" then .node.position = ($position | tonumber) else . end')
+
+  local response
+  response=$(api POST "/api/goal_trees/${tree_id}/nodes" "$body") || { echo "$response"; return $?; }
+  if [[ "$ID_ONLY" == "true" ]]; then
+    echo "$response" | jq -r '.data.id'
+  else
+    echo "$response"
+  fi
+}
+
+node_show() {
+  local tree_id="${1:-}"; shift || usage_die "node show: <tree-id> is required"
+
+  # Check for --by-node-id flag (lookup by logical node_id like "A.1")
+  if [[ "${1:-}" == "--by-node-id" ]]; then
+    local logical_id="${2:-}"
+    [[ -n "$logical_id" ]] || usage_die "node show: --by-node-id requires a value"
+    local tree_json
+    tree_json=$(api GET "/api/goal_trees/${tree_id}") || { echo "$tree_json"; return $?; }
+    echo "$tree_json" | jq --arg nid "$logical_id" '.data.nodes[] | select(.node_id == $nid)'
+    return
+  fi
+
+  local node_id="${1:-}"
+  [[ -n "$node_id" ]] || usage_die "node show: <node-db-id> or --by-node-id <id> is required"
+  api GET "/api/goal_trees/${tree_id}/nodes/${node_id}"
+}
+
+node_update() {
+  local tree_id="${1:-}"; shift || usage_die "node update: <tree-id> is required"
+  local node_id="${1:-}"; shift || usage_die "node update: <node-id> is required"
+
+  local status="" result="" description="" title="" criteria=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --status)      status="$2"; shift 2 ;;
+      --result)      result="$2"; shift 2 ;;
+      --description) description="$2"; shift 2 ;;
+      --title)       title="$2"; shift 2 ;;
+      --criteria)    criteria="$2"; shift 2 ;;
+      *) usage_die "node update: unknown option '$1'" ;;
+    esac
+  done
+
+  local body
+  body=$(jq -n \
+    --arg status "$status" \
+    --arg result "$result" \
+    --arg description "$description" \
+    --arg title "$title" \
+    --arg criteria "$criteria" \
+    '{node: {}}
+    | if $status != "" then .node.status = $status else . end
+    | if $result != "" then .node.result = $result else . end
+    | if $description != "" then .node.description = $description else . end
+    | if $title != "" then .node.title = $title else . end
+    | if $criteria != "" then .node.criteria = ($criteria | fromjson) else . end')
+
+  api PATCH "/api/goal_trees/${tree_id}/nodes/${node_id}" "$body"
+}
+
+node_add_dependency() {
+  local tree_id="${1:-}"; shift || usage_die "node add-dependency: <tree-id> is required"
+  local node_id="${1:-}"; shift || usage_die "node add-dependency: <node-id> is required"
+
+  local depends_on=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --depends-on) depends_on="$2"; shift 2 ;;
+      *) usage_die "node add-dependency: unknown option '$1'" ;;
+    esac
+  done
+  [[ -n "$depends_on" ]] || usage_die "node add-dependency: --depends-on is required"
+
+  # Dependencies are managed via node update with dependency data.
+  # The API expects goal_node_id (db id) and depends_on_node_id (db id).
+  # The node_id passed here is the database ID of the node.
+  local body
+  body=$(jq -n \
+    --argjson goal_node_id "$node_id" \
+    --argjson depends_on_node_id "$depends_on" \
+    '{dependency: {goal_node_id: $goal_node_id, depends_on_node_id: $depends_on_node_id}}')
+
+  # Note: This endpoint may need to be added to the API.
+  # For now, sends to a conventional nested resource path.
+  api POST "/api/goal_trees/${tree_id}/nodes/${node_id}/dependencies" "$body"
+}
+
+node_add_result() {
+  local tree_id="${1:-}"; shift || usage_die "node add-result: <tree-id> is required"
+  local node_id="${1:-}"; shift || usage_die "node add-result: <node-id> is required"
+
+  local status="" dispatch="" files="" summary="" commit=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --status)   status="$2"; shift 2 ;;
+      --dispatch) dispatch="$2"; shift 2 ;;
+      --files)    files="$2"; shift 2 ;;
+      --summary)  summary="$2"; shift 2 ;;
+      --commit)   commit="$2"; shift 2 ;;
+      *) usage_die "node add-result: unknown option '$1'" ;;
+    esac
+  done
+
+  local body
+  body=$(jq -n \
+    --arg status "$status" \
+    --arg dispatch "$dispatch" \
+    --arg files "$files" \
+    --arg summary "$summary" \
+    --arg commit "$commit" \
+    --argjson goal_node_id "$node_id" \
+    '{result: {goal_node_id: $goal_node_id}}
+    | if $status != "" then .result.status = $status else . end
+    | if $dispatch != "" then .result.dispatch_method = $dispatch else . end
+    | if $files != "" then .result.files_modified = ($files | split(",")) else . end
+    | if $summary != "" then .result.changes_summary = $summary else . end
+    | if $commit != "" then .result.commit_hash = $commit else . end')
+
+  # Note: This endpoint may need to be added to the API.
+  # For now, sends to a conventional nested resource path.
+  api POST "/api/goal_trees/${tree_id}/nodes/${node_id}/results" "$body"
+}
+
+cmd_node() {
+  local subcmd="${1:-help}"; shift || true
+  case "$subcmd" in
+    create)         node_create "$@" ;;
+    show)           node_show "$@" ;;
+    update)         node_update "$@" ;;
+    add-dependency) node_add_dependency "$@" ;;
+    add-result)     node_add_result "$@" ;;
+    help)           usage_node ;;
+    *)              usage_die "node: unknown subcommand '$subcmd'" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Usage / Help
+# ---------------------------------------------------------------------------
+
+usage_tree() {
+  cat <<'EOF'
+Usage: coord tree <subcommand> [options]
+
+Subcommands:
+  create    Create a new goal tree
+              --title <title>              (required)
+              --context <description>
+              --guardian-issue <ref>        e.g. pfeff/guardian#187
+              --status <status>            default: active
+
+  list      List all goal trees
+
+  show      Show a goal tree with all nodes
+              coord tree show <tree-id>
+
+  Note: tree create supports --id-only (global flag) to output just the ID.
+
+  update    Update a goal tree
+              coord tree update <tree-id>
+              --status <status>
+              --title <title>
+              --context <description>
+              --guardian-issue <ref>
+
+  ready     List nodes ready for dispatch
+              coord tree ready <tree-id>
+
+  sync      Output GOAL.md-formatted tree from coordinator state
+              coord tree sync <tree-id>
+              Outputs full GOAL.md to stdout (frontmatter, headings, results log)
+EOF
+}
+
+usage_node() {
+  cat <<'EOF'
+Usage: coord node <subcommand> [options]
+
+Subcommands:
+  show <tree-id> <node-db-id>
+              Show a single node's details
+              --by-node-id <id>            Lookup by logical node_id (e.g. "A.1")
+
+  create <tree-id>    Create a node in a tree
+              --node-id <id>               (required) e.g. "A.1"
+              --title <title>              (required)
+              --description <text>
+              --status <status>            default: pending
+              --repos <repo1,repo2>        comma-separated
+              --parent-id <db-id>          parent node database ID
+              --position <int>
+
+  update <tree-id> <node-id>    Update a node
+              --status <status>
+              --result <summary>
+              --title <title>
+              --description <text>
+              --criteria '<json-array>'    e.g. '["crit 1","crit 2"]'
+
+  add-dependency <tree-id> <node-db-id>
+              --depends-on <other-node-db-id>
+
+  add-result <tree-id> <node-db-id>
+              --status <status>            e.g. completed, partial
+              --dispatch <method>          e.g. subagent, inline
+              --files <f1,f2>              comma-separated
+              --summary <text>
+              --commit <hash>
+EOF
+}
+
+usage_main() {
+  cat <<'EOF'
+Usage: coord [--id-only] <command> <subcommand> [options]
+
+Global flags:
+  --id-only   Output just the database ID from create commands
+
+Commands:
+  tree      Goal tree operations (create, list, show, update, ready)
+  node      Node operations (show, create, update, add-dependency, add-result)
+  help      Show this help
+
+Environment:
+  COORDINATOR_URL    API base URL (default: http://localhost:4000)
+  COORDINATOR_TOKEN  Bearer token (required)
+
+Exit codes:
+  0  Success
+  1  Client error (bad arguments, 4xx)
+  2  Server error (5xx)
+  3  Connection failure
+
+Examples:
+  coord tree create --title "My Project" --guardian-issue "pfeff/guardian#187"
+  coord --id-only tree create --title "My Project"    # outputs just the ID
+  coord tree list
+  coord tree show 1
+  coord tree ready 1
+  coord --id-only node create 1 --node-id "A.1" --title "First task"
+  coord node create 1 --node-id "A.1" --title "First task" --repos "repo1,repo2"
+  coord node update 1 42 --status in_progress
+  coord node update 1 42 --status completed --result "Done"
+  coord node show 3 84
+  coord node show 3 --by-node-id "A.1"               # lookup by logical ID
+  coord node add-dependency 1 42 --depends-on 41
+  coord node add-result 1 42 --status completed --dispatch subagent --summary "What changed"
+  coord tree sync 1 > GOAL.md
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+# ---------------------------------------------------------------------------
+
+main() {
+  # Parse global flags before command dispatch
+  while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+      --id-only) ID_ONLY=true; shift ;;
+      --help|-h) usage_main; return ;;
+      *) break ;;
+    esac
+  done
+
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    tree) cmd_tree "$@" ;;
+    node) cmd_node "$@" ;;
+    help|--help|-h) usage_main ;;
+    *) usage_die "unknown command '$cmd'" ;;
+  esac
+}
+
+main "$@"

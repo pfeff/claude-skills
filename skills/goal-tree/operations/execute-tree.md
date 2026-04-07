@@ -1,0 +1,529 @@
+# Execute Tree Operation
+
+Main orchestration loop for goal tree execution. Iterates: select ready nodes → decide dispatch strategy → fan-out dispatch → collect results → update coordinator → repeat.
+
+## Inputs
+
+| Input | Required | Description |
+|-------|----------|-------------|
+| `tree_id` | Yes | Coordinator tree ID |
+| `project_dir` | Yes | Project directory path |
+| `project_branch` | Yes | Project branch name |
+
+## Purpose
+
+Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
+
+## Protocol Requirements
+
+These are mandatory — do not shortcut the pipeline.
+
+1. **Every node goes through the full pipeline.** You MUST run select-ready → dispatch-decision → dispatch-node for each node. Do not implement tasks directly without going through dispatch-decision first.
+2. **Parallel dispatch is the default.** When select-ready returns multiple independent nodes, dispatch them as parallel subagents (multiple Agent tool calls in one message). Sequential inline execution of independent nodes is a protocol violation, not a simplification.
+3. **Planning-workflow is a gate, not a suggestion.** Every dispatched node — whether subagent or inline — must run planning-workflow before implementation. For subagents this is in the prompt. For inline this is verified by checking PLAN.md exists before proceeding to implementation.
+
+## Entry Guard
+
+Before entering the loop:
+
+### 1. Query Goal Tree
+
+```bash
+coord tree show $TREE_ID
+```
+
+Parse the JSON response to get the full tree state.
+
+### 2. Check Preconditions
+
+| Condition | Action |
+|-----------|--------|
+| No nodes in tree | Output "Empty goal tree — nothing to execute." and stop |
+| All nodes completed | Output completion summary and hand off to synthesize |
+| Any node in_progress | Resume: treat in_progress as ready (it wasn't completed last session) |
+| Pending nodes exist | Enter loop |
+| All remaining nodes blocked/skipped | Output "All remaining nodes are blocked or skipped." and stop |
+
+### 3. Initialize State
+
+```
+skipped_set = {}           # node IDs skipped by stuck detection
+completed_nodes = []       # list of {id, title, commits}
+total_dispatches = 0       # total dispatch attempts
+parallel_dispatches = 0    # parallel fan-out count
+```
+
+## Loop Body
+
+Repeat steps 1-5 until termination.
+
+### 1. Select Ready Nodes
+
+```bash
+coord tree ready $TREE_ID
+```
+
+Parse the JSON response to get ready nodes, then group for parallel dispatch per `operations/select-ready.md`.
+
+| Batch Result | Action |
+|-------------|--------|
+| Non-empty batch | Proceed to step 2 |
+| Empty, reason: "complete", **bounded** | Go to Termination (step 6) |
+| Empty, reason: "complete", **open-ended** | Auto-continue via `operations/next-cycle.md` |
+| Empty, reason: "blocked" | Go to Termination with blocked summary |
+| Empty, reason: "all_skipped" | Go to Termination with skipped summary |
+
+### 2. Dispatch Decisions
+
+For each node in the ready batch:
+
+```
+Load: operations/dispatch-decision.md
+
+decisions = []
+for node in ready_batch:
+  decision = dispatch_decision(node, tree, results_log)
+  decisions.append((node, decision))
+```
+
+### 2b. Dispatch Checkpoint
+
+Checkpoint behavior is determined by autonomy tier (see `dispatch-decision.md`):
+
+| Batch composition | Checkpoint |
+|-------------------|------------|
+| All Tier 1 (read-only) | **Skip** — auto-dispatch silently |
+| All Tier 2 (code with spec) | **Skip** — auto-dispatch, checkpoint comes post-completion |
+| Any Tier 3 (strategic/ambiguous) | **Present** escalations to user before dispatching |
+| Mixed Tier 1+2 | **Skip** — auto-dispatch all |
+
+When presenting a checkpoint (Tier 3 in batch):
+
+```
+## Dispatch Round <N>
+
+| Node | Strategy | Tier | Reason |
+|------|----------|------|--------|
+| <id>. <title> | escalate | 3 | <question for user> |
+| <id>. <title> | subagent | 1 | <rationale> (auto) |
+
+Tier 1/2 nodes will auto-dispatch. Need your input on the Tier 3 items above.
+```
+
+Tier 1 and 2 nodes in a mixed batch dispatch immediately — don't hold them waiting for Tier 3 resolution.
+
+### 3. Fan-Out Dispatch
+
+Group decisions by strategy and dispatch:
+
+```
+Load: operations/dispatch-node.md
+
+# Separate by dispatch type
+subagent_nodes = [(n, d) for n, d in decisions if d.strategy == "subagent"]
+subsession_nodes = [(n, d) for n, d in decisions if d.strategy == "sub-session"]
+inline_nodes = [(n, d) for n, d in decisions if d.strategy == "inline"]
+escalate_nodes = [(n, d) for n, d in decisions if d.strategy == "escalate"]
+```
+
+#### 3a. Handle Escalations First
+
+If any nodes need escalation, present them to the user before dispatching others:
+
+```
+for node, decision in escalate_nodes:
+  coord node update $TREE_ID $NODE_DB_ID --status blocked
+  present escalation to user
+```
+
+If **all** nodes in the batch are escalations, pause the loop.
+
+#### 3b. Dispatch Subagents in Parallel
+
+Launch all subagent dispatches simultaneously using the Agent tool:
+
+```
+# All subagent nodes in the same independent group → parallel
+for node, decision in subagent_nodes:
+  coord node update $TREE_ID $NODE_DB_ID --status in_progress
+
+# Dispatch all subagents in a single message with multiple Agent tool calls
+results = dispatch_all_subagents(subagent_nodes)
+```
+
+This is the fan-out: multiple Agent tool invocations in one message. Each subagent works in its own node workspace (created by dispatch-node before dispatch).
+
+#### 3c. Dispatch Sub-Sessions in Parallel
+
+Launch sub-sessions concurrently:
+
+```
+for node, decision in subsession_nodes:
+  coord node update $TREE_ID $NODE_DB_ID --status in_progress
+  create_subsession(node, decision)  # tmux session
+```
+
+Sub-sessions run asynchronously. The root session monitors them.
+
+#### 3d. Execute Inline Sequentially
+
+Inline tasks execute in the root session one at a time:
+
+```
+for node, decision in inline_nodes:
+  coord node update $TREE_ID $NODE_DB_ID --status in_progress
+  result = dispatch_inline(node, decision)
+  process_result(node, result)  # step 4
+```
+
+### 4. Process Results
+
+For each dispatch result:
+
+```
+if result.status == "success":
+  coord node update $TREE_ID $NODE_DB_ID \
+    --status completed \
+    --result "<changes summary>"
+
+  coord node add-result $TREE_ID $NODE_DB_ID \
+    --status completed \
+    --dispatch <dispatch_method> \
+    --files "<comma-separated files>" \
+    --summary "<changes summary>" \
+    --commit "<commit hash>"
+
+  completed_nodes.append(node)
+
+elif result.status == "partial":
+  coord node update $TREE_ID $NODE_DB_ID \
+    --result "<changes summary> (partial)"
+  # Decide: retry remaining criteria or accept partial
+
+elif result.status == "failure":
+  # Subagent failed → fall back to inline
+  if result.dispatch_method == "subagent":
+    inline_result = dispatch_inline(node, { reason: "fallback", prior_failure: result.issues })
+    process_result(node, inline_result)  # recursive
+  else:
+    # Inline also failed → skip or escalate
+    handle_stuck(node, "dispatch-failure", result.issues)
+
+elif result.status == "blocked":
+  coord node update $TREE_ID $NODE_DB_ID --status blocked
+
+elif result.status == "escalated":
+  # Already handled in step 3a
+  pass
+```
+
+### 4a. Outcome Classification
+
+For each completed node, classify the outcome relative to the mission:
+
+| Classification | Meaning | Action |
+|----------------|---------|--------|
+| **Advanced** | Node delivered clear mission value | Record advancement in coordinator result |
+| **Neutral** | Node completed but impact is unclear or deferred | Note as "neutral — impact pending" |
+| **Setback** | Node completed but revealed a problem or regression | Flag for strategic review in step 4d |
+
+Record the classification alongside the node result:
+
+```bash
+coord node add-result $TREE_ID $NODE_DB_ID \
+  --summary "<changes summary>. Outcome: <advanced|neutral|setback>. <1-sentence justification>"
+```
+
+Setback classifications automatically trigger the strategic feedback check in step 4d.
+
+### 4b. Commit After Results
+
+After processing results from a dispatch round, commit changes in node workspaces:
+
+Check for uncommitted changes in node workspaces:
+
+```bash
+skills/goal-tree/scripts/check-workspace-state.sh "$PROJECT_DIR"
+```
+
+For each workspace reported as `dirty`, use the git skill commit operation:
+
+```
+Read: skills/git/operations/commit.md
+commit(repo_dir)
+record commit hash in completed_nodes
+```
+
+### 4c. Completion Checkpoint
+
+Post-completion behavior is determined by autonomy tier:
+
+| Tier | Post-Completion |
+|------|-----------------|
+| Tier 1 (read-only) | **Auto-continue** — log result, move on |
+| Tier 2 (code) | **Validation gate** → agent review → present for human review |
+| Tier 3 (strategic) | **Present** for human review immediately |
+
+#### Tier 1: Auto-continue
+
+Log a single status line and proceed to next round:
+
+```
+── T1: <node.id> <node.title> ✓ ──
+```
+
+#### Tier 2: Validation gate
+
+Before presenting to human, run the validation pipeline:
+
+1. **Automated tests**: Run full test suite in the node workspace
+2. **Lint/format**: Run project linters
+3. **Agent review**: Verify spec → test → code traceability
+   - Each acceptance criterion maps to at least one test
+   - Each test exercises the implementation
+   - No orphan code (implementation without spec coverage)
+
+Present to human with traceability summary:
+
+```
+## Review: <node.id> <node.title>
+
+| Criterion | Test | Status |
+|-----------|------|--------|
+| <spec item> | <test name> | pass |
+
+Validation: tests ✓ lint ✓ traceability ✓
+Files: <N> | Commit: <hash>
+
+Approve, or feedback?
+```
+
+#### Tier 3: Present immediately
+
+Show results and wait for human input before continuing.
+
+### 4d. Strategic Feedback Check
+
+After processing results, evaluate whether results change the strategic picture:
+
+- Did a completed node reveal that the tree decomposition is wrong?
+- Did a failure expose a missing dependency or incorrect assumption?
+- Did results advance a KR in a way that changes priorities?
+
+**Most of the time**: No strategic impact — auto-advance to next round.
+
+**Pause for conversation when**:
+- Results contradict a design assumption in the tree
+- A node's result suggests the tree needs restructuring (new nodes, removed nodes, changed deps)
+- The operator has been disengaged for 3+ rounds and a natural checkpoint exists
+
+When pausing, present the strategic observation and let the operator steer. Do not present a list of everything that happened — focus on the one thing that matters.
+
+### 5. Re-Query and Continue
+
+Query the coordinator for fresh state (may have been updated by sub-sessions):
+
+```bash
+coord tree show $TREE_ID
+```
+
+Check for sub-session completions:
+
+```
+for active sub-session:
+  if session completed:
+    # Query coordinator for node status (sub-session updates coordinator directly)
+    coord tree show $TREE_ID
+    collect results from node statuses
+    # Branch merging deferred to synthesize step
+```
+
+Go to step 1 (select next ready batch).
+
+## Termination
+
+### 6. Completion
+
+When the loop terminates:
+
+```
+## Goal Tree Execution Summary
+
+**Nodes completed**: <N>
+<for each completed node>
+  - <node.id>. <node.title> [<dispatch_method>] (<commit>)
+
+**Nodes skipped**: <N>
+<for each skipped node>
+  - <node.id>. <node.title> (detector: <reason>)
+
+**Nodes blocked**: <N>
+<for each blocked node>
+  - <node.id>. <node.title> (reason: <blocker>)
+
+**Dispatch summary**: <subagent: N, inline: N, sub-session: N, fallback: N>
+**Parallel dispatches**: <N fan-outs>
+**Commits**: <N total>
+
+**Termination reason**: all_complete | blocked | all_skipped | escalated
+```
+
+### Termination Routing
+
+| Condition | Action |
+|-----------|--------|
+| All nodes complete, **bounded project** | Hand off to `operations/synthesize.md` |
+| All nodes complete, **open-ended project** | Auto-continue via `operations/next-cycle.md` |
+| Blocked/skipped nodes remain | Report and pause for user guidance |
+
+**Open-ended detection**: A project is open-ended when the operator has indicated they will determine completion (e.g., "I'll decide when it's done", continuous OODA, no fixed scope). Check project CLAUDE.md for signals. When in doubt, ask once — then remember the answer for the session.
+
+In open-ended mode, "all nodes complete" means "this batch is done" — not "the project is done." The agent immediately enters the next OODA cycle: observe what changed, orient to the mission, propose new nodes, dispatch.
+
+## Stuck Detection
+
+Reuses stuck detection patterns from task-workflow auto-advance:
+
+### No-Progress Detection
+
+After each inline implementation step, check `git diff --stat`:
+
+```
+if empty diff:
+  no_progress_count += 1
+  if no_progress_count >= 1:  # threshold
+    handle_stuck(node, "no-progress")
+```
+
+### Repeated Failure Detection
+
+If the same error appears across retry attempts:
+
+```
+if error_summary == last_error_summary:
+  repeated_count += 1
+  if repeated_count >= 3:  # threshold
+    handle_stuck(node, "repeated-failure")
+```
+
+### Stuck Handling
+
+```
+function handle_stuck(node, reason, detail):
+  coord node update $TREE_ID $NODE_DB_ID \
+    --status skipped \
+    --result "Stuck: ${reason} — ${detail}"
+
+  skipped_set.add(node.id)
+
+  # Log
+  -- Stuck detected --------------------------------
+  Node: <node.id>. <node.title>
+  Detector: <reason>
+  Action: skip and continue
+  --------------------------------------------------
+```
+
+## Parallel Failure Isolation
+
+When dispatching nodes in parallel:
+
+- One node's failure does **not** block independent siblings
+- Failed nodes are handled individually (retry → inline fallback → skip)
+- Other parallel dispatches continue unaffected
+- Results are collected as each dispatch completes
+
+```
+# Fan-out: 3 subagents dispatched in parallel
+# Agent 1: success → process result
+# Agent 2: failure → retry → inline fallback
+# Agent 3: success → process result
+# All three processed independently
+```
+
+## Error Handling
+
+| Error | Response |
+|-------|----------|
+| Coordinator unreachable | Retry with backoff, pause if persistent |
+| Tree not found | Stop with error |
+| All dispatches in a round fail | Pause, report failures, ask user |
+| Transient error (API, network) | Classify via error-classification, retry with backoff |
+| Merge conflict on sub-branch | Escalate to user |
+| Context approaching limit | Output summary, suggest /resume-project in new session |
+
+## Example
+
+### 3-node parallel dispatch with checkpoints
+
+```
+[Goal tree execution starting: 6 nodes (3 ready)]
+
+── Dispatch Round 1 ───────────────────────
+
+| Node | Strategy | Reason |
+|------|----------|--------|
+| A.1. Add OAuth config | subagent | Single repo, clear spec |
+| B.1. Add login UI | subagent | Single repo, clear spec |
+| C.1. Update API docs | subagent | Single repo, clear spec |
+
+Ready to dispatch, or want to adjust?
+
+  → User: "go"
+
+  Dispatching 3 subagents in parallel...
+
+── Round 1 Complete ───────────────────────
+
+| Node | Result | Files | Commit |
+|------|--------|-------|--------|
+| A.1. Add OAuth config | success | 2 files | abc1234 |
+| B.1. Add login UI | success | 3 files | def5678 |
+| C.1. Update API docs | partial | 1 file | — |
+
+**Next up**: A.2 (depends: A.1 ✓), B.2 (depends: B.1 ✓), C.1 retry
+
+Continuing. Redirect?
+
+  → (no response, continuing)
+
+── Dispatch Round 2 ───────────────────────
+
+| Node | Strategy | Reason |
+|------|----------|--------|
+| A.2. Implement OAuth flow | subagent | Depends met, clear spec |
+| C.1. Update API docs | inline | Retry partial completion |
+
+Ready to dispatch?
+
+  → User: "go, auto-advance from here"
+
+  (checkpoints compressed to status lines for remaining rounds)
+
+── Round 2: A.2 success (4 files), C.1 success (1 file) ──
+── Round 3: B.2 success (2 files) ──
+
+## Goal Tree Execution Summary
+
+**Nodes completed**: 5
+  - A.1. Add OAuth config [subagent] (abc1234)
+  - A.2. Implement OAuth flow [subagent] (ghi9012)
+  - B.1. Add login UI [subagent] (def5678)
+  - B.2. Add token refresh [subagent] (mno7890)
+  - C.1. Update API docs [inline] (jkl3456)
+
+**Dispatch summary**: subagent: 4, inline: 1
+**Parallel dispatches**: 1 fan-out (3 parallel)
+**Commits**: 5 total
+**Termination reason**: all_complete
+```
+
+## Integration Points
+
+- **Called by**: start-project (after approval), resume-project (after state recovery)
+- **Calls**: select-ready (via `coord tree ready`), dispatch-decision, dispatch-node, update-goal (via `coord node update`)
+- **Hands off to**: synthesize (on completion)
+- **References**:
+  - `task-workflow/references/error-classification.md`
+  - `task-workflow/references/retry-with-backoff.md`
+  - `references/node-lifecycle.md`
