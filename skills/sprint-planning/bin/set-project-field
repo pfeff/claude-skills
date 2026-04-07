@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# set-project-field — Set a field value on a GitHub Project item
+#
+# Usage: set-project-field [--refresh] <issue-ref> <field-name> <value>
+#
+# Arguments:
+#   issue-ref    Issue reference: owner/repo#N, repo#N, or #N (default: pfeff/cursor-rules)
+#   field-name   Project field name (e.g., "Sprint", "Status")
+#   value        Field value to set (case-insensitive partial match)
+#
+# Options:
+#   --refresh    Force refresh of cached project metadata
+#
+# Examples:
+#   set-project-field '#110' Sprint 'Sprint 8'
+#   set-project-field 'cursor-rules#110' Sprint 'Sprint 8'
+#   set-project-field 'pfeff/cursor-rules#110' Status 'In Progress'
+#   set-project-field --refresh '#110' Sprint 'Sprint 8'
+
+readonly DEFAULT_OWNER="pfeff"
+readonly DEFAULT_REPO="cursor-rules"
+readonly PROJECT_NUMBER=4
+readonly CACHE_DIR="${HOME}/.cache/gh-project"
+readonly CACHE_FILE="${CACHE_DIR}/${DEFAULT_OWNER}-${PROJECT_NUMBER}.json"
+
+usage() {
+  sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \?//'
+  exit 1
+}
+
+die() {
+  echo "error: $1" >&2
+  exit 1
+}
+
+# Parse --refresh flag
+REFRESH=false
+if [[ "${1:-}" == "--refresh" ]]; then
+  REFRESH=true
+  shift
+fi
+
+# Validate argument count
+if [[ $# -ne 3 ]]; then
+  usage
+fi
+
+ISSUE_REF="$1"
+FIELD_NAME="$2"
+FIELD_VALUE="$3"
+
+# Parse issue reference into owner, repo, number
+parse_issue_ref() {
+  local ref="$1"
+
+  # Strip leading # if present
+  ref="${ref#\#}"
+
+  if [[ "$ref" =~ ^([^/]+)/([^#]+)#([0-9]+)$ ]]; then
+    # owner/repo#N
+    OWNER="${BASH_REMATCH[1]}"
+    REPO="${BASH_REMATCH[2]}"
+    ISSUE_NUMBER="${BASH_REMATCH[3]}"
+  elif [[ "$ref" =~ ^([^#]+)#([0-9]+)$ ]]; then
+    # repo#N
+    OWNER="$DEFAULT_OWNER"
+    REPO="${BASH_REMATCH[1]}"
+    ISSUE_NUMBER="${BASH_REMATCH[2]}"
+  elif [[ "$ref" =~ ^[0-9]+$ ]]; then
+    # bare number
+    OWNER="$DEFAULT_OWNER"
+    REPO="$DEFAULT_REPO"
+    ISSUE_NUMBER="$ref"
+  else
+    die "invalid issue reference: $1 (expected owner/repo#N, repo#N, #N, or N)"
+  fi
+}
+
+parse_issue_ref "$ISSUE_REF"
+
+echo "Issue: ${OWNER}/${REPO}#${ISSUE_NUMBER}"
+echo "Field: ${FIELD_NAME} = ${FIELD_VALUE}"
+
+fetch_project_metadata() {
+  local query
+  query=$(cat <<'GRAPHQL'
+query($owner: String!) {
+  user(login: $owner) {
+    projectV2(number: PROJ_NUMBER) {
+      id
+      fields(first: 50) {
+        nodes {
+          ... on ProjectV2Field {
+            id
+            name
+          }
+          ... on ProjectV2SingleSelectField {
+            id
+            name
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL
+)
+  # GraphQL Int arguments require -F; inject PROJECT_NUMBER via string replace
+  # since gh api graphql doesn't support Int variables in all contexts
+  query="${query//PROJ_NUMBER/$PROJECT_NUMBER}"
+  gh api graphql -f query="$query" -f owner="$DEFAULT_OWNER"
+}
+
+ensure_cache() {
+  if [[ "$REFRESH" == "true" ]] || [[ ! -f "$CACHE_FILE" ]]; then
+    mkdir -p "$CACHE_DIR"
+    local tmp="${CACHE_FILE}.tmp"
+    fetch_project_metadata > "$tmp" || { rm -f "$tmp"; die "failed to fetch project metadata"; }
+    mv "$tmp" "$CACHE_FILE"
+  fi
+}
+
+resolve_field() {
+  local field_name="$1"
+  local field_value="$2"
+
+  PROJECT_ID=$(jq -r '.data.user.projectV2.id' "$CACHE_FILE")
+  [[ -n "$PROJECT_ID" && "$PROJECT_ID" != "null" ]] || die "could not resolve project ID"
+
+  # Field lookup: exact match, case-insensitive
+  FIELD_ID=$(jq -r --arg name "$field_name" '
+    .data.user.projectV2.fields.nodes[]
+    | select(.name | ascii_downcase == ($name | ascii_downcase))
+    | .id
+  ' "$CACHE_FILE")
+
+  [[ -n "$FIELD_ID" ]] || die "field not found: $field_name"
+
+  # Option lookup: case-insensitive partial match
+  local matches match_count
+  matches=$(jq --arg val "$field_value" --arg fid "$FIELD_ID" '
+    .data.user.projectV2.fields.nodes[]
+    | select(.id == $fid)
+    | .options // []
+    | map(select(.name | ascii_downcase | contains($val | ascii_downcase)))
+  ' "$CACHE_FILE")
+
+  match_count=$(echo "$matches" | jq 'length')
+
+  if [[ "$match_count" -eq 0 ]]; then
+    local available
+    available=$(jq -r --arg fid "$FIELD_ID" '
+      .data.user.projectV2.fields.nodes[]
+      | select(.id == $fid)
+      | .options // []
+      | map(.name)
+      | join(", ")
+    ' "$CACHE_FILE")
+    die "no match for value '$field_value' in field '$field_name' (available: $available)"
+  elif [[ "$match_count" -gt 1 ]]; then
+    local names
+    names=$(echo "$matches" | jq -r 'map(.name) | join(", ")')
+    die "ambiguous match for '$field_value': $names"
+  fi
+
+  OPTION_ID=$(echo "$matches" | jq -r '.[0].id')
+  OPTION_NAME=$(echo "$matches" | jq -r '.[0].name')
+}
+
+ensure_cache
+resolve_field "$FIELD_NAME" "$FIELD_VALUE"
+
+echo "Resolved: ${FIELD_NAME}=${OPTION_NAME} (project=${PROJECT_ID}, field=${FIELD_ID}, option=${OPTION_ID})"
+
+ISSUE_URL="https://github.com/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}"
+
+# Ensure issue is on the project board (ignore "already exists" but surface other errors)
+if ! item_add_err=$(gh project item-add "$PROJECT_NUMBER" --owner "$DEFAULT_OWNER" --url "$ISSUE_URL" 2>&1); then
+  if [[ "$item_add_err" != *"already"* ]]; then
+    die "failed to add item to project: $item_add_err"
+  fi
+fi
+
+# Find the item ID for this issue on the board
+find_item_id() {
+  local query result
+  query=$(cat <<'GRAPHQL'
+query($owner: String!, $number: Int!) {
+  user(login: $owner) {
+    projectV2(number: $number) {
+      items(last: 100) {
+        nodes {
+          id
+          content {
+            ... on Issue {
+              number
+              repository { name owner { login } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL
+)
+  result=$(gh api graphql \
+    -f query="$query" \
+    -f owner="$DEFAULT_OWNER" \
+    -F number="$PROJECT_NUMBER")
+
+  echo "$result" | jq -r --arg repo "$REPO" --arg owner "$OWNER" --argjson num "$ISSUE_NUMBER" '
+    .data.user.projectV2.items.nodes[]
+    | select(
+        .content.number == $num
+        and .content.repository.name == $repo
+        and .content.repository.owner.login == $owner
+      )
+    | .id
+  '
+}
+
+ITEM_ID=$(find_item_id)
+[[ -n "$ITEM_ID" ]] || die "could not find item for ${OWNER}/${REPO}#${ISSUE_NUMBER} on project board"
+
+# Set the field value
+update_field() {
+  local query
+  query=$(cat <<'GRAPHQL'
+mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: $project
+    itemId: $item
+    fieldId: $field
+    value: { singleSelectOptionId: $option }
+  }) { projectV2Item { id } }
+}
+GRAPHQL
+)
+  gh api graphql \
+    -f query="$query" \
+    -f project="$PROJECT_ID" \
+    -f item="$ITEM_ID" \
+    -f field="$FIELD_ID" \
+    -f option="$OPTION_ID" > /dev/null
+}
+
+update_field || die "failed to update field"
+
+echo "Done: ${OWNER}/${REPO}#${ISSUE_NUMBER} → ${FIELD_NAME}=${OPTION_NAME}"

@@ -1,0 +1,272 @@
+# Obsidian Note Templates and Examples
+
+This file contains concrete templates and examples for creating Obsidian notes according to the established conventions.
+
+## Date-Based Work Note Template
+
+```markdown
+---
+tags:
+  - [primary_topic]
+  - [secondary_topic]
+  - [technology]
+  - technical_note
+date: "[[YYYY-MM-DD]]"
+month: "[[YYYY-MM]]"
+---
+
+# [Title Matching Filename]
+
+## Overview
+
+[2-3 sentence summary of the work completed, architectural decisions made, or implementation approach taken]
+
+## [Context/Background]
+
+[Why this work was done, what problem it solves]
+
+## [Implementation Details]
+
+[Technical specifics, code decisions, architecture]
+
+## [Challenges and Solutions]
+
+[Problems encountered and how they were solved]
+
+## Related Notes
+
+- [[Keyword 1]]
+- [[Keyword 2]]
+- [[Related Concept]]
+```
+
+## Example Date-Based Work Note
+
+**Filename**: `Notes/2025/09/161948-Hybrid-Semantic-Search-Algorithm.md`
+
+```markdown
+---
+tags:
+  - zettelkasten
+  - semantic_search
+  - information_retrieval
+  - machine_learning
+  - technical_note
+date: "[[2025-09-16]]"
+month: "[[2025-09]]"
+---
+
+# Hybrid Semantic Search Algorithm Implementation
+
+## Overview
+
+Implemented state-of-the-art semantic search combining vector similarity, BM25 full-text search, and Reciprocal Rank Fusion (RRF) for enhanced relevance over traditional embedding-only approaches.
+
+## Architecture
+
+Combined three retrieval methods:
+1. **Vector similarity**: Using [[sentence-transformers]] embeddings with cosine similarity
+2. **BM25**: Traditional full-text search for keyword matching
+3. **RRF**: Reciprocal Rank Fusion to merge results from both approaches
+
+## Implementation Details
+
+- Used [[FAISS]] for efficient vector similarity search
+- Implemented custom BM25 scoring with [[Python]]
+- RRF formula: score = sum(1/(k + rank_i)) where k=60
+- Tested on 10k document corpus with 500 queries
+
+## Results
+
+Hybrid approach improved MRR@10 by 23% over embedding-only baseline. BM25 catches exact matches that embeddings miss, while embeddings handle semantic similarity.
+
+## Related Concepts
+
+- [[Vector Search]]
+- [[Information Retrieval]]
+- [[Rank Fusion]]
+- [[Embeddings]]
+```
+
+## Permanent Note Template
+
+```markdown
+---
+tags:
+  - permanent_note
+  - [topic_area_1]
+  - [topic_area_2]
+date: "[[YYYY-MM-DD]]"
+month: "[[YYYY-MM]]"
+---
+
+# [Concept or Topic Title]
+
+## Summary
+
+[1-2 sentence atomic idea that captures the essence of this note]
+
+## Details
+
+[Expanded explanation synthesizing insights from multiple sources]
+
+## Connections
+
+[How this relates to other permanent notes and concepts]
+
+## Source Notes
+
+- [[DDHHmm-Source-Note-1]]
+- [[DDHHmm-Source-Note-2]]
+
+## References
+
+[External sources, papers, books, etc.]
+```
+
+## Example Permanent Note
+
+**Filename**: `M99 Personal Notes/32.05 Hybrid Search Strategies.md`
+
+```markdown
+---
+tags:
+  - permanent_note
+  - information_retrieval
+  - search_systems
+date: "[[2025-09-20]]"
+month: "[[2025-09]]"
+---
+
+# Hybrid Search Strategies
+
+## Summary
+
+Combining multiple retrieval methods (lexical and semantic) through rank fusion produces more robust search results than either approach alone, as they complement each other's weaknesses.
+
+## Key Insights
+
+Traditional keyword search (BM25, TF-IDF) excels at exact matching but misses semantic relationships. Vector embeddings capture semantic similarity but can miss exact keyword matches. Hybrid approaches leverage both:
+
+1. **Complementary strengths**: Lexical for precision, semantic for recall
+2. **Rank fusion**: Algorithms like RRF merge results effectively
+3. **Performance gains**: Typically 15-30% improvement in relevance metrics
+
+## Implementation Patterns
+
+- Run both searches in parallel
+- Normalize scores to comparable ranges
+- Apply fusion algorithm (RRF, CombSUM, etc.)
+- Consider query-dependent weighting
+
+## Trade-offs
+
+- Increased computational cost (2x searches)
+- More complex infrastructure
+- Requires tuning fusion parameters
+- Worth it for user-facing search applications
+
+## Connections
+
+- [[32.01 Vector Embeddings]]
+- [[32.03 BM25 Algorithm]]
+- [[32.08 Rank Fusion Methods]]
+
+## Source Notes
+
+- [[161948-Hybrid-Semantic-Search-Algorithm]]
+- [[180715-Production-Search-Implementation]]
+
+## References
+
+- "The Probabilistic Relevance Framework: BM25 and Beyond" (Robertson, 2009)
+- "Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods" (Cormack et al., 2009)
+```
+
+## Machine-Generated Note Template
+
+**Location**: `Generated/YYYYMMDDHHmm-Title.md`
+
+```markdown
+---
+tags:
+  - generated_note
+  - [topic_tag]
+date: "[[YYYY-MM-DD]]"
+month: "[[YYYY-MM]]"
+keywords:
+  - "[[Keyword 1]]"
+  - "[[Keyword 2]]"
+---
+
+# [Descriptive Title]
+
+## Overview
+
+[Summary of the generated content]
+
+## [Main Content Sections]
+
+[Content as appropriate for the note type]
+
+## Related Notes
+
+- [[Related-Note-1]]
+- [[Related-Note-2]]
+
+---
+
+*Generated by [command/skill name] on YYYY-MM-DD*
+```
+
+## Common Tag Vocabularies
+
+### Note Types
+- `technical_note`
+- `permanent_note`
+- `meeting_note`
+- `literature_note`
+
+### Domains
+- `machine_learning`
+- `software_architecture`
+- `information_retrieval`
+- `web_development`
+- `data_science`
+- `distributed_systems`
+
+### Methodologies
+- `zettelkasten`
+- `semantic_search`
+- `vector_database`
+- `api_design`
+- `testing_strategy`
+
+### Technologies
+- `python`
+- `typescript`
+- `postgresql`
+- `react`
+- `docker`
+
+## Filename Patterns
+
+### Date-Based Work Notes (Notes/YYYY/MM/)
+- `051430-API-Gateway-Design.md` (May 5, 2:30 PM)
+- `221815-Database-Migration-Strategy.md` (November 22, 6:15 PM)
+- `010900-Project-Kickoff-Notes.md` (January 1, 9:00 AM)
+
+Note: Year/month is encoded in the folder path, so filename only needs DDHHmm.
+
+### Machine-Generated Notes (Generated/)
+- `202601160804-DO-351-Investigation.md` (2026-01-16, 8:04 AM)
+- `202601131030-Lessons-Learned-SSM-CDC-Testing.md` (2026-01-13, 10:30 AM)
+- `202509161948-Hybrid-Semantic-Search-Algorithm.md` (2025-09-16, 7:48 PM)
+
+Format: `YYYYMMDDHHmm-Title.md` - Full timestamp required since folder has no date context.
+
+### Permanent Notes (Legacy JD)
+- `10.01 Project Management Fundamentals.md`
+- `23.05 React Component Patterns.md`
+- `45.12 Database Indexing Strategies.md`
+- `32.08 Information Retrieval Methods.md`
