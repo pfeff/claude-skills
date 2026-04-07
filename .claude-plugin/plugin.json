@@ -1,5 +1,5 @@
 {
-  "name": "claude-skills",
+  "name": "pfeff-skills",
   "version": "1.0.0",
   "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, compound knowledge capture, and structured planning workflows",
   "author": {
