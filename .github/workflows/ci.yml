@@ -41,9 +41,14 @@ jobs:
 
       - name: Check for leaked personal references
         run: |
+          # Catch real personal paths (/Users/<name>/, /home/<name>/)
+          # Allow: ~/.claude/skills/ (standard install path in docs)
+          #        /home/user/ (generic example path)
+          #        /home/runner/ (GitHub Actions runner path)
           if grep -r --include='*.md' --include='*.json' --include='*.tmpl' \
-            -E '(/Users/|/home/|~/.claude/skills/)' \
-            --exclude-dir=.git .; then
+            -E '(/Users/[a-zA-Z]|/home/[a-zA-Z])' \
+            --exclude-dir=.git . \
+            | grep -v -E '(/home/user/|/home/runner/)'; then
             echo "Found leaked personal paths"
             exit 1
           fi
