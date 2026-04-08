@@ -8,6 +8,29 @@ Before planning implementation, validate the problem statement. Ensures we under
 
 ## Execution Steps
 
+### 0. Subagent context detection
+
+Check whether this workspace was dispatched by a goal-tree coordinator (subagent context). Subagents cannot interview the user, so the interactive steps must be bypassed.
+
+**Detection**: Read `DESIGN.md` in the workspace root. If it contains **both** of:
+- A `Node ID` field (e.g., `- **Node ID**: C.1.5`)
+- An `## Acceptance Criteria` section
+
+Then this is a **subagent context**. The DESIGN.md already contains the structured task spec from the coordinator dispatch.
+
+**When subagent context is detected**, extract the four validation dimensions directly from DESIGN.md:
+
+| Dimension | DESIGN.md source |
+|-----------|-----------------|
+| **User** | Infer from Project Context, Parent goal, and Requirements — identify who is affected |
+| **Pain** | `## Requirements` section — the problem statement and motivation |
+| **Current workflow** | `## Design Decisions` and `## Project Context` — how things work today |
+| **Success criteria** | `## Acceptance Criteria` — the checkboxes define done |
+
+Produce the output using the same format as step 6 (Compile output), with Validation Method set to `"Extracted from DESIGN.md (subagent context)"`. Then **skip steps 1–5** and proceed directly to the Output phase.
+
+**When subagent context is NOT detected** (no DESIGN.md, or DESIGN.md lacks the required sections), proceed with the interactive flow starting at step 1.
+
 ### 1. Assess coverage
 
 Scan the task description for evidence of each dimension:
