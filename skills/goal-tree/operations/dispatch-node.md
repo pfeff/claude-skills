@@ -55,6 +55,8 @@ ${NODE_DESCRIPTION}
 
 ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
+> **Criteria format**: Each criterion must be specific enough for an LLM to judge pass/fail unambiguously. Use observable, verifiable statements (e.g., "endpoint returns 404 when resource not found") not vague directives (e.g., "improve error handling"). Criteria are evaluated post-completion by the parent session — see execute-tree step 4a.
+
 ## Project Context
 
 - **Parent goal**: ${PARENT_GOAL_TITLE}
@@ -140,6 +142,8 @@ You are implementing a single task in a goal-tree project. Make the code changes
 ## Acceptance Criteria
 
 ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
+
+Each criterion above is a specific, verifiable statement. Your output will be evaluated against these criteria by the parent session (LLM-as-judge). For each criterion, the evaluator will determine pass/fail based on your actual changes.
 
 ## Goal Tree Context
 
