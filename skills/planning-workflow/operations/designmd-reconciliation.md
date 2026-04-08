@@ -168,11 +168,18 @@ Produce a section for the plan:
 <"DESIGN.md confirmed aligned across all layers" | "N changes applied">
 ```
 
+### 7. Run fast path gate
+
+After compiling the reconciliation output, load and run `operations/fast-path-gate.md` to evaluate whether the task qualifies for fast path planning. Pass `problem_validation` and `designmd_reconciliation` (the output from step 6) as inputs.
+
+The gate returns a decision: fast path (skip phases 3-6) or full path (continue to phase 3).
+
 ## Output
 
 The "DESIGN.md Reconciliation" section, included in the Planning Context appendix. The agent carries this context forward:
-- **Solution search**: reconciled DESIGN.md provides accurate architecture context for query term selection
-- **SpecFlow analysis**: reconciled requirements ground flow identification
+- **Fast path gate**: reconciliation output feeds the fast path criteria check (low risk = no unresolved contradictions)
+- **Solution search** (full path): reconciled DESIGN.md provides accurate architecture context for query term selection
+- **SpecFlow analysis** (full path): reconciled requirements ground flow identification
 - **Plan generation**: accepts `designmd_reconciliation` as a formal parameter and includes it in the Planning Context
 
 ## Examples

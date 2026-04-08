@@ -46,9 +46,17 @@ The planning workflow runs these phases in order:
 
 **Quick summary**: Two-layer check of DESIGN.md against problem validation and repo docs. Surfaces contradictions and gaps for user approval.
 
+### 2a. Fast Path Gate
+
+**When**: After DESIGN.md reconciliation — evaluates whether to skip phases 3-6.
+
+**Implementation**: Load `operations/fast-path-gate.md`
+
+**Quick summary**: Checks three deterministic criteria: (1) task has explicit, testable acceptance criteria, (2) task targets known, locatable code, (3) DESIGN.md reconciliation is clean (no unresolved contradictions). All three must pass for fast path. On fast path, skips directly to plan generation with Minimal detail level. On full path, continues to phase 3.
+
 ### 3. Solution Search
 
-**When**: After DESIGN.md reconciliation — searches for relevant prior solutions.
+**When**: After fast path gate (full path only) — searches for relevant prior solutions.
 
 **Implementation**: Load `operations/solution-search.md`
 
@@ -88,7 +96,7 @@ The planning workflow runs these phases in order:
 
 ## End-to-End Flow
 
-When invoked, run all phases sequentially. Each phase produces a section that feeds into the next.
+When invoked, run all phases sequentially. Each phase produces a section that feeds into the next. After phase 2, a fast path gate may skip phases 3-6 for qualifying tasks (see "Fast Path" below).
 
 ### Input
 
@@ -118,6 +126,14 @@ Task Description
 └─────────────┘
       │
       ▼
+┌─────────────┐
+│ 2a. Fast     │──→ Fast Path Gate section
+│  Path Gate   │     (criteria check: acceptance criteria + known code + low risk)
+└─────────────┘
+      │
+      ├── all criteria pass → FAST PATH (skip to phase 7)
+      │
+      ▼ (any criterion fails → full path)
 ┌─────────────┐
 │ 3. Solution  │──→ Prior Solutions section
 │    Search    │     (matched solutions + critical patterns)
@@ -155,7 +171,38 @@ Task Description
 `PLAN.md` written to the workspace root, containing:
 - Plan body (sections per detail level)
 - Acceptance criteria with `[ ]` checkboxes
-- Planning context appendix (outputs from phases 1-6)
+- Planning context appendix (outputs from phases 1-7)
+
+## Fast Path
+
+An alternative flow for tasks that don't benefit from phases 3-6. The fast path produces the same PLAN.md output format as the full path, using Minimal detail level.
+
+### When It Applies
+
+The fast path gate runs after phase 2 (DESIGN.md reconciliation) and checks three deterministic criteria. **All three must pass**:
+
+1. **Explicit acceptance criteria** — the task description contains at least one testable, pass/fail statement
+2. **Known code target** — the task targets files or modules that exist in the repo and can be located (via Glob/Grep)
+3. **Low risk** — DESIGN.md reconciliation produced no unresolved contradictions
+
+### What Gets Skipped
+
+| Phase | Full path | Fast path |
+|-------|-----------|-----------|
+| 1. Problem validation | Runs | Runs |
+| 2. DESIGN.md reconciliation | Runs | Runs |
+| 2a. Fast path gate | Runs | Runs |
+| 3. Solution search | Runs | Skipped |
+| 4. Research gating | Runs | Skipped |
+| 5. SpecFlow analysis | Runs | Skipped |
+| 6. Detail level selection | Runs | Skipped (defaults to Minimal) |
+| 7. Plan generation | Runs | Runs |
+
+### Implementation
+
+Load `operations/fast-path-gate.md` for criteria definitions and execution details.
+
+Full path remains the default. The fast path gate evaluates criteria and routes automatically — no user decision required.
 
 ## Common Patterns
 
@@ -169,6 +216,7 @@ Load only what you need:
 
 - `operations/problem-validation.md` — Problem validation, user interview, task type classification, and interactive content gate
 - `operations/designmd-reconciliation.md` — DESIGN.md two-layer reconciliation
+- `operations/fast-path-gate.md` — Fast path criteria evaluation and routing
 - `operations/solution-search.md` — Solution search implementation details
 - `operations/research-gating.md` — Research gating decision logic
 - `operations/specflow-analysis.md` — SpecFlow edge case analysis
