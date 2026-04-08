@@ -126,12 +126,10 @@ Reuses the subagent contract from `task-workflow/references/subagent-dispatch.md
 
 #### 1. Assemble Prompt
 
-Build a self-contained prompt for the subagent:
+Build a self-contained prompt for the subagent. The prompt must not reference loading external skill files — all instructions are inlined.
 
 ```
-You are implementing a single task in a goal-tree project. Make the code changes described below, run tests to verify, and report your results.
-
-Do not commit changes. Do not create PRs. Do not modify files outside the scope of this task.
+You are implementing a single task in a goal-tree project. Make the code changes described below, commit them, and report your results.
 
 ## Task
 
@@ -145,10 +143,7 @@ ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
 ## Goal Tree Context
 
-This task is part of a larger project:
-- **Project**: ${ROOT_GOAL_TITLE}
-- **Parent goal**: ${PARENT_GOAL_TITLE}
-- **Position**: ${NODE_ID} of ${TOTAL_NODES} nodes
+${GOAL_TREE_CONTEXT}
 
 ## Design Decisions
 
@@ -165,18 +160,18 @@ ${DEPENDENCY_RESULTS_LOG_ENTRIES}
 - Node workspace: ${NODE_DIR}
 - Repository: ${NODE_DIR}/${REPO}
 
-## Important Context
-
-The coordinator API manages this project's goal tree. The tree ID is ${TREE_ID} and this node's database ID is ${NODE_DB_ID}. The `coord` CLI is available for querying project state if needed.
-
 ## Instructions
 
-1. Read the planning-workflow skill and run it for this task:
-   Read(~/.claude/skills/planning-workflow/SKILL.md)
-2. Implement the changes following the generated plan
-3. If a test runner is available, run tests
-4. If a linter is available, run lint
-5. If tests or lint fail, attempt to fix (up to 2 retries)
+1. Read the DESIGN.md in the workspace for full requirements
+2. Read existing code/files relevant to the task to understand current state
+3. Create a PLAN.md with your implementation steps
+4. Implement the changes following the plan
+5. Commit your changes with a conventional commit message (no Claude attribution)
+6. Do not create PRs
+
+## Important
+
+- Read .github/PULL_REQUEST_TEMPLATE.md before any PR work.
 
 ## Required Output Format
 
@@ -188,14 +183,12 @@ files_modified:
   - path/to/file1.md
   - path/to/file2.md
 changes_summary: |
-  <1-3 sentence description of what was changed and why>
-test_result: pass | fail | no_tests | skipped
-lint_result: pass | fail | no_linter | skipped
+  description of what was changed and why
 acceptance_criteria_met:
   - "criterion 1 text"
   - "criterion 2 text"
 issues: |
-  <any problems encountered, or "none">
+  any problems encountered, or "none"
 RESULT_END
 ```
 
