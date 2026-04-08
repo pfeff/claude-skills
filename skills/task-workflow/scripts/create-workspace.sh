@@ -150,26 +150,31 @@ generate_slug() {
 resolve_repo_path() {
   local repo_name="$1"
 
-  # Check if it's already an absolute path
+  # Reject names with glob or path characters
   if [[ "$repo_name" == /* && -d "$repo_name" ]]; then
     echo "$repo_name"
     return 0
   fi
-
-  # Try to find in ~/src/github
-  local found
-  found=$(find ~/src/github -maxdepth 2 -type d -name "$repo_name" 2>/dev/null | head -1)
-  if [[ -n "$found" ]]; then
-    echo "$found"
-    return 0
+  if [[ ! "$repo_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    return 1
   fi
 
-  # Try to find in ~/src/azdevops
-  found=$(find ~/src/azdevops -maxdepth 3 -type d -name "$repo_name" 2>/dev/null | head -1)
-  if [[ -n "$found" ]]; then
-    echo "$found"
-    return 0
-  fi
+  # Try ~/src/github/<org>/<repo> (known structure, no find)
+  local match
+  for match in ~/src/github/*/"$repo_name"; do
+    if [[ -d "$match" ]]; then
+      echo "$match"
+      return 0
+    fi
+  done
+
+  # Try ~/src/azdevops/<org>/<project>/<repo> (known structure, no find)
+  for match in ~/src/azdevops/*/*/"$repo_name"; do
+    if [[ -d "$match" ]]; then
+      echo "$match"
+      return 0
+    fi
+  done
 
   return 1
 }
