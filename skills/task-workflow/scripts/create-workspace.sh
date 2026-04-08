@@ -146,7 +146,7 @@ generate_slug() {
 }
 
 # Resolve repository path
-# Tries: ~/src/github/<org>/<repo> patterns
+# Tries: ~/src/github/<org>/<repo>, ~/src/azdevops/<org>/<project>/<repo>
 resolve_repo_path() {
   local repo_name="$1"
 
@@ -159,6 +159,13 @@ resolve_repo_path() {
   # Try to find in ~/src/github
   local found
   found=$(find ~/src/github -maxdepth 2 -type d -name "$repo_name" 2>/dev/null | head -1)
+  if [[ -n "$found" ]]; then
+    echo "$found"
+    return 0
+  fi
+
+  # Try to find in ~/src/azdevops
+  found=$(find ~/src/azdevops -maxdepth 3 -type d -name "$repo_name" 2>/dev/null | head -1)
   if [[ -n "$found" ]]; then
     echo "$found"
     return 0
@@ -279,7 +286,7 @@ if [[ -n "$REPOS" ]]; then
     repo=$(echo "$repo" | xargs)
     if ! resolve_repo_path "$repo" &>/dev/null; then
       echo "Error: Repository not found: $repo" >&2
-      echo "Searched in ~/src/github" >&2
+      echo "Searched in ~/src/github and ~/src/azdevops" >&2
       exit 2
     fi
   done
@@ -349,10 +356,11 @@ if [[ -n "$REPOS" ]]; then
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
     repo_path=$(resolve_repo_path "$repo")
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
     branch_name="$TASK_ID/$TASK_SLUG"
 
-    echo "  $repo:"
+    echo "  $repo_basename:"
     echo "    Source: $repo_path"
     echo "    Worktree: $worktree_path"
     echo "    Branch: $branch_name"
@@ -401,7 +409,9 @@ if [[ -n "$REPOS" ]]; then
   IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_path=$(resolve_repo_path "$repo")
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
 
     if [[ -d "$worktree_path" ]]; then
       for category in $SOLUTION_CATEGORIES; do
@@ -415,7 +425,7 @@ if [[ -n "$REPOS" ]]; then
         fi
       done
 
-      echo "  $repo: docs/solutions/ created"
+      echo "  $repo_basename: docs/solutions/ created"
     fi
   done
 else
@@ -509,22 +519,23 @@ if [[ -n "$REPOS" ]]; then
   IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_path=$(resolve_repo_path "$repo")
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
     expected_branch="$TASK_ID/$TASK_SLUG"
     if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
       actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
       # Guard: worktree must not be on the default branch
-      repo_path=$(resolve_repo_path "$repo")
       wt_default_branch=$(cd "$repo_path" && git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
       if [[ "$actual_branch" == "$wt_default_branch" ]]; then
-        verify_check "Git worktree $repo not on default branch" "fail"
+        verify_check "Git worktree $repo_basename not on default branch" "fail"
       elif [[ "$actual_branch" == "$expected_branch" ]]; then
-        verify_check "Git worktree $repo on correct branch" "pass"
+        verify_check "Git worktree $repo_basename on correct branch" "pass"
       else
-        verify_check "Git worktree $repo on correct branch" "fail"
+        verify_check "Git worktree $repo_basename on correct branch" "fail"
       fi
     else
-      verify_check "Git worktree $repo exists" "fail"
+      verify_check "Git worktree $repo_basename exists" "fail"
     fi
   done
 fi
@@ -580,7 +591,9 @@ if [[ -n "$REPOS" ]]; then
   IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
-    echo "  - $repo (branch: $TASK_ID/$TASK_SLUG)"
+    repo_path=$(resolve_repo_path "$repo")
+    repo_basename=$(basename "$repo_path")
+    echo "  - $repo_basename (branch: $TASK_ID/$TASK_SLUG)"
   done
 fi
 echo ""
