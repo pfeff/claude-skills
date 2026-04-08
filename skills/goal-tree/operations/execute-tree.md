@@ -236,11 +236,8 @@ function retry_node(node, initial_result):
     escalate_with_failure_log(node, attempts)
     return
 
-  # Determine parameter change for next attempt
-  param_change = select_parameter_change(attempts)
-
-  # Re-dispatch with modified parameters
-  new_result = dispatch_with_params(node, param_change, attempts)
+  # Re-dispatch with parameter change based on attempt count
+  new_result = retry_dispatch(node, attempts)
   process_result(node, new_result)  # recursive — will retry again if needed
 ```
 
@@ -250,68 +247,24 @@ function retry_node(node, initial_result):
 |---------|-----------------|-------------|
 | 2 | Add error context | Append prior failure reason and error output to dispatch prompt |
 | 3 | Alternative approach hint | Add instruction to use a different implementation strategy (e.g., "The previous approach failed because X. Try Y instead.") |
-| 4+ | Increase resource limits | Extend turn budget, provide additional reference files or broader context |
 
 ```
-function select_parameter_change(attempts):
+function retry_dispatch(node, attempts):
   n = len(attempts)
   last = attempts[-1]
 
   if n == 1:
-    return {
-      strategy: "error_context",
-      description: "Add prior failure details to dispatch prompt",
-      context: last.failure_reason
-    }
-  elif n == 2:
-    return {
-      strategy: "alternative_approach",
-      description: "Suggest different implementation approach",
-      hint: "The previous approach failed: ${last.failure_reason}. Try an alternative strategy."
-    }
-  else:
-    return {
-      strategy: "expanded_resources",
-      description: "Increase context and resource limits",
-      additional_context: <gather related files, sibling node results, broader design context>
-    }
-```
-
-```
-function dispatch_with_params(node, param_change, attempts):
-  # Record the parameter change on the next attempt
-  # (will be logged when process_result records the attempt)
-
-  if param_change.strategy == "error_context":
-    # Re-dispatch with failure context appended
     result = dispatch_node(node, {
       reason: "retry",
       prior_failures: attempts,
-      additional_prompt: "Previous attempt failed: ${param_change.context}. Address this specific issue."
+      additional_prompt: "Previous attempt failed: ${last.failure_reason}. Address this specific issue."
     })
-
-  elif param_change.strategy == "alternative_approach":
+  else:
     result = dispatch_node(node, {
       reason: "retry-alternative",
       prior_failures: attempts,
-      additional_prompt: param_change.hint
+      additional_prompt: "The previous approach failed: ${last.failure_reason}. Try an alternative strategy."
     })
-
-  elif param_change.strategy == "expanded_resources":
-    result = dispatch_node(node, {
-      reason: "retry-expanded",
-      prior_failures: attempts,
-      additional_prompt: param_change.description,
-      additional_context: param_change.additional_context
-    })
-
-  # Update the latest attempt record with the parameter change applied
-  attempt = {
-    attempt_number: len(attempts) + 1,
-    failure_reason: <populated after result>,
-    dispatch_method: result.dispatch_method,
-    parameter_change: param_change.description
-  }
 
   return result
 ```
@@ -323,18 +276,11 @@ Each failed attempt emits a structured telemetry record that N+1 can consume:
 ```
 failure_telemetry_record:
   node_id: <node ID>
-  tree_id: <tree ID>
   attempt_number: <1-based>
-  max_retries: <configured max>
-  outcome: "retry" | "escalated"
   failure_reason: <error description>
-  dispatch_method: <subagent | inline | sub-session>
   parameter_change_applied: <description of what changed>
-  parameter_change_strategy: <error_context | alternative_approach | expanded_resources>
+  outcome: "retry" | "escalated"
   timestamp: <ISO 8601>
-  resources:
-    duration_seconds: <wall clock for this attempt>
-    tokens_consumed: <if available>
 ```
 
 These records are appended to the node's result in the coordinator:
@@ -692,14 +638,14 @@ function handle_stuck(node, reason, detail):
 When dispatching nodes in parallel:
 
 - One node's failure does **not** block independent siblings
-- Failed nodes are handled individually (retry → inline fallback → skip)
+- Failed nodes are handled individually (retry with parameter change → escalate)
 - Other parallel dispatches continue unaffected
 - Results are collected as each dispatch completes
 
 ```
 # Fan-out: 3 subagents dispatched in parallel
 # Agent 1: success → process result
-# Agent 2: failure → retry → inline fallback
+# Agent 2: failure → retry with error context → success
 # Agent 3: success → process result
 # All three processed independently
 ```

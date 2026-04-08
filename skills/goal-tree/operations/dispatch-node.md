@@ -12,7 +12,6 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
-| `max_retries` | No | Maximum retry attempts before escalation (default: 3). Passed from execute-tree's dispatch pipeline. Controls the retry loop in execute-tree step 4, not internal subagent retries. |
 | `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_reason, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to dispatch prompt on retry (error details, approach hints). |
 

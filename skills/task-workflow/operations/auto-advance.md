@@ -44,7 +44,7 @@ stuck_action = env(AUTO_ADVANCE_STUCK_ACTION, default="skip-task")
 
 `max_retries` is passed to validate-implementation and used in pause messages for validation fix-and-retry attempts.
 
-`max_revert_retries` controls the revert-and-retry loop (step 3a). When validation fails after `max_retries` fix attempts, the agent reverts changes and re-implements with an alternative approach, up to `max_revert_retries` times. Each attempt is logged as structured telemetry. Escalation to human occurs only after all revert-retry attempts are exhausted.
+`max_revert_retries` controls the revert-and-retry loop (step 3a). This is distinct from `max_retries` (which controls validate-implementation's fix-and-retry within a single approach). When validation fails after `max_retries` fix attempts, the agent reverts changes and re-implements with an alternative approach, up to `max_revert_retries` times. Each attempt is logged as structured telemetry. Escalation to human occurs only after all revert-retry attempts are exhausted. In execute-tree, the equivalent parameter is `max_retries` on the dispatch pipeline — it controls re-dispatch with parameter changes, not revert-and-retry.
 
 `use_subagents` enables subagent dispatch mode (see "Subagent Dispatch" section below). When `false`, the loop behaves identically to the original inline execution.
 
@@ -250,8 +250,8 @@ while revert_retry_count < max_revert_retries:
   }
   revert_retry_attempts.append(attempt_record)
 
-  # 2. Revert changes back to last good state
-  git stash  # or git checkout -- . if stash is not needed
+  # 2. Revert changes back to last good state (include untracked files)
+  git stash --include-untracked
 
   # 3. Select alternative approach
   approach_hint = select_alternative_approach(revert_retry_attempts)
@@ -296,21 +296,16 @@ function select_alternative_approach(attempts):
 
 #### Revert-Retry Telemetry
 
-Each revert-retry attempt produces a structured telemetry record that N+1 can consume:
+Each revert-retry attempt produces a structured telemetry record following the same schema as execute-tree's `failure_telemetry_record` (see execute-tree step 4), with `node_id` replaced by `task_id`:
 
 ```
 revert_retry_telemetry_record:
   task_id: <task ID>
   attempt_number: <1-based>
-  max_revert_retries: <configured max>
-  outcome: "retry" | "success" | "escalated"
   failure_reason: <validation error summary>
-  approach_used: <description of implementation approach>
   parameter_change_applied: <alternative approach hint>
+  outcome: "retry" | "success" | "escalated"
   timestamp: <ISO 8601>
-  files_reverted: <list of files that were reverted>
-  resources:
-    duration_seconds: <wall clock for this attempt>
 ```
 
 **Coordinator sync** (if available):
