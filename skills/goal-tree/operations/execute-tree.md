@@ -217,7 +217,109 @@ elif result.status == "escalated":
   pass
 ```
 
-### 4a. Outcome Classification
+### 4a. Spec-Driven Evaluation
+
+Evaluate each node in `pending_evaluation` against its acceptance criteria before committing or advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
+
+#### Evaluation Protocol
+
+For each node in `pending_evaluation`:
+
+1. **Gather evaluation inputs**:
+   - Node's acceptance criteria (from the spec/DESIGN.md in the node workspace)
+   - Node's output: diff (`git diff` in node workspace), artifacts produced
+   - Node's changes summary from the dispatch result
+   - Subagent's self-reported `acceptance_criteria_met` list (advisory input — the LLM-as-judge verdict is authoritative)
+
+2. **LLM-as-judge evaluation**: Assess each acceptance criterion independently:
+
+```
+## Evaluation: ${NODE_ID}. ${NODE_TITLE}
+
+For each acceptance criterion, determine pass/fail based on the actual changes produced.
+
+### Criteria Assessment
+
+| # | Criterion | Verdict | Reasoning |
+|---|-----------|---------|-----------|
+| 1 | <criterion text> | PASS/FAIL | <1-2 sentence justification citing specific evidence from the diff/artifacts> |
+| 2 | <criterion text> | PASS/FAIL | <reasoning> |
+| ... | ... | ... | ... |
+
+### Summary
+
+- **Pass**: <N>/<total>
+- **Fail**: <N>/<total>
+- **Overall**: ACCEPT / REJECT
+```
+
+3. **Decision**:
+
+| Overall | Action |
+|---------|--------|
+| All criteria pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4b |
+| Any criteria fail, retries remaining | **REJECT** — re-dispatch with feedback (see below) |
+| Any criteria fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
+
+#### Accept Path
+
+Write the deferred coordinator status and advance the node:
+
+```bash
+coord node update $TREE_ID $NODE_DB_ID \
+  --status completed \
+  --result "<changes summary>"
+
+completed_nodes.append(node)
+```
+
+Then proceed to step 4b (commit) and subsequent steps for this node.
+
+#### Reject Path
+
+When evaluation rejects a node's output:
+
+1. **Build feedback prompt**: Append the failed criteria and reasoning to the original dispatch prompt:
+
+```
+## Evaluation Feedback (Attempt ${ATTEMPT}/${MAX_RETRIES + 1})
+
+The following acceptance criteria were not met:
+
+${FOR_EACH_FAILED_CRITERION}
+- **Criterion**: ${CRITERION_TEXT}
+  **Verdict**: FAIL
+  **Reasoning**: ${REASONING}
+${END_FOR}
+
+Please address the failed criteria. The passing criteria should not regress.
+```
+
+2. **Re-dispatch** with the augmented prompt (same strategy as original dispatch)
+3. **Increment retry counter** for this node
+
+#### Re-Dispatch Limits
+
+- **Default**: 2 retries (3 total attempts including the original)
+- Tracked per node: `evaluation_attempts[node_id]`
+- After exhausting retries, mark the node as failed:
+
+```bash
+coord node update $TREE_ID $NODE_DB_ID \
+  --status blocked \
+  --result "Evaluation failed after ${MAX_RETRIES + 1} attempts. Last failures: ${FAILED_CRITERIA_SUMMARY}"
+```
+
+#### Evaluation Telemetry
+
+Log the evaluation result for each assessed node. Telemetry is persisted via the coordinator `add-result` call:
+
+```bash
+coord node add-result $TREE_ID $NODE_DB_ID \
+  --summary "Evaluation: ${VERDICT}. ${PASS_COUNT}/${TOTAL} criteria passed. ${REASONING_SUMMARY}"
+```
+
+### 4b. Outcome Classification
 
 For each completed node, classify the outcome relative to the mission:
 
@@ -236,7 +338,7 @@ coord node add-result $TREE_ID $NODE_DB_ID \
 
 Setback classifications automatically trigger the strategic feedback check in step 4d.
 
-### 4b. Commit After Results
+### 4c. Commit After Results
 
 After processing results from a dispatch round, commit changes in node workspaces:
 
@@ -254,7 +356,7 @@ commit(repo_dir)
 record commit hash in completed_nodes
 ```
 
-### 4c. Completion Checkpoint
+### 4d. Completion Checkpoint
 
 Post-completion behavior is determined by autonomy tier:
 
@@ -302,7 +404,7 @@ Approve, or feedback?
 
 Show results and wait for human input before continuing.
 
-### 4d. Strategic Feedback Check
+### 4e. Strategic Feedback Check
 
 After processing results, evaluate whether results change the strategic picture:
 
