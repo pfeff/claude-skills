@@ -12,6 +12,8 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
+| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_reason, parameter_change_applied. |
+| `additional_prompt` | No | Extra context appended to dispatch prompt on retry (error details, approach hints). |
 
 ## Output
 
@@ -128,10 +130,12 @@ Reuses the subagent contract from `task-workflow/references/subagent-dispatch.md
 
 #### 1. Assemble Prompt
 
-Build a self-contained prompt for the subagent. The prompt must not reference loading external skill files — all instructions are inlined.
+Build a self-contained prompt for the subagent:
 
 ```
-You are implementing a single task in a goal-tree project. Make the code changes described below, commit them, and report your results.
+You are implementing a single task in a goal-tree project. Make the code changes described below, run tests to verify, and report your results.
+
+Do not commit changes. Do not create PRs. Do not modify files outside the scope of this task.
 
 ## Task
 
@@ -147,7 +151,10 @@ Each criterion above is a specific, verifiable statement. Your output will be ev
 
 ## Goal Tree Context
 
-${GOAL_TREE_CONTEXT}
+This task is part of a larger project:
+- **Project**: ${ROOT_GOAL_TITLE}
+- **Parent goal**: ${PARENT_GOAL_TITLE}
+- **Position**: ${NODE_ID} of ${TOTAL_NODES} nodes
 
 ## Design Decisions
 
@@ -164,18 +171,18 @@ ${DEPENDENCY_RESULTS_LOG_ENTRIES}
 - Node workspace: ${NODE_DIR}
 - Repository: ${NODE_DIR}/${REPO}
 
+## Important Context
+
+The coordinator API manages this project's goal tree. The tree ID is ${TREE_ID} and this node's database ID is ${NODE_DB_ID}. The `coord` CLI is available for querying project state if needed.
+
 ## Instructions
 
-1. Read the DESIGN.md in the workspace for full requirements
-2. Read existing code/files relevant to the task to understand current state
-3. Create a PLAN.md with your implementation steps
-4. Implement the changes following the plan
-5. Commit your changes with a conventional commit message (no Claude attribution)
-6. Do not create PRs
-
-## Important
-
-- Read .github/PULL_REQUEST_TEMPLATE.md before any PR work.
+1. Read the planning-workflow skill and run it for this task:
+   Read(~/.claude/skills/planning-workflow/SKILL.md)
+2. Implement the changes following the generated plan
+3. If a test runner is available, run tests
+4. If a linter is available, run lint
+5. If tests or lint fail, attempt to fix (up to 2 retries)
 
 ## Required Output Format
 
@@ -187,12 +194,14 @@ files_modified:
   - path/to/file1.md
   - path/to/file2.md
 changes_summary: |
-  description of what was changed and why
+  <1-3 sentence description of what was changed and why>
+test_result: pass | fail | no_tests | skipped
+lint_result: pass | fail | no_linter | skipped
 acceptance_criteria_met:
   - "criterion 1 text"
   - "criterion 2 text"
 issues: |
-  any problems encountered, or "none"
+  <any problems encountered, or "none">
 RESULT_END
 ```
 
@@ -336,14 +345,33 @@ dispatch_result:
 
 ## Failure Handling
 
+Dispatch-node returns failures to execute-tree, which owns the retry loop (step 4). Dispatch-node performs one internal retry for subagents (prompt enrichment), then returns `status: failure` for execute-tree to handle via its retry-with-parameter-change loop.
+
 ### Subagent Failure Chain
 
 ```
 Subagent attempt 1 → failure
   → Retry with failure context (attempt 2) → failure
     → Return to caller with status: failure
-      → Caller (execute-tree) falls back to inline
-        → Inline failure → escalate to user
+      → Caller (execute-tree) retry loop:
+        → Attempt 2: re-dispatch with error context → failure
+        → Attempt 3: re-dispatch with alternative approach hint → failure
+        → Escalate to human with full failure log
+```
+
+When `prior_failures` is provided (retry dispatch from execute-tree), append the failure history to the subagent prompt:
+
+```
+## Prior Failure History
+
+This task has been attempted ${len(prior_failures)} time(s) previously.
+
+<for each prior failure>
+### Attempt ${attempt.attempt_number}
+- **Failure reason**: ${attempt.failure_reason}
+- **Parameter change applied**: ${attempt.parameter_change_applied}
+
+${additional_prompt}
 ```
 
 ### Sub-Session Failure
@@ -353,8 +381,12 @@ Sub-session completes with failures
   → Root session queries coordinator for node status
   → Evaluates: can remaining failures be fixed inline?
     → Yes: fix inline in node workspace
-    → No: escalate to user
+    → No: return status: failure → execute-tree retry loop handles retries
 ```
+
+### Failure Telemetry
+
+Each dispatch failure emits a structured telemetry record (see execute-tree step 4 "Failure Telemetry Record" for schema). Dispatch-node populates the `dispatch_method` and `failure_reason` fields; execute-tree adds the retry-loop fields (`attempt_number`, `parameter_change_applied`, `parameter_change_strategy`).
 
 ### Error Classification
 

@@ -13,28 +13,10 @@ None — uses the workspace's task list and DESIGN.md for all context.
 If `COORDINATOR_URL` and `COORDINATOR_TOKEN` are set, mirror task state changes to the coordinator API. This is additive — native `TaskList`/`TaskUpdate` remain the primary interface.
 
 ```bash
-# Helper: sync task status to coordinator
-coord_sync_status() {
-  local task_id="$1" status="$2"
-  if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" && -n "${COORDINATOR_TASK_ID:-}" ]]; then
-    curl -s -X PATCH "${COORDINATOR_URL}/api/tasks/${COORDINATOR_TASK_ID}" \
-      -H "Authorization: Bearer ${COORDINATOR_TOKEN}" \
-      -H "Content-Type: application/json" \
-      -d "{\"task\":{\"status\":\"${status}\"}}" > /dev/null
-  fi
-}
-
-# Helper: report task progress to coordinator
-coord_report_progress() {
-  local status="$1" summary="$2"
-  if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" && -n "${COORDINATOR_TASK_ID:-}" ]]; then
-    curl -s -X POST "${COORDINATOR_URL}/api/tasks/${COORDINATOR_TASK_ID}/report" \
-      -H "Authorization: Bearer ${COORDINATOR_TOKEN}" \
-      -H "Content-Type: application/json" \
-      -d "{\"status\":\"${status}\",\"outputs\":{\"summary\":\"${summary}\"}}" > /dev/null
-  fi
-}
+source ~/.claude/skills/goal-tree/scripts/coord-helpers.sh
 ```
+
+This provides `coord_create_task`, `coord_sync_status`, and `coord_report_progress`. All are no-ops when coordinator env vars are unset.
 
 `COORDINATOR_TASK_ID` is the coordinator's task ID (set in `.envrc` during workspace setup when coordinator is active). It maps the local task to the coordinator's task record.
 
@@ -48,6 +30,7 @@ Read workspace settings before entering the loop:
 
 ```
 max_retries = env(AUTO_ADVANCE_MAX_RETRIES, default=2)
+max_revert_retries = env(AUTO_ADVANCE_MAX_REVERT_RETRIES, default=3)
 use_subagents = env(AUTO_ADVANCE_USE_SUBAGENTS, default=false)
 transient_retries = env(AUTO_ADVANCE_TRANSIENT_RETRIES, default=3)
 backoff_ceiling = env(AUTO_ADVANCE_BACKOFF_CEILING, default=60)
@@ -60,6 +43,8 @@ stuck_action = env(AUTO_ADVANCE_STUCK_ACTION, default="skip-task")
 ```
 
 `max_retries` is passed to validate-implementation and used in pause messages for validation fix-and-retry attempts.
+
+`max_revert_retries` controls the revert-and-retry loop (step 3a). This is distinct from `max_retries` (which controls validate-implementation's fix-and-retry within a single approach). When validation fails after `max_retries` fix attempts, the agent reverts changes and re-implements with an alternative approach, up to `max_revert_retries` times. Each attempt is logged as structured telemetry. Escalation to human occurs only after all revert-retry attempts are exhausted. In execute-tree, the equivalent parameter is `max_retries` on the dispatch pipeline — it controls re-dispatch with parameter changes, not revert-and-retry.
 
 `use_subagents` enables subagent dispatch mode (see "Subagent Dispatch" section below). When `false`, the loop behaves identically to the original inline execution.
 
@@ -229,14 +214,130 @@ Read: skills/task-workflow/operations/validate-implementation.md
 
 Execute the operation's steps: detect test runner → detect linter → run tests → run lint → retry on failure.
 
-**Important**: The validate-implementation operation's retry loop (step 5 in that operation) asks the user for guidance when retries are exhausted. In auto-advance mode, treat "Let me fix it manually" as a **loop termination signal** — go to step 8 (pause). Treat "Skip validation and commit anyway" as permission to proceed to step 4.
+**Important**: The validate-implementation operation's retry loop (step 5 in that operation) asks the user for guidance when retries are exhausted. In auto-advance mode, **do not pause immediately** — instead enter the revert-and-retry loop (step 3a).
 
 | Validation Result | Action |
 |-------------------|--------|
 | All checks pass | Proceed to step 4 |
 | Checks fail, agent fixes within retries | Proceed to step 4 |
-| Retries exhausted, user says skip | Proceed to step 4 |
-| Retries exhausted, user says fix manually | Go to step 8 (pause) |
+| Retries exhausted | Go to step 3a (revert-and-retry) |
+
+### 3a. Revert-and-Retry Loop
+
+When validation fails and the validate-implementation retry budget is exhausted, revert the failed changes and re-attempt with a different approach. This implements the design principle: "Failure is normal — rejection → parameter change + re-dispatch, not stop-and-ask."
+
+```
+revert_retry_attempts = []  # telemetry for this task's revert-retry cycle
+revert_retry_count = 0
+max_revert_retries = env(AUTO_ADVANCE_MAX_REVERT_RETRIES, default=3)
+```
+
+#### Loop:
+
+```
+while revert_retry_count < max_revert_retries:
+  revert_retry_count += 1
+
+  # 1. Record the failed attempt as telemetry
+  attempt_record = {
+    attempt_number: revert_retry_count,
+    failure_reason: <validation error summary>,
+    approach_used: <description of what was tried>,
+    parameter_change: <what will change on next attempt>,
+    timestamp: <ISO 8601>,
+    files_modified: <from git diff --name-only>,
+    validation_errors: <structured test/lint output>
+  }
+  revert_retry_attempts.append(attempt_record)
+
+  # 2. Revert changes back to last good state (include untracked files)
+  git stash --include-untracked
+
+  # 3. Select alternative approach
+  approach_hint = select_alternative_approach(revert_retry_attempts)
+
+  # 4. Re-implement with alternative approach
+  #    The approach hint is injected as additional context:
+  #    "Previous approach failed: <failure_reason>. Try: <approach_hint>"
+  implement_with_hint(task, approach_hint)
+
+  # 5. Re-validate
+  validation_result = validate_implementation()
+
+  if validation_result.passed:
+    # Success — proceed to step 4 (commit)
+    break
+
+# If loop exits without success:
+if not validation_result.passed:
+  escalate_with_revert_log(task, revert_retry_attempts)
+```
+
+**Alternative approach strategies** — applied in order across retry attempts:
+
+| Attempt | Strategy | Description |
+|---------|----------|-------------|
+| 1 | Different algorithm | Change the implementation approach (e.g., iterative vs recursive, different data structure) |
+| 2 | Simplified scope | Implement a minimal version that satisfies core acceptance criteria |
+| 3 | Decomposed steps | Break the change into smaller incremental steps, validating between each |
+
+```
+function select_alternative_approach(attempts):
+  n = len(attempts)
+  last = attempts[-1]
+
+  if n == 1:
+    return "Previous approach failed: ${last.failure_reason}. Use a fundamentally different implementation strategy."
+  elif n == 2:
+    return "Two approaches have failed. Implement the simplest possible version that satisfies the core acceptance criteria. Defer edge cases."
+  else:
+    return "Multiple approaches have failed. Break the change into the smallest possible incremental step. Make one change, validate it works, then build on it."
+```
+
+#### Revert-Retry Telemetry
+
+Each revert-retry attempt produces a structured telemetry record following the same schema as execute-tree's `failure_telemetry_record` (see execute-tree step 4), with `node_id` replaced by `task_id`:
+
+```
+revert_retry_telemetry_record:
+  task_id: <task ID>
+  attempt_number: <1-based>
+  failure_reason: <validation error summary>
+  parameter_change_applied: <alternative approach hint>
+  outcome: "retry" | "success" | "escalated"
+  timestamp: <ISO 8601>
+```
+
+**Coordinator sync** (if available):
+```bash
+coord_report_progress "retry" "Attempt ${attempt_number}/${max_revert_retries}: ${failure_reason}. Trying: ${parameter_change}."
+```
+
+#### Escalation After Revert-Retry Exhaustion
+
+When max_revert_retries is exhausted, pause with the full failure log:
+
+```
+function escalate_with_revert_log(task, attempts):
+  # Present structured failure history
+  output:
+    ## Auto-Advance Paused
+
+    **Completed before pause**: <N> tasks
+    <for each completed task>
+      - <task subject> (<commit hash>)
+
+    **Blocked on**: <current task subject>
+    **Reason**: Validation failed after ${len(attempts)} revert-and-retry attempts
+
+    | Attempt | Approach | Failure |
+    |---------|----------|---------|
+    <for each attempt in attempts>
+    | ${attempt.attempt_number} | ${attempt.parameter_change} | ${attempt.failure_reason} |
+
+    **Decision needed**: All automated retry strategies exhausted.
+      Review the failure pattern above and provide guidance.
+```
 
 ### 3.5. Repeated Failure Check
 

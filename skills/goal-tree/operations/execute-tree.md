@@ -51,6 +51,8 @@ skipped_set = {}           # node IDs skipped by stuck detection
 completed_nodes = []       # list of {id, title, commits}
 total_dispatches = 0       # total dispatch attempts
 parallel_dispatches = 0    # parallel fan-out count
+max_retries = 3            # max retry attempts per node before escalation
+failure_telemetry = {}     # node_id → [list of attempt records]
 ```
 
 ## Loop Body
@@ -201,13 +203,7 @@ elif result.status == "partial":
   # Decide: retry remaining criteria or accept partial
 
 elif result.status == "failure":
-  # Subagent failed → fall back to inline
-  if result.dispatch_method == "subagent":
-    inline_result = dispatch_inline(node, { reason: "fallback", prior_failure: result.issues })
-    process_result(node, inline_result)  # recursive
-  else:
-    # Inline also failed → skip or escalate
-    handle_stuck(node, "dispatch-failure", result.issues)
+  retry_node(node, result)
 
 elif result.status == "blocked":
   coord node update $TREE_ID $NODE_DB_ID --status blocked
@@ -215,6 +211,113 @@ elif result.status == "blocked":
 elif result.status == "escalated":
   # Already handled in step 3a
   pass
+```
+
+#### Retry Loop (`retry_node`)
+
+When a node fails, retry with parameter changes before escalating. This implements the design principle: "Failure is normal — rejection → parameter change + re-dispatch, not stop-and-ask."
+
+```
+function retry_node(node, initial_result):
+  attempts = failure_telemetry.get(node.id, [])
+
+  # Record this failure as attempt
+  attempt = {
+    attempt_number: len(attempts) + 1,
+    failure_reason: initial_result.issues,
+    dispatch_method: initial_result.dispatch_method,
+    parameter_change: "initial dispatch"
+  }
+  attempts.append(attempt)
+  failure_telemetry[node.id] = attempts
+
+  if len(attempts) >= max_retries:
+    # Exhausted retries — escalate with full failure log
+    escalate_with_failure_log(node, attempts)
+    return
+
+  # Re-dispatch with parameter change based on attempt count
+  new_result = retry_dispatch(node, attempts)
+  process_result(node, new_result)  # recursive — will retry again if needed
+```
+
+**Parameter change strategies** — applied in order across retry attempts:
+
+| Attempt | Parameter Change | Description |
+|---------|-----------------|-------------|
+| 2 | Add error context | Append prior failure reason and error output to dispatch prompt |
+| 3 | Alternative approach hint | Add instruction to use a different implementation strategy (e.g., "The previous approach failed because X. Try Y instead.") |
+
+```
+function retry_dispatch(node, attempts):
+  n = len(attempts)
+  last = attempts[-1]
+
+  if n == 1:
+    result = dispatch_node(node, {
+      reason: "retry",
+      prior_failures: attempts,
+      additional_prompt: "Previous attempt failed: ${last.failure_reason}. Address this specific issue."
+    })
+  else:
+    result = dispatch_node(node, {
+      reason: "retry-alternative",
+      prior_failures: attempts,
+      additional_prompt: "The previous approach failed: ${last.failure_reason}. Try an alternative strategy."
+    })
+
+  return result
+```
+
+#### Failure Telemetry Record
+
+Each failed attempt emits a structured telemetry record that N+1 can consume:
+
+```
+failure_telemetry_record:
+  node_id: <node ID>
+  attempt_number: <1-based>
+  failure_reason: <error description>
+  parameter_change_applied: <description of what changed>
+  outcome: "retry" | "escalated"
+  timestamp: <ISO 8601>
+```
+
+These records are appended to the node's result in the coordinator:
+
+```bash
+coord node add-result $TREE_ID $NODE_DB_ID \
+  --status retry \
+  --summary "Attempt ${attempt_number}/${max_retries}: ${failure_reason}. Parameter change: ${parameter_change_applied}."
+```
+
+#### Escalation with Failure Log
+
+When max_retries is exhausted, escalate with the full failure history attached:
+
+```
+function escalate_with_failure_log(node, attempts):
+  coord node update $TREE_ID $NODE_DB_ID \
+    --status blocked \
+    --result "Failed after ${len(attempts)} attempts — escalating to human"
+
+  # Record all attempts as a single telemetry summary
+  coord node add-result $TREE_ID $NODE_DB_ID \
+    --status failed \
+    --summary "Exhausted ${max_retries} retries. Failure log: ${format_attempts(attempts)}"
+
+  # Present escalation with full context
+  present_escalation:
+    ## Escalation: Node ${node.id} — ${node.title}
+
+    **Attempts exhausted**: ${len(attempts)} / ${max_retries}
+
+    | Attempt | Method | Parameter Change | Failure Reason |
+    |---------|--------|-----------------|----------------|
+    <for each attempt in attempts>
+    | ${attempt.attempt_number} | ${attempt.dispatch_method} | ${attempt.parameter_change} | ${attempt.failure_reason} |
+
+    **Decision needed**: All automated retry strategies exhausted. Human guidance required.
 ```
 
 ### 4a. Spec-Driven Evaluation
@@ -257,7 +360,7 @@ For each acceptance criterion, determine pass/fail based on the actual changes p
 
 | Overall | Action |
 |---------|--------|
-| All criteria pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4b |
+| All criteria pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4c |
 | Any criteria fail, retries remaining | **REJECT** — re-dispatch with feedback (see below) |
 | Any criteria fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
 
@@ -273,7 +376,7 @@ coord node update $TREE_ID $NODE_DB_ID \
 completed_nodes.append(node)
 ```
 
-Then proceed to step 4b (commit) and subsequent steps for this node.
+Then proceed to step 4c (commit) and subsequent steps for this node.
 
 #### Reject Path
 
@@ -463,6 +566,10 @@ When the loop terminates:
 <for each blocked node>
   - <node.id>. <node.title> (reason: <blocker>)
 
+**Retried nodes**: <N>
+<for each node with failure telemetry>
+  - <node.id>. <node.title>: <attempts> attempts, final outcome: <completed|escalated>
+
 **Dispatch summary**: <subagent: N, inline: N, sub-session: N, fallback: N>
 **Parallel dispatches**: <N fan-outs>
 **Commits**: <N total>
@@ -531,14 +638,14 @@ function handle_stuck(node, reason, detail):
 When dispatching nodes in parallel:
 
 - One node's failure does **not** block independent siblings
-- Failed nodes are handled individually (retry → inline fallback → skip)
+- Failed nodes are handled individually (retry with parameter change → escalate)
 - Other parallel dispatches continue unaffected
 - Results are collected as each dispatch completes
 
 ```
 # Fan-out: 3 subagents dispatched in parallel
 # Agent 1: success → process result
-# Agent 2: failure → retry → inline fallback
+# Agent 2: failure → retry with error context → success
 # Agent 3: success → process result
 # All three processed independently
 ```
