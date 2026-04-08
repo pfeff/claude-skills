@@ -7,11 +7,12 @@ Generate a living plan as markdown with checkable acceptance criteria. The plan 
 - `task_description` (required): Issue title, description, requirements
 - `problem_validation` (required): Output from problem validation phase
 - `designmd_reconciliation` (required): Output from DESIGN.md reconciliation phase (may contain "Skipped" status if DESIGN.md was absent)
-- `prior_solutions` (required): Output from solution search phase
-- `research_decision` (required): Output from research gating phase
+- `prior_solutions` (required): Output from solution search phase (may be "Skipped — fast path")
+- `research_decision` (required): Output from research gating phase (may be "Skipped — fast path")
 - `research_findings` (optional): External research results, if conducted
-- `specflow_analysis` (required): Output from SpecFlow analysis phase
+- `specflow_analysis` (required): Output from SpecFlow analysis phase (may be "Skipped — fast path")
 - `detail_level` (required): Selected level — Minimal, More, or A Lot
+- `fast_path_gate` (optional): Output from fast path gate evaluation, if the gate was reached
 
 ## Plan Templates
 
@@ -131,8 +132,8 @@ Fill each section using context from prior phases:
 - **Risks**: From SpecFlow analysis (error states, edge cases), research, and any unresolved DESIGN.md contradictions
 - **Acceptance criteria**: Merge criteria from:
   - Task requirements (explicit)
-  - SpecFlow-generated criteria (discovered edge cases)
-  - Prior solution prevention guidance (avoid known pitfalls)
+  - SpecFlow-generated criteria (discovered edge cases) — omit if SpecFlow was skipped via fast path
+  - Prior solution prevention guidance (avoid known pitfalls) — omit if solution search was skipped via fast path
   - Standard completion criteria (included by default, deduplicated — omit if not applicable to the task):
     - `Documentation updated to reflect changes (DESIGN.md, README, docs/, or inline as appropriate)`
     - `Deliverable validated via walkthrough or demonstration`
@@ -154,6 +155,8 @@ After the plan body, append the phase outputs as reference:
 
 <DESIGN.md Reconciliation section from designmd reconciliation>
 
+<Fast Path Gate section from fast path gate, if evaluated>
+
 <Prior Solutions section from solution search>
 
 <Research Decision section from research gating>
@@ -168,6 +171,22 @@ If DESIGN.md reconciliation was skipped (no DESIGN.md found), include:
 ```markdown
 ### DESIGN.md Reconciliation
 Skipped — no substantive DESIGN.md found.
+```
+
+If phases were skipped via fast path, include their "Skipped — fast path" values as-is in the Planning Context. For example:
+
+```markdown
+### Prior Solutions
+Skipped — fast path
+
+### Research Decision
+Skipped — fast path
+
+### SpecFlow Analysis
+Skipped — fast path
+
+### Plan Detail Level
+Minimal (fast path default)
 ```
 
 ### 4. Write plan file
