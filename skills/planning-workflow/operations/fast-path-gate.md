@@ -30,7 +30,7 @@ The task targets files or modules that exist in the current repository and can b
 **False when**:
 - The task requires creating a new subsystem or module from scratch
 - The affected code cannot be located in the repo
-- The task scope spans 3+ unrelated modules
+- The task scope spans 3+ distinct top-level directories in the repo
 
 ### Criterion 3: Low risk
 

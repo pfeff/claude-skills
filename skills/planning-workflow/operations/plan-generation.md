@@ -11,7 +11,7 @@ Generate a living plan as markdown with checkable acceptance criteria. The plan 
 - `research_decision` (required): Output from research gating phase (may be "Skipped — fast path")
 - `research_findings` (optional): External research results, if conducted
 - `specflow_analysis` (required): Output from SpecFlow analysis phase (may be "Skipped — fast path")
-- `detail_level` (required): Selected level — Minimal, More, or A Lot
+- `detail_level` (required): Selected level — Minimal, More, or A Lot (defaults to Minimal on fast path)
 - `fast_path_gate` (optional): Output from fast path gate evaluation, if the gate was reached
 
 ## Plan Templates
