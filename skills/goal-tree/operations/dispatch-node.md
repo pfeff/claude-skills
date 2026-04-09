@@ -1,6 +1,6 @@
 # Dispatch Node Operation
 
-Executes the chosen dispatch strategy for a node. Handles subagent invocation, sub-session creation, inline execution, and escalation.
+Executes the chosen dispatch strategy for a node. Handles subagent invocation, sub-session creation, container dispatch, inline execution, and escalation.
 
 ## Inputs
 
@@ -26,7 +26,7 @@ dispatch_result:
   commits: [list of hashes]
   acceptance_criteria_met: [list of met criteria]
   issues: "<problems encountered>" | "none"
-  dispatch_method: "subagent" | "sub-session" | "inline" | "escalated"
+  dispatch_method: "subagent" | "sub-session" | "container" | "inline" | "escalated"
 ```
 
 ## Node Workspace Setup
@@ -232,6 +232,61 @@ Follow parsing rules from `task-workflow/references/subagent-dispatch.md`:
 | First failure | Retry with failure context appended to prompt |
 | Second failure | Return `status: failure` with `dispatch_method: "subagent"` — caller falls back to inline |
 
+### Container Dispatch
+
+For leaf tasks where repos have Taskfile and Docker is available. Runs inside Ralph's sandboxed devcontainer — eliminates permission prompts entirely.
+
+#### 1. Invoke Wrapper Script
+
+```bash
+skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}"
+```
+
+The wrapper script handles the full lifecycle:
+1. Translates `DESIGN.md` → `specs/task.md` (L1→L0 spec format)
+2. Generates `.ralph/gates.md` from each repo's `Taskfile.yml`
+3. Generates `.ralph/workspace.md` for multi-repo nodes
+4. Copies `PROMPT_plan.md` and `PROMPT_build.md` from Ralph-wiggum skill
+5. Invokes `run-container.sh` with plan then build phases
+6. Parses results into `dispatch_result` JSON
+
+#### 2. Parse Result
+
+The wrapper outputs structured JSON to stdout. Parse it directly:
+
+```
+dispatch_result:
+  status: <from wrapper JSON>
+  node_id: <from wrapper JSON>
+  files_modified: <from wrapper JSON>
+  changes_summary: <from wrapper JSON>
+  commits: <from wrapper JSON>
+  acceptance_criteria_met: <from wrapper JSON>
+  issues: <from wrapper JSON>
+  dispatch_method: "container"
+```
+
+#### 3. Handle Failure
+
+| Status | Action |
+|--------|--------|
+| `success` | All tasks completed — proceed to post-implementation lifecycle |
+| `partial` | Some tasks completed — return to caller for retry decision |
+| `blocked` | Ralph wrote BLOCKERS.md — return `status: blocked` with blocker text |
+| `failure` | Max iterations or error — return `status: failure` for caller retry loop |
+
+On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline.
+
+#### 4. Dry Run
+
+For validation without execution, use `--dry-run`:
+
+```bash
+skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}" --dry-run
+```
+
+This prepares the workspace (specs, gates, prompts) without invoking the container. Useful for verifying the translation pipeline.
+
 ### Sub-Session Dispatch
 
 For deep subtrees that exceed subagent capacity.
@@ -374,6 +429,21 @@ This task has been attempted ${len(prior_failures)} time(s) previously.
 ${additional_prompt}
 ```
 
+### Container Failure
+
+```
+Container dispatch returns non-success status
+  → status: "blocked" → return to caller with blocker text
+  → status: "partial" → return to caller for retry decision
+  → status: "failure" → return to caller
+    → Caller (execute-tree) retry loop:
+      → Attempt 2: re-dispatch as container with adjusted spec context → failure
+      → Attempt 3: fall back to subagent strategy → failure
+      → Escalate to human with full failure log
+```
+
+Container dispatch does not perform internal retries — Ralph's loop already iterates up to `MAX_ITER` (default 20). If the container exits with failure, the task exhausted Ralph's retry budget.
+
 ### Sub-Session Failure
 
 ```
@@ -475,10 +545,11 @@ After the operator approves and merges:
 ## Integration Points
 
 - **Called by**: execute-tree (step 3)
-- **Depends on**: dispatch-decision output, Agent tool, task-workflow scripts, `coord` CLI
+- **Depends on**: dispatch-decision output, Agent tool, task-workflow scripts, `coord` CLI, `dispatch-container.sh`
 - **References**:
   - `task-workflow/references/subagent-dispatch.md` — dispatch contract and result format
   - `task-workflow/operations/dispatch-task.md` — mechanical dispatch plumbing
   - `task-workflow/references/error-classification.md` — error taxonomy
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm
   - `operations/branch-management.md` — node workspace creation
+  - `scripts/dispatch-container.sh` — container dispatch wrapper (DESIGN.md → Ralph)
