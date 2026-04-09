@@ -64,13 +64,14 @@ If a completed node's result changes the strategic picture (new gap, invalidated
 
 ### 2a. Cycle Metrics
 
-Before the qualitative retrospective, surface quantitative data from `finish.jsonl` to ground the review in measured outcomes.
+Before the qualitative retrospective, surface quantitative data from `finish.jsonl` to ground the review in measured outcomes. Compare against baselines when available.
 
 **Determine cycle date range**: Use the most recent `lessons_cycle_*.md` file timestamp as the cycle start. If no lesson files exist, default to the last 7 days. The cycle end is now.
 
 ```bash
 # Find cycle start from most recent lesson file, or default to 7 days ago
 METRICS_FILE=~/src/work/.metrics/finish.jsonl
+BASELINES_FILE=~/src/work/.metrics/baselines.jsonl
 CYCLE_START=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' \
   "$(ls -t ${PROJECT_DIR}/memory/lessons_cycle_*.md 2>/dev/null | head -1)" 2>/dev/null \
   || date -u -v-7d '+%Y-%m-%dT%H:%M:%SZ')
@@ -78,27 +79,89 @@ CYCLE_START=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' \
 
 **Determine epic**: Extract from the project CLAUDE.md or workspace path segment (e.g., `guardian`, `mission`).
 
-**Query metrics**:
+**Query metrics and compare against baselines**:
 
 ```bash
 if [[ -f "$METRICS_FILE" ]]; then
-  jq -r --arg epic "$EPIC" --arg since "$CYCLE_START" '
+  # Collect current cycle metrics
+  CYCLE_JSON=$(jq -r --arg epic "$EPIC" --arg since "$CYCLE_START" '
     select(.epic == $epic and .finished_at >= $since)
   ' "$METRICS_FILE" | jq -s '
-    if length == 0 then "No metrics found for this cycle."
-    else
-      "Tasks: \(length)",
-      "Elapsed hours: \(map(.elapsed_hours) | add | . * 10 | round / 10)",
-      "Avg hours/task: \(map(.elapsed_hours) | add / length | . * 10 | round / 10)",
-      "Review rounds: \(map(.review_rounds) | add) total (\(map(.review_rounds) | add / length | . * 10 | round / 10) avg)"
+    if length == 0 then null
+    else {
+      task_count: length,
+      elapsed_hours_total: (map(.elapsed_hours) | add | . * 10 | round / 10),
+      elapsed_hours_avg: (map(.elapsed_hours) | add / length | . * 10 | round / 10),
+      review_rounds_total: (map(.review_rounds) | add),
+      review_rounds_avg: (map(.review_rounds) | add / length | . * 10 | round / 10)
+    }
     end
-  '
+  ')
+
+  if [[ "$CYCLE_JSON" == "null" ]]; then
+    echo "No metrics found for this cycle."
+  else
+    echo "$CYCLE_JSON" | jq -r '
+      "Tasks: \(.task_count)",
+      "Elapsed hours: \(.elapsed_hours_total) (\(.elapsed_hours_avg) avg)",
+      "Review rounds: \(.review_rounds_total) total (\(.review_rounds_avg) avg)"
+    '
+
+    # Compare against baselines if available
+    if [[ -f "$BASELINES_FILE" ]]; then
+      BASELINE=$(jq -c --arg epic "$EPIC" 'select(.epic == $epic)' "$BASELINES_FILE" | head -1)
+      if [[ -n "$BASELINE" ]]; then
+        echo ""
+        echo "── Baseline Comparison ──"
+        echo "$CYCLE_JSON" | jq -r --argjson bl "$BASELINE" '
+          def delta(current; base): current - base | . * 10 | round / 10;
+          def flag(current; mean; stddev; threshold):
+            if current > (mean + (threshold * stddev)) then " ⚠ REGRESSION"
+            elif current < (mean - (threshold * stddev)) then " ✓ improved"
+            else ""
+            end;
+          ($bl.regression_threshold // 1) as $thresh |
+          "Avg hours/task: \(.elapsed_hours_avg) vs baseline \($bl.elapsed_hours_avg) (delta: \(delta(.elapsed_hours_avg; $bl.elapsed_hours_avg)))\(flag(.elapsed_hours_avg; $bl.elapsed_hours_avg; $bl.elapsed_hours_stddev; $thresh))",
+          "Avg review rounds: \(.review_rounds_avg) vs baseline \($bl.review_rounds_avg) (delta: \(delta(.review_rounds_avg; $bl.review_rounds_avg)))\(flag(.review_rounds_avg; $bl.review_rounds_avg; $bl.review_rounds_stddev; $thresh))"
+        '
+      else
+        echo "(No baseline found for epic '$EPIC')"
+      fi
+    else
+      echo "(No baselines.jsonl found — run seed-baselines to enable comparison)"
+    fi
+  fi
 else
   echo "No finish.jsonl found — metrics collection not yet active."
 fi
 ```
 
 Present the output as a "Cycle Metrics" block before the retrospective. If the file is missing or no entries match, state that clearly and continue — metrics are informational, not blocking.
+
+#### Baselines File Format
+
+`~/src/work/.metrics/baselines.jsonl` — one JSON object per line, one line per epic:
+
+```json
+{"epic":"guardian","sample_size":33,"computed_at":"2026-04-09T00:00:00Z","elapsed_hours_avg":4.8,"elapsed_hours_stddev":3.2,"review_rounds_avg":0.2,"review_rounds_stddev":0.4,"task_count_avg":4.4,"task_count_stddev":1.8,"regression_threshold":1}
+```
+
+| Field | Description |
+|-------|-------------|
+| `epic` | Epic name (matches finish.jsonl epic field) |
+| `sample_size` | Number of finish.jsonl entries used to compute this baseline |
+| `computed_at` | ISO 8601 timestamp when baseline was generated |
+| `elapsed_hours_avg` | Mean elapsed hours per task |
+| `elapsed_hours_stddev` | Standard deviation of elapsed hours |
+| `review_rounds_avg` | Mean review rounds per task |
+| `review_rounds_stddev` | Standard deviation of review rounds |
+| `task_count_avg` | Mean subtask count per task |
+| `task_count_stddev` | Standard deviation of subtask count |
+| `regression_threshold` | Number of stddevs above mean to flag as regression (default: 1) |
+
+**Seeding baselines**: Run `seed-baselines.sh` (see goal-tree `scripts/` directory) to compute initial baselines from existing finish.jsonl data. Re-run periodically to update baselines as more data accumulates.
+
+**Metric-gated decisions**: When a cycle metric exceeds `baseline_mean + (regression_threshold * stddev)`, it is flagged as a regression with `⚠ REGRESSION`. This surfaces in the retrospective output for the operator to act on. The threshold is configurable per-epic in baselines.jsonl.
 
 ### 2b. End-of-Cycle Retrospective
 
