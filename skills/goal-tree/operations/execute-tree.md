@@ -422,6 +422,34 @@ coord node add-result $TREE_ID $NODE_DB_ID \
   --summary "Evaluation: ${VERDICT}. ${PASS_COUNT}/${TOTAL} criteria passed. ${REASONING_SUMMARY}"
 ```
 
+#### Scalar Metrics (L0)
+
+After evaluation, write structured scalar metrics to the node workspace so downstream telemetry (finish.jsonl) can consume them. The acceptance criteria pass rate is the L0 scalar metric defined in DESIGN.md.
+
+```bash
+NODE_METRICS_DIR="${NODE_WORKSPACE}/.metrics"
+mkdir -p "$NODE_METRICS_DIR"
+jq -n \
+  --argjson criteria_passed ${PASS_COUNT} \
+  --argjson criteria_total ${TOTAL} \
+  --arg verdict "${VERDICT}" \
+  --arg evaluated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+  -c '{$criteria_passed, $criteria_total, acceptance_rate: ($criteria_passed / $criteria_total), $verdict, $evaluated_at}' \
+  > "${NODE_METRICS_DIR}/evaluation.json"
+```
+
+The `evaluation.json` file contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `criteria_passed` | int | Number of acceptance criteria that passed |
+| `criteria_total` | int | Total acceptance criteria evaluated |
+| `acceptance_rate` | float | `criteria_passed / criteria_total` (0.0–1.0) |
+| `verdict` | string | `ACCEPT`, `REJECT`, or `FAIL` |
+| `evaluated_at` | string | ISO 8601 timestamp of evaluation |
+
+This file is read by the task-workflow finish operation (step 7) when writing finish.jsonl.
+
 ### 4b. Outcome Classification
 
 For each completed node, classify the outcome relative to the mission:

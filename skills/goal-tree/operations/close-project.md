@@ -67,7 +67,22 @@ if [[ -f "$METRICS_FILE" ]]; then
       "Total tasks:    \(length)",
       "Elapsed hours:  \(map(.elapsed_hours) | add | . * 10 | round / 10)",
       "Avg hours/task: \(map(.elapsed_hours) | add / length | . * 10 | round / 10)",
-      "Review rounds:  \(map(.review_rounds) | add) total (\(map(.review_rounds) | add / length | . * 10 | round / 10) avg)",
+      "",
+      # L0: Acceptance criteria pass rate
+      (if [map(select(.acceptance_rate != null))] | .[0] | length > 0 then
+        [map(select(.acceptance_rate != null))] | .[0] |
+        "L0 acceptance rate: \(map(.acceptance_rate) | add / length | . * 1000 | round / 1000) avg (\(length) evaluated)"
+      else
+        "L0 acceptance rate: no evaluation data"
+      end),
+      # L1: Batch success rate + cycle time
+      (if [map(select(.acceptance_rate != null))] | .[0] | length > 0 then
+        [map(select(.acceptance_rate != null))] | .[0] |
+        "L1 batch success: \([map(select(.acceptance_rate >= 1.0))] | .[0] | length)/\(length) (\([map(select(.acceptance_rate >= 1.0))] | .[0] | length / length | . * 1000 | round / 1000))"
+      else
+        "L1 batch success: no evaluation data"
+      end),
+      "L1 cycle time:  \(map(.elapsed_hours) | add / length | . * 10 | round / 10) avg hours/task",
       "───────────────────────────────────────"
     end
   ' --arg epic "$EPIC"

@@ -115,7 +115,12 @@ if [[ -f "$METRICS_FILE" ]]; then
       elapsed_hours_total: (map(.elapsed_hours) | add | . * 10 | round / 10),
       elapsed_hours_avg: (map(.elapsed_hours) | add / length | . * 10 | round / 10),
       review_rounds_total: (map(.review_rounds) | add),
-      review_rounds_avg: (map(.review_rounds) | add / length | . * 10 | round / 10)
+      review_rounds_avg: (map(.review_rounds) | add / length | . * 10 | round / 10),
+      # L0/L1 scalar metrics
+      l0_acceptance_rate: (if [map(select(.acceptance_rate != null))] | .[0] | length > 0 then [map(select(.acceptance_rate != null))] | .[0] | (map(.acceptance_rate) | add / length | . * 1000 | round / 1000) else null end),
+      l0_evaluated_count: ([map(select(.acceptance_rate != null))] | .[0] | length),
+      l1_batch_success_count: ([map(select(.acceptance_rate != null and .acceptance_rate >= 1.0))] | .[0] | length),
+      l1_batch_total: ([map(select(.acceptance_rate != null))] | .[0] | length)
     }
     end
   ')
@@ -126,7 +131,15 @@ if [[ -f "$METRICS_FILE" ]]; then
     echo "$CYCLE_JSON" | jq -r '
       "Tasks: \(.task_count)",
       "Elapsed hours: \(.elapsed_hours_total) (\(.elapsed_hours_avg) avg)",
-      "Review rounds: \(.review_rounds_total) total (\(.review_rounds_avg) avg)"
+      "Review rounds: \(.review_rounds_total) total (\(.review_rounds_avg) avg)",
+      (if .l0_acceptance_rate != null then
+        "L0 acceptance rate: \(.l0_acceptance_rate) avg (\(.l0_evaluated_count) evaluated)",
+        "L1 batch success: \(.l1_batch_success_count)/\(.l1_batch_total) (\(if .l1_batch_total > 0 then .l1_batch_success_count / .l1_batch_total | . * 1000 | round / 1000 else 0 end))"
+      else
+        "L0 acceptance rate: no evaluation data",
+        "L1 batch success: no evaluation data"
+      end),
+      "L1 cycle time: \(.elapsed_hours_avg) avg hours/task"
     '
 
     # Compare against baselines if available
@@ -157,6 +170,14 @@ else
   echo "No finish.jsonl found — metrics collection not yet active."
 fi
 ```
+
+**Metric definitions**:
+
+| Metric | Layer | Formula | Description |
+|--------|-------|---------|-------------|
+| Acceptance rate | L0 | `criteria_passed / criteria_total` | Per-task pass rate, averaged across cycle |
+| Batch success rate | L1 | `count(acceptance_rate == 1.0) / count(evaluated)` | Fraction of tasks fully accepted on first evaluation |
+| Cycle time | L1 | `avg(elapsed_hours)` | Average wall-clock time per task |
 
 Present the output as a "Cycle Metrics" block before the retrospective. If the file is missing or no entries match, state that clearly and continue — metrics are informational, not blocking.
 
