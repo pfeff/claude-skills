@@ -229,17 +229,45 @@ Check the background subagent dispatched in step 4b. If the dispatch completed s
 | finished_at | Current timestamp |
 | elapsed_hours | `finished_at - started_at` |
 | pr_url | Captured from step 4 |
+| criteria_passed | `.metrics/evaluation.json` — number of acceptance criteria passed (optional) |
+| criteria_total | `.metrics/evaluation.json` — total acceptance criteria evaluated (optional) |
+| acceptance_rate | `.metrics/evaluation.json` — `criteria_passed / criteria_total` (optional) |
+
+**Evaluation metrics**: Check for `.metrics/evaluation.json` in the workspace root. This file is written by execute-tree step 4a (Scalar Metrics) when the task was dispatched via goal-tree. If the file exists, include `criteria_passed`, `criteria_total`, and `acceptance_rate` in the finish record. If absent (e.g., standalone task-workflow without goal-tree), omit these fields.
+
+```bash
+EVAL_METRICS="${WORKSPACE_ROOT}/.metrics/evaluation.json"
+if [[ -f "$EVAL_METRICS" ]]; then
+  CRITERIA_PASSED=$(jq -r '.criteria_passed' "$EVAL_METRICS")
+  CRITERIA_TOTAL=$(jq -r '.criteria_total' "$EVAL_METRICS")
+  ACCEPTANCE_RATE=$(jq -r '.acceptance_rate' "$EVAL_METRICS")
+fi
+```
 
 **Log location**: `~/src/work/.metrics/finish.jsonl`
 
 **Format** (one JSON object per line):
 
 ```json
-{"task_id":57,"epic":"guardian","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/pfeff/guardian/pull/12"}
+{"task_id":57,"epic":"guardian","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/pfeff/guardian/pull/12","criteria_passed":3,"criteria_total":3,"acceptance_rate":1.0}
 ```
+
+The `criteria_passed`, `criteria_total`, and `acceptance_rate` fields are optional — omitted when no evaluation data exists.
 
 ```bash
 mkdir -p ~/src/work/.metrics && chmod 700 ~/src/work/.metrics
+
+EVAL_METRICS="${WORKSPACE_ROOT}/.metrics/evaluation.json"
+EVAL_ARGS=""
+if [[ -f "$EVAL_METRICS" ]]; then
+  EVAL_ARGS="--argjson criteria_passed $(jq -r '.criteria_passed' "$EVAL_METRICS") \
+    --argjson criteria_total $(jq -r '.criteria_total' "$EVAL_METRICS") \
+    --argjson acceptance_rate $(jq -r '.acceptance_rate' "$EVAL_METRICS")"
+  EVAL_FIELDS=', $criteria_passed, $criteria_total, $acceptance_rate'
+else
+  EVAL_FIELDS=""
+fi
+
 jq -n \
   --argjson task_id 57 \
   --arg epic "guardian" \
@@ -248,7 +276,8 @@ jq -n \
   --arg finished_at "2026-02-22T15:30:00Z" \
   --argjson elapsed_hours 53.5 \
   --arg pr_url "https://github.com/pfeff/guardian/pull/12" \
-  -c '{$task_id,$epic,$task_count,$started_at,$finished_at,$elapsed_hours,$pr_url}' \
+  $EVAL_ARGS \
+  -c "{task_id: \$task_id, epic: \$epic, task_count: \$task_count, started_at: \$started_at, finished_at: \$finished_at, elapsed_hours: \$elapsed_hours, pr_url: \$pr_url${EVAL_FIELDS}}" \
   >> ~/src/work/.metrics/finish.jsonl
 ```
 
