@@ -96,7 +96,7 @@ The `scan-task-dirs.sh` script scans these files to determine workspace status f
 
 Each workspace includes a symlink to the Obsidian vault:
 ```bash
-Obsidian -> /mnt/c/Users/mpfefferle/Documents/Obsidian/tcetra
+Obsidian -> /path/to/obsidian/vault
 ```
 
 ## Solution Documentation

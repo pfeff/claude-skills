@@ -153,7 +153,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-workspace.sh \
 ```
 Creating workspace for task 19...
   Slug: use-deterministic-script
-  Path: /Users/matt/src/work/cursor-rules/19-use-deterministic-script
+  Path: ~/src/work/cursor-rules/19-use-deterministic-script
 
 Checking prerequisites...
   Prerequisites OK
@@ -163,7 +163,7 @@ Fetching secrets...
   Octopus API Key: skipped (no valid AWS session)
 
 Creating workspace directory...
-  Created: /Users/matt/src/work/cursor-rules/19-use-deterministic-script
+  Created: ~/src/work/cursor-rules/19-use-deterministic-script
 
 Rendering templates...
   DESIGN.md: created
@@ -172,8 +172,8 @@ Rendering templates...
 
 Creating git worktrees...
   cursor-rules:
-    Source: /Users/matt/src/github/pfeff/cursor-rules
-    Worktree: /Users/matt/src/work/cursor-rules/19-use-deterministic-script/cursor-rules
+    Source: ~/src/github/pfeff/cursor-rules
+    Worktree: ~/src/work/cursor-rules/19-use-deterministic-script/cursor-rules
     Branch: 19/mbp/use-deterministic-script
     Created worktree
 
@@ -202,7 +202,7 @@ All verification checks passed!
 Workspace created successfully!
 ==========================================
 
-  Path:         /Users/matt/src/work/cursor-rules/19-use-deterministic-script
+  Path:         ~/src/work/cursor-rules/19-use-deterministic-script
   Task List ID: cursor-rules-19
   Tmux Session: 19- Use deterministic script for workspace bootstrapping
 

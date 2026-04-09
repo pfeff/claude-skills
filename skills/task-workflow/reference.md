@@ -214,7 +214,7 @@ These symlinks are required for `task` commands to work properly in Dev-Stacks.
 
 ```bash
 # Mac (iCloud)
-ln -s "/Users/matt/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obisian" ~/src/work/<epic>/<task-id>-<slug>/Obsidian
+ln -s "/Users/<user>/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian" ~/src/work/<epic>/<task-id>-<slug>/Obsidian
 
 # WSL
 ln -s /mnt/c/Users/<user>/Documents/Obsidian/<vault> ~/src/work/<epic>/<task-id>-<slug>/Obsidian
@@ -359,8 +359,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/list-tasks.sh
 
 Example:
 ```
-in-progress|tooling|skills-workflow|Refactor workflow system|8|15|/Users/matt/src/work/tooling/skills-workflow
-completed|ad-hoc|auth-fix|Fix authentication timeout|5|5|/Users/matt/src/work/ad-hoc/DO-242-auth-timeout
+in-progress|tooling|skills-workflow|Refactor workflow system|8|15|~/src/work/tooling/skills-workflow
+completed|ad-hoc|auth-fix|Fix authentication timeout|5|5|~/src/work/ad-hoc/DO-242-auth-timeout
 ```
 
 ### Status Classification

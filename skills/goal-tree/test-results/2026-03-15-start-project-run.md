@@ -67,7 +67,7 @@
 ### 9. No workspace/worktree created (still)
 - **Severity**: Workflow compliance — high
 - **Where**: Bootstrap execution
-- **What happened**: Agent created project directory (`~/src/work/ac-local-prod/`) and wrote `setup.sh` directly there. No worktree from the agent-coordinator repo. The setup script references the source repo directly (`AC_REPO="/Users/matt/src/github/pfeff/agent-coordinator"`) rather than working from a worktree.
+- **What happened**: Agent created project directory (`~/src/work/ac-local-prod/`) and wrote `setup.sh` directly there. No worktree from the agent-coordinator repo. The setup script references the source repo directly (`AC_REPO="~/src/github/pfeff/agent-coordinator"`) rather than working from a worktree.
 - **Root cause**: Despite fix in start-project.md step 9 saying "create node workspace via scripted path", the agent still didn't do it. The bootstrap execution guidance may not be strong enough, or the agent doesn't see worktrees as relevant for a deployment task (no code changes to isolate).
 - **Assessment**: For this specific task (local deployment), a worktree is arguably unnecessary — the agent is building a release from main, not modifying code. But the approval prompt issue remains because the working directory doesn't cover the source repo path.
 
