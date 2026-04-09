@@ -6,7 +6,7 @@ Standard layout for task workspaces.
 
 ```
 ~/src/work/<project-slug>/<issue-slug>/
-├── .envrc              # direnv config with task list ID
+├── .envrc              # direnv config with Azure PAT and task list ID
 ├── DESIGN.md           # Task requirements and architecture
 ├── .tmuxp.yaml         # Tmux session configuration
 ├── <repo-1>/           # Git worktree for repository 1
@@ -21,13 +21,15 @@ Standard layout for task workspaces.
 Each workspace includes a `.envrc` file for environment configuration:
 
 ```bash
-export CLAUDE_CODE_TASK_LIST_ID="<epic>-<task-id>"
+layout python3
 
-# Optional: auto-advance configuration
-# export AUTO_ADVANCE_MAX_RETRIES=2
-# export AUTO_ADVANCE_USE_SUBAGENTS=true
+export TF_VAR_azure_devops_pat="<pat-value>"
+export AZURE_DEVOPS_EXT_PAT="<pat-value>"
+export CLAUDE_CODE_TASK_LIST_ID="<epic>-<task-id>"
 ```
 
+- `TF_VAR_azure_devops_pat` - Terraform variable for Azure DevOps provider
+- `AZURE_DEVOPS_EXT_PAT` - Azure CLI extension authentication
 - `CLAUDE_CODE_TASK_LIST_ID` - Links workspace to Claude Code native task list
 
 **Important**: Run `direnv allow` after workspace creation to activate the environment.
@@ -90,6 +92,13 @@ Tasks are stored in JSON files at `~/.claude/tasks/`:
 
 The `scan-task-dirs.sh` script scans these files to determine workspace status for `/list-workspaces`.
 
+## Obsidian Symlink
+
+Each workspace includes a symlink to the Obsidian vault:
+```bash
+Obsidian -> /path/to/obsidian/vault
+```
+
 ## Solution Documentation
 
 Each repo worktree includes a `docs/solutions/` directory for documenting solved problems. Created automatically by `create-workspace.sh`.
@@ -106,7 +115,7 @@ docs/solutions/
 └── patterns/
 ```
 
-See `templates/solution.md.tmpl` for the frontmatter schema and file format.
+See [SCHEMA.md](https://github.com/pfeff/guardian/blob/main/docs/solutions/SCHEMA.md) for the frontmatter schema and file format.
 
 ## Git Worktrees
 

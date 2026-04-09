@@ -129,14 +129,14 @@ Fill each section using context from prior phases:
 
 - **Problem**: From task description
 - **Technical considerations**: From research findings, prior solutions, and DESIGN.md reconciliation findings
-- **Risks**: From SpecFlow analysis (error states, edge cases), research, and any unresolved DESIGN.md contradictions
+- **Risks**: From SpecFlow analysis (error states, edge cases), research, and any unresolved DESIGN.md contradictions or upstream flags
 - **Acceptance criteria**: Merge criteria from:
   - Task requirements (explicit)
   - SpecFlow-generated criteria (discovered edge cases) — omit if SpecFlow was skipped via fast path
   - Prior solution prevention guidance (avoid known pitfalls) — omit if solution search was skipped via fast path
   - Standard completion criteria (included by default, deduplicated — omit if not applicable to the task):
     - `Documentation updated to reflect changes (DESIGN.md, README, docs/, or inline as appropriate)`
-    - `Deliverable validated via walkthrough or demonstration`
+    - `Interactive walkthrough performed using browser/MCP tools to validate deliverable is demonstrable`
   - **Deduplication**: Before appending standard criteria, check if existing criteria (from task requirements or SpecFlow) already cover documentation or demo. If a criterion already addresses docs or walkthrough/demo, skip the corresponding standard criterion.
 - **Phases**: Group related acceptance criteria into logical phases (A Lot only)
 - **Alternatives**: From research findings (A Lot only)
@@ -189,7 +189,30 @@ Skipped — fast path
 Minimal (fast path default)
 ```
 
-### 4. Write plan file
+### 4. Run ADR propagation
+
+After writing the plan body and context sections, run the ADR propagation phase (see `operations/adr-propagation.md`).
+
+Pass the `designmd_reconciliation` output — specifically the "Upstream Flags" section — to the propagation operation. It will:
+1. Check for upstream flags
+2. Propose strategic doc edits and generate issue/board checklist items
+3. Present for user approval
+4. Apply approved changes
+
+Append the propagation output to the Planning Context:
+
+```markdown
+<ADR Propagation section from adr-propagation>
+```
+
+If DESIGN.md reconciliation was skipped or produced no upstream flags, the propagation section will contain:
+
+```markdown
+### ADR Propagation
+No upstream flags from DESIGN.md reconciliation — propagation skipped.
+```
+
+### 5. Write plan file
 
 Write the plan to PLAN.md in the workspace root:
 

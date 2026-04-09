@@ -9,17 +9,10 @@ Creates task documentation for in-workspace coordination in `docs/tasks/` direct
 If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_MISSION_ID` are set, also create the task in the coordinator API. This is additive — native `TaskCreate` remains the primary interface.
 
 ```bash
-# Helper: create task in coordinator
-coord_create_task() {
-  local objective="$1" status="${2:-pending}"
-  if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" && -n "${COORDINATOR_MISSION_ID:-}" ]]; then
-    curl -s -X POST "${COORDINATOR_URL}/api/missions/${COORDINATOR_MISSION_ID}/tasks" \
-      -H "Authorization: Bearer ${COORDINATOR_TOKEN}" \
-      -H "Content-Type: application/json" \
-      -d "{\"task\":{\"objective\":\"${objective}\",\"status\":\"${status}\"}}"
-  fi
-}
+source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
 ```
+
+This provides `coord_create_task` and other helpers. All are no-ops when coordinator env vars are unset.
 
 ## Parameters
 

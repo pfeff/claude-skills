@@ -1,7 +1,7 @@
 {
   "name": "mbp",
-  "version": "1.0.0",
-  "description": "Engineering skills for Claude Code: git workflows, TDD without mocks, Diataxis documentation, CI feedback loops, compound knowledge capture, and structured planning workflows",
+  "version": "2.0.0",
+  "description": "Engineering skills for Claude Code: task orchestration, goal trees, git workflows, TDD, Diataxis documentation, CI feedback loops, knowledge capture, sprint planning, code review, and structured planning workflows",
   "author": {
     "name": "pfeff"
   },
@@ -16,6 +16,11 @@
     "ci",
     "knowledge-capture",
     "planning",
-    "workflow"
+    "workflow",
+    "goal-tree",
+    "task-management",
+    "sprint-planning",
+    "code-review",
+    "github-projects"
   ]
 }

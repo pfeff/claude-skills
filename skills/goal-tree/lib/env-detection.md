@@ -44,7 +44,7 @@ Is hostname TCETRA*?
 Operations should call `scripts/detect-env.sh` to determine the backend:
 
 ```bash
-ENV=$(~/.claude/skills/goal-tree/scripts/detect-env.sh)
+ENV=$(${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/detect-env.sh)
 if [ "$ENV" = "work" ]; then
     # Use GOAL.md + TodoWrite
 else

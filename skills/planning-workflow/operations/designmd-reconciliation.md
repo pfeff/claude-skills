@@ -1,8 +1,6 @@
 # DESIGN.md Reconciliation
 
-After problem validation, compare the workspace DESIGN.md against two layers of truth: problem validation findings and repo-level docs. Surfaces contradictions and gaps before downstream planning phases operate on stale assumptions.
-
-> **Extension point**: Additional reconciliation layers can be added by appending steps to this phase.
+After problem validation, compare the workspace DESIGN.md against three layers of truth: problem validation findings, repo-level docs, and strategic docs. Surfaces contradictions and gaps before downstream planning phases operate on stale assumptions.
 
 ## Parameters
 
@@ -58,7 +56,7 @@ Read: file_path="<resolved_repo_root>/CLAUDE.md"
 Glob: pattern="docs/**/*.md" path="<resolved_repo_root>"
 ```
 
-If the repo root cannot be determined or repo docs are unavailable, report "Repo docs not found — skipping layer 2" and proceed to step 4.
+If the repo root cannot be determined or repo docs are unavailable, report "Repo docs not found — skipping layer 2" and proceed to layer 3.
 
 **Check for contradictions**:
 
@@ -109,9 +107,44 @@ Never use these when reporting contradictions or gaps:
 - BAD: "The architecture section describes a monolith, while ARCHITECTURE.md describes microservices, but both could work depending on the deployment strategy."
 - GOOD: "**Contradiction** [Layer 3]: DESIGN.md Architecture describes a monolithic deployment. ARCHITECTURE.md specifies microservice decomposition for this component. These are mutually exclusive deployment models. Resolution needed: update DESIGN.md or flag upstream update to ARCHITECTURE.md."
 
-### 4. Present findings for approval
+### 4. Layer 3 — Strategic docs
 
-If no findings, skip to step 5.
+Locate the guardian meta-repo by searching for a "Project Documentation" link in the repo's CLAUDE.md:
+
+```
+# Search repo CLAUDE.md for guardian path or URL
+Grep: pattern="Project Documentation" path="<resolved_repo_root>/CLAUDE.md" output_mode="content"
+```
+
+If the grep finds a GitHub URL (e.g., `https://github.com/org/guardian`), check for a local clone at the conventional path (`../../<org>/guardian` relative to the repo root, or search common checkout locations). If found, read the strategic docs:
+
+```
+Read: file_path="<resolved_guardian_path>/REQUIREMENTS.md"
+Read: file_path="<resolved_guardian_path>/ARCHITECTURE.md"
+Read: file_path="<resolved_guardian_path>/PROJECT.md"
+```
+
+If the guardian repo cannot be located locally, report "Strategic docs not found — skipping layer 3" and proceed to step 5.
+
+**Check for contradictions**:
+
+| Strategic Doc | DESIGN.md Section | Contradiction Signal |
+|---------------|-------------------|---------------------|
+| REQUIREMENTS.md | Requirements | DESIGN.md requirements conflict with or duplicate guardian requirements |
+| ARCHITECTURE.md | Architecture | DESIGN.md architecture contradicts guardian architecture decisions |
+| PROJECT.md (OKRs, scope) | Requirements, Architecture | DESIGN.md scope falls outside project boundaries or misaligns with strategic priorities |
+
+**Check for gaps**:
+- Guardian requirements that this task should reference but DESIGN.md doesn't
+- Architectural patterns or components in ARCHITECTURE.md relevant to this task but absent from DESIGN.md
+
+For strategic findings, mark the conflict direction as `bidirectional` — the resolution may flow down (update DESIGN.md) or up (flag strategic doc update).
+
+Append findings to the list.
+
+### 5. Present findings for approval
+
+If no findings, skip to step 6.
 
 Group findings by type and present using AskUserQuestion:
 
@@ -132,9 +165,21 @@ Options:
 - "Review individually" — present each change for accept/reject
 - "Skip" — proceed without changes
 
+**For strategic contradictions** (bidirectional):
+```
+"<description>
+
+This conflicts with <strategic_doc>. How should we resolve it?"
+```
+
+Options:
+- "Update DESIGN.md" — conform workspace doc to strategic doc
+- "Flag upstream update" — note that strategic doc may need revision; record in reconciliation report
+- "Skip" — leave as-is
+
 **For gaps**:
 ```
-"Problem validation / repo docs revealed <N> item(s) not yet in DESIGN.md:
+"Problem validation / upstream docs revealed <N> item(s) not yet in DESIGN.md:
 
 1. [<layer>] <section>: <description>
    Proposed addition: <proposed_change>
@@ -147,11 +192,11 @@ Options:
 - "Review individually" — present each for accept/reject
 - "Skip" — proceed without additions
 
-### 5. Apply approved changes
+### 6. Apply approved changes
 
 For each approved change, use the Edit tool to update DESIGN.md surgically. Preserve all existing content that wasn't flagged.
 
-### 6. Compile output
+### 7. Compile output
 
 Produce a section for the plan:
 
@@ -164,8 +209,14 @@ Produce a section for the plan:
 ### Layer 2: Repo Docs
 <"Aligned" | "Skipped (docs unavailable)" | list of findings and resolution>
 
+### Layer 3: Strategic Docs
+<"Aligned" | "Skipped (docs unavailable)" | list of findings and resolution>
+
+### Upstream Flags
+<list of strategic doc updates flagged, or "None">
+
 ### Summary
-<"DESIGN.md confirmed aligned across all layers" | "N changes applied">
+<"DESIGN.md confirmed aligned across all layers" | "N changes applied, M upstream flags raised">
 ```
 
 ### 7. Run fast path gate
@@ -182,13 +233,15 @@ The "DESIGN.md Reconciliation" section, included in the Planning Context appendi
 - **SpecFlow analysis** (full path): reconciled requirements ground flow identification
 - **Plan generation**: accepts `designmd_reconciliation` as a formal parameter and includes it in the Planning Context
 
+Upstream flags are surfaced in the plan summary so they aren't lost.
+
 ## Examples
 
 ### Aligned (no changes needed)
 
 Task: "Add retry logic to the webhook handler"
 
-DESIGN.md describes webhook handler architecture, requirements for retry behavior, and decision to use exponential backoff. Problem validation confirms this matches the developer's intent. Repo docs align.
+DESIGN.md describes webhook handler architecture, requirements for retry behavior, and decision to use exponential backoff. Problem validation confirms this matches the developer's intent. Repo docs and guardian architecture align.
 
 ```markdown
 ## DESIGN.md Reconciliation
@@ -199,6 +252,12 @@ Aligned — DESIGN.md requirements match validated scope.
 ### Layer 2: Repo Docs
 Aligned — no conflicts with repo CLAUDE.md or docs/.
 
+### Layer 3: Strategic Docs
+Aligned — webhook handler falls within AO-CORE-01 scope per REQUIREMENTS.md.
+
+### Upstream Flags
+None
+
 ### Summary
 DESIGN.md confirmed aligned across all layers.
 ```
@@ -207,24 +266,56 @@ DESIGN.md confirmed aligned across all layers.
 
 Task: "Add DESIGN.md reconciliation to planning workflow"
 
-Problem validation reveals the developer wants two-layer validation (problem validation + repo docs), but DESIGN.md only mentions checking against problem validation findings.
+Problem validation reveals the developer wants three-layer validation (problem validation + repo docs + strategic docs), but DESIGN.md only mentions checking against problem validation findings.
 
 ```markdown
 ## DESIGN.md Reconciliation
 
 ### Layer 1: Problem Validation
-- **Gap**: R1 only mentions problem validation comparison. Developer confirmed two-layer model (problem validation, repo docs). → Updated R1.
+- **Gap**: R1 only mentions problem validation comparison. Developer confirmed three-layer model (problem validation, repo docs, strategic docs). → Updated R1.
+- **Gap**: No requirement for bidirectional conflict resolution. Developer wants contradictions with strategic docs presented both ways. → Added R3.
 
 ### Layer 2: Repo Docs
 Aligned — no conflicts with repo conventions.
 
+### Layer 3: Strategic Docs
+Aligned — CR-EVOLVE-01 (skill evolution) supports adding new planning phases.
+
+### Upstream Flags
+None
+
 ### Summary
-1 change applied.
+2 changes applied, 0 upstream flags raised.
+```
+
+### Strategic conflict (bidirectional)
+
+Task: "Replace webhook handler with event streaming"
+
+DESIGN.md proposes event streaming architecture, but guardian ARCHITECTURE.md defines webhook-based integration for this component.
+
+```markdown
+## DESIGN.md Reconciliation
+
+### Layer 1: Problem Validation
+Aligned.
+
+### Layer 2: Repo Docs
+Aligned.
+
+### Layer 3: Strategic Docs
+- **Contradiction**: DESIGN.md proposes event streaming, but ARCHITECTURE.md specifies webhook integration for this component. User chose: **Flag upstream update** — ARCHITECTURE.md may need revision to reflect event streaming direction.
+
+### Upstream Flags
+- ARCHITECTURE.md: Webhook integration pattern may need update to event streaming for <component>
+
+### Summary
+0 changes applied, 1 upstream flag raised.
 ```
 
 ### Missing docs (graceful degradation)
 
-Task in a repo without repo-level documentation.
+Task in a repo without guardian context.
 
 ```markdown
 ## DESIGN.md Reconciliation
@@ -235,8 +326,14 @@ Aligned.
 ### Layer 2: Repo Docs
 Skipped — no docs/ directory found.
 
+### Layer 3: Strategic Docs
+Skipped — guardian repo not found.
+
+### Upstream Flags
+None
+
 ### Summary
-DESIGN.md confirmed aligned at layer 1. Layer 2 skipped (docs unavailable).
+DESIGN.md confirmed aligned at layer 1. Layers 2-3 skipped (docs unavailable).
 ```
 
 ## Error Handling
@@ -247,11 +344,14 @@ DESIGN.md confirmed aligned at layer 1. Layer 2 skipped (docs unavailable).
 | DESIGN.md has only placeholders | Report, skip reconciliation, produce minimal output |
 | Repo CLAUDE.md not found | Skip layer 2, note in output |
 | Repo docs/ not found | Skip layer 2, note in output |
+| Guardian repo not found | Skip layer 3, note in output |
+| Guardian docs partially available | Check available docs, skip missing ones |
 | User declines all changes | Proceed with original DESIGN.md, note in output |
 | Edit tool fails | Warn user, include proposed change in output for manual application |
 
 ## Tips
 
 - Bias toward extracting alignment rather than inventing contradictions — unnecessary conflicts slow down planning
-- One round of approval per type (contradictions, gaps) — don't ask for approval one item at a time unless the user requests individual review
+- One round of approval per type (contradictions, strategic conflicts, gaps) — don't ask for approval one item at a time unless the user requests individual review
+- Strategic contradictions are the most consequential — present these clearly with full context from both docs
 - Keep the reconciliation report concise — downstream phases need the summary, not a detailed diff

@@ -2,6 +2,23 @@
 
 Cleanly tears down a task workspace by invoking `close-workspace.sh`.
 
+## MANDATORY: No Manual Teardown
+
+**DO NOT manually execute any teardown commands.** All workspace closing MUST go through `close-workspace.sh`. Manual teardown has caused data loss.
+
+**Prohibited commands** (never run these directly for workspace closing):
+- `tmux kill-session`
+- `git worktree remove`
+- `rm -rf <workspace-path>`
+- `rm -r <workspace-path>`
+- `rmdir <workspace-path>`
+- `gh issue close` (outside of the script)
+- Any combination of the above as a substitute for the script
+
+**Why**: Previous incidents of freehanding teardown skipped safety checks, archiving, ordering constraints, and verification — resulting in lost work. The script handles all of these correctly.
+
+**If the script fails**: Report the error and exit code. Do not attempt to replicate the script's behavior manually.
+
 ## Purpose
 
 Closes a task workspace when work is complete, preserving artifacts in a compressed archive while cleaning up active resources. All logic is handled by the deterministic script.
@@ -73,9 +90,11 @@ The script handles all operations:
 - CWD safety (`cd $HOME` before destructive ops)
 - Worktree removal via `git -C`
 - Tmux session cleanup
+- Obsidian symlink removal
 - Archiving to `~/src/work/.archive/<epic>/<task-dir>.tar.gz`
+- GitHub issue close via `gh issue close` (unless `--no-close-issue`)
 - Directory removal
-- Verification checks
+- Verification checks (including issue-closed status)
 
 ### 4. Mark Task Completed
 
@@ -114,19 +133,22 @@ Workspace: ~/src/work/platform/TOOS-24-fix-auth
   Task:     TOOS-24 - Fix authentication bug
   Epic:     platform
   Task Dir: TOOS-24-fix-auth
-  GitHub Issue: user/repo#24
+  GitHub Issue: pfeff/guardian#24
 
 Inventorying components...
-  Worktrees:        my-app
+  Worktrees:        Dev-Stacks
   Tmux session:     TOOS-24- Fix authentication bug
+  Obsidian symlink: none
 
 Archiving to: ~/src/work/.archive/platform/TOOS-24-fix-auth.tar.gz
-Removing worktree: my-app
+Removing worktree: Dev-Stacks
+Closing GitHub issue: pfeff/guardian#24
 Removing workspace directory
 
 All verification checks passed!
 
 Workspace closed successfully!
+GitHub issue: pfeff/guardian#24 closed
 ```
 
 ### Close without closing the issue

@@ -1,6 +1,6 @@
 # Document Solution Operation
 
-**When**: User invokes `/compound` to capture a solved problem as a searchable solution doc.
+**When**: User invokes `/claude-skills:compound` to capture a solved problem as a searchable solution doc.
 
 ## Purpose
 
@@ -10,11 +10,17 @@ Captures a single solved problem with structured YAML frontmatter so future agen
 
 ### Step 1: Load Schema
 
-Read the solution doc schema and template:
+Read the solution doc schema for field definitions:
 
 ```
-Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/compound/references/SCHEMA.md")
-Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/compound/templates/solution.md.tmpl")
+Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/templates/solution.md.tmpl")
+```
+
+Also read the full schema reference if the template lacks detail:
+
+```
+# Check workspace repos first, fall back to main clone
+Glob(pattern: "**/docs/solutions/SCHEMA.md")
 ```
 
 ### Step 2: Gather Problem Context

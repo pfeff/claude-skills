@@ -19,6 +19,7 @@
 #   2 - Prerequisite check failed
 #   3 - Template rendering failed
 #   4 - Git worktree creation failed
+#   5 - Secret fetching failed
 #   6 - Tmux session creation failed
 #   7 - Verification failed
 #   8 - Issue derivation failed
@@ -42,6 +43,12 @@ HEADLINE=""
 REPOS=""
 ISSUE_REF=""
 DESCRIPTION=""
+
+# Node mode values
+MODE=""
+NODE_ID=""
+PROJECT_DIR=""
+PROJECT_BRANCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -70,6 +77,22 @@ while [[ $# -gt 0 ]]; do
       DESCRIPTION="$2"
       shift 2
       ;;
+    --node)
+      MODE="node"
+      shift
+      ;;
+    --node-id)
+      NODE_ID="$2"
+      shift 2
+      ;;
+    --project-dir)
+      PROJECT_DIR="$2"
+      shift 2
+      ;;
+    --project-branch)
+      PROJECT_BRANCH="$2"
+      shift 2
+      ;;
     *)
       echo "Error: Unknown argument: $1" >&2
       exit 1
@@ -77,64 +100,89 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Set default mode
+MODE="${MODE:-task}"
+
 #------------------------------------------------------------------------------
-# Derive params from --issue when not explicitly provided
+# Validate arguments based on mode
 #------------------------------------------------------------------------------
 
-if [[ -n "$ISSUE_REF" && ( -z "$TASK_ID" || -z "$HEADLINE" ) ]]; then
-  # Parse issue reference: org/repo#number
-  if [[ "$ISSUE_REF" =~ ^([^/]+)/([^#]+)#([0-9]+)$ ]]; then
-    ISSUE_OWNER="${BASH_REMATCH[1]}"
-    ISSUE_REPO="${BASH_REMATCH[2]}"
-    ISSUE_NUMBER="${BASH_REMATCH[3]}"
-  else
-    echo "Error: Cannot parse issue reference '$ISSUE_REF'. Expected format: owner/repo#number" >&2
-    exit 8
+if [[ "$MODE" == "node" ]]; then
+  # Node mode validation
+  if [[ -z "$NODE_ID" ]]; then
+    echo "Error: --node-id is required for node mode" >&2
+    exit 1
   fi
-
-  # Check gh CLI is available
-  if ! command -v gh &>/dev/null; then
-    echo "Error: gh CLI is required to derive params from --issue. Install with: brew install gh" >&2
-    exit 8
+  if [[ -z "$PROJECT_DIR" || ! -d "$PROJECT_DIR" ]]; then
+    echo "Error: --project-dir must be an existing directory" >&2
+    exit 1
   fi
-
-  # Derive task-id from issue number (explicit flag wins)
-  if [[ -z "$TASK_ID" ]]; then
-    TASK_ID="$ISSUE_NUMBER"
+  if [[ ! -f "$PROJECT_DIR/CLAUDE.md" ]]; then
+    echo "Error: Project directory must contain CLAUDE.md" >&2
+    exit 1
   fi
-
-  # Derive headline from issue title via gh (explicit flag wins)
+  if [[ -z "$REPOS" ]]; then
+    echo "Error: --repos is required for node mode" >&2
+    exit 1
+  fi
   if [[ -z "$HEADLINE" ]]; then
-    HEADLINE=$(gh issue view "$ISSUE_NUMBER" --repo "$ISSUE_OWNER/$ISSUE_REPO" --json title --jq '.title' 2>&1) || {
-      echo "Error: Failed to fetch issue $ISSUE_REF: $HEADLINE" >&2
-      exit 8
-    }
-    if [[ -z "$HEADLINE" ]]; then
-      echo "Error: Could not derive headline from issue $ISSUE_REF" >&2
+    HEADLINE="Node $NODE_ID"
+  fi
+else
+  # Task mode validation
+  # Derive params from --issue when not explicitly provided
+  if [[ -n "$ISSUE_REF" && ( -z "$TASK_ID" || -z "$HEADLINE" ) ]]; then
+    # Parse issue reference: org/repo#number
+    if [[ "$ISSUE_REF" =~ ^([^/]+)/([^#]+)#([0-9]+)$ ]]; then
+      ISSUE_OWNER="${BASH_REMATCH[1]}"
+      ISSUE_REPO="${BASH_REMATCH[2]}"
+      ISSUE_NUMBER="${BASH_REMATCH[3]}"
+    else
+      echo "Error: Cannot parse issue reference '$ISSUE_REF'. Expected format: owner/repo#number" >&2
       exit 8
     fi
+
+    # Check gh CLI is available
+    if ! command -v gh &>/dev/null; then
+      echo "Error: gh CLI is required to derive params from --issue. Install with: brew install gh" >&2
+      exit 8
+    fi
+
+    # Derive task-id from issue number (explicit flag wins)
+    if [[ -z "$TASK_ID" ]]; then
+      TASK_ID="$ISSUE_NUMBER"
+    fi
+
+    # Derive headline from issue title via gh (explicit flag wins)
+    if [[ -z "$HEADLINE" ]]; then
+      HEADLINE=$(gh issue view "$ISSUE_NUMBER" --repo "$ISSUE_OWNER/$ISSUE_REPO" --json title --jq '.title' 2>&1) || {
+        echo "Error: Failed to fetch issue $ISSUE_REF: $HEADLINE" >&2
+        exit 8
+      }
+      if [[ -z "$HEADLINE" ]]; then
+        echo "Error: Could not derive headline from issue $ISSUE_REF" >&2
+        exit 8
+      fi
+    fi
+
+    echo "Derived from issue $ISSUE_REF:"
+    echo "  task-id:  $TASK_ID"
+    echo "  headline: $HEADLINE"
   fi
 
-  echo "Derived from issue $ISSUE_REF:"
-  echo "  task-id:  $TASK_ID"
-  echo "  headline: $HEADLINE"
-fi
-
-#------------------------------------------------------------------------------
-# Validate required arguments
-#------------------------------------------------------------------------------
-
-if [[ -z "$TASK_ID" ]]; then
-  echo "Error: --task-id is required (provide explicitly or use --issue to derive)" >&2
-  exit 1
-fi
-if [[ -z "$EPIC" ]]; then
-  echo "Error: --epic is required (provide explicitly or use agent-level derivation)" >&2
-  exit 1
-fi
-if [[ -z "$HEADLINE" ]]; then
-  echo "Error: --headline is required (provide explicitly or use --issue to derive)" >&2
-  exit 1
+  # Validate required arguments for task mode
+  if [[ -z "$TASK_ID" ]]; then
+    echo "Error: --task-id is required (provide explicitly or use --issue to derive)" >&2
+    exit 1
+  fi
+  if [[ -z "$EPIC" ]]; then
+    echo "Error: --epic is required (provide explicitly or use agent-level derivation)" >&2
+    exit 1
+  fi
+  if [[ -z "$HEADLINE" ]]; then
+    echo "Error: --headline is required (provide explicitly or use --issue to derive)" >&2
+    exit 1
+  fi
 fi
 
 #------------------------------------------------------------------------------
@@ -222,6 +270,18 @@ format_repos_list() {
   done
 }
 
+# Detect organization context from hostname
+# Returns: org identifier (e.g., "tcetra", "personal")
+detect_org() {
+  local host
+  host=$(hostname)
+
+  case "$host" in
+    TCETRA*) echo "tcetra" ;;
+    *)       echo "personal" ;;
+  esac
+}
+
 # Verification check helper
 # Usage: verify_check "Check name" "pass|fail"
 verify_check() {
@@ -236,8 +296,10 @@ verify_check() {
 }
 
 #------------------------------------------------------------------------------
-# Main workspace creation
+# create_task_workspace - Create a task workspace (original behavior)
 #------------------------------------------------------------------------------
+
+create_task_workspace() {
 
 echo "Creating workspace for task $TASK_ID..."
 
@@ -248,6 +310,7 @@ TASK_LIST_ID="$EPIC-$TASK_ID"
 SESSION_NAME="$TASK_ID: $HEADLINE"
 ISSUE_URL=$(generate_issue_url "$ISSUE_REF")
 REPOS_LIST=$(format_repos_list "$REPOS" "$WORKSPACE_PATH")
+ORG_CONTEXT=$(detect_org)
 
 # Use headline as description if not provided
 if [[ -z "$DESCRIPTION" ]]; then
@@ -256,6 +319,7 @@ fi
 
 echo "  Slug: $TASK_SLUG"
 echo "  Path: $WORKSPACE_PATH"
+echo "  Org:  $ORG_CONTEXT"
 
 #------------------------------------------------------------------------------
 # Step 1: Check prerequisites
@@ -306,7 +370,79 @@ fi
 echo "  Prerequisites OK"
 
 #------------------------------------------------------------------------------
-# Step 2: Create workspace directory
+# Step 2: Fetch secrets (epic-specific)
+#------------------------------------------------------------------------------
+
+# Secret configuration by epic
+# Format: epic|secret_type|source|identifier
+# Sources: 1password, aws-secrets-manager
+# Add new epics here as needed
+SECRETS_CONFIG="
+t-cetra|AZURE_PAT|1password|Azure CLI PAT
+t-cetra|OCTOPUS_API_KEY|aws-secrets-manager|tcetra-devops-sso:DevExtTFEnv/octopus/api_key
+"
+
+# Initialize secret variables
+AZURE_PAT=""
+OCTOPUS_API_KEY=""
+
+# Fetch secrets for current epic
+fetch_secret() {
+  local secret_type="$1"
+  local source="$2"
+  local identifier="$3"
+
+  case "$source" in
+    1password)
+      if command -v op &>/dev/null; then
+        if value=$(op item get "$identifier" --fields password --reveal 2>/dev/null); then
+          echo "$value"
+          return 0
+        fi
+      fi
+      ;;
+    aws-secrets-manager)
+      local profile="${identifier%%:*}"
+      local secret_id="${identifier#*:}"
+      if command -v aws &>/dev/null; then
+        if AWS_PROFILE="$profile" aws sts get-caller-identity &>/dev/null 2>&1; then
+          if value=$(AWS_PROFILE="$profile" aws secretsmanager get-secret-value \
+            --secret-id "$secret_id" --query SecretString --output text 2>/dev/null); then
+            echo "$value"
+            return 0
+          fi
+        fi
+      fi
+      ;;
+  esac
+  return 1
+}
+
+echo "Fetching secrets for epic '$EPIC'..."
+
+while IFS='|' read -r cfg_epic secret_type source identifier; do
+  # Skip empty lines and trim whitespace
+  cfg_epic=$(echo "$cfg_epic" | xargs)
+  [[ -z "$cfg_epic" ]] && continue
+
+  # Only process secrets for current epic
+  if [[ "$cfg_epic" == "$EPIC" ]]; then
+    if value=$(fetch_secret "$secret_type" "$source" "$identifier"); then
+      export "$secret_type=$value"
+      echo "  $secret_type: retrieved"
+    else
+      echo "  $secret_type: not available"
+    fi
+  fi
+done <<< "$SECRETS_CONFIG"
+
+# Check if any secrets were configured for this epic
+if ! echo "$SECRETS_CONFIG" | grep -q "^$EPIC|"; then
+  echo "  No secrets configured for epic '$EPIC'"
+fi
+
+#------------------------------------------------------------------------------
+# Step 3: Create workspace directory
 #------------------------------------------------------------------------------
 
 echo "Creating workspace directory..."
@@ -314,7 +450,7 @@ mkdir -p "$WORKSPACE_PATH"
 echo "  Created: $WORKSPACE_PATH"
 
 #------------------------------------------------------------------------------
-# Step 3: Render templates
+# Step 4: Render templates
 #------------------------------------------------------------------------------
 
 echo "Rendering templates..."
@@ -322,6 +458,7 @@ echo "Rendering templates..."
 # Export all variables for envsubst
 export TASK_ID EPIC HEADLINE TASK_SLUG ISSUE_REF ISSUE_URL
 export WORKSPACE_PATH TASK_LIST_ID SESSION_NAME DESCRIPTION REPOS_LIST
+# Secret variables exported above if configured for this epic
 
 # Render DESIGN.md
 if envsubst < "$TEMPLATE_DIR/DESIGN.md.tmpl" > "$WORKSPACE_PATH/DESIGN.md"; then
@@ -356,8 +493,55 @@ else
   exit 3
 fi
 
+# Append org-specific .envrc content
+if [[ "$ORG_CONTEXT" == "tcetra" ]]; then
+  {
+    echo ""
+    echo "# Organization-specific configuration ($ORG_CONTEXT)"
+    echo "layout python3"
+  } >> "$WORKSPACE_PATH/.envrc"
+  echo "  .envrc: appended $ORG_CONTEXT org config"
+fi
+
+# Append epic-specific environment variables to .envrc
+# Environment variable configuration by epic
+# Format: epic|env_var|value_source
+# value_source: secret:VAR_NAME (use fetched secret) or literal:value
+ENVRC_CONFIG="
+t-cetra|TF_VAR_azure_devops_pat|secret:AZURE_PAT
+t-cetra|AZURE_DEVOPS_EXT_PAT|secret:AZURE_PAT
+t-cetra|OCTOPUS_API_KEY|secret:OCTOPUS_API_KEY
+t-cetra|OCTOPUS_SERVER|literal:https://t-cetra-deploy.octopus.app
+"
+
+has_epic_config=false
+while IFS='|' read -r cfg_epic env_var value_source; do
+  cfg_epic=$(echo "$cfg_epic" | xargs)
+  [[ -z "$cfg_epic" ]] && continue
+
+  if [[ "$cfg_epic" == "$EPIC" ]]; then
+    if [[ "$has_epic_config" == "false" ]]; then
+      echo "" >> "$WORKSPACE_PATH/.envrc"
+      echo "# Epic-specific configuration ($EPIC)" >> "$WORKSPACE_PATH/.envrc"
+      has_epic_config=true
+    fi
+
+    case "$value_source" in
+      secret:*)
+        secret_var="${value_source#secret:}"
+        value="${!secret_var}"
+        ;;
+      literal:*)
+        value="${value_source#literal:}"
+        ;;
+    esac
+
+    echo "export $env_var=\"$value\"" >> "$WORKSPACE_PATH/.envrc"
+  fi
+done <<< "$ENVRC_CONFIG"
+
 #------------------------------------------------------------------------------
-# Step 4: Create git worktrees
+# Step 5: Create git worktrees
 #------------------------------------------------------------------------------
 
 if [[ -n "$REPOS" ]]; then
@@ -409,7 +593,7 @@ if [[ -n "$REPOS" ]]; then
 fi
 
 #------------------------------------------------------------------------------
-# Step 5: Create docs/solutions/ directories in repo worktrees
+# Step 6: Create docs/solutions/ directories in repo worktrees
 #------------------------------------------------------------------------------
 
 SOLUTION_CATEGORIES="build-errors test-failures performance-issues runtime-errors integration-issues workflow-issues best-practices patterns"
@@ -444,7 +628,7 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 6: Run direnv allow
+# Step 7: Run direnv allow
 #------------------------------------------------------------------------------
 
 echo "Configuring direnv..."
@@ -456,7 +640,27 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 7: Create tmux session
+# Step 8: Create Obsidian symlink (platform-specific)
+#------------------------------------------------------------------------------
+
+echo "Creating Obsidian symlink..."
+OBSIDIAN_PATH=""
+
+# macOS iCloud path
+if [[ -d "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" ]]; then
+  # Find the first vault (usually there's only one)
+  OBSIDIAN_PATH=$(find "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" -maxdepth 1 -type d ! -name Documents | head -1)
+fi
+
+if [[ -n "$OBSIDIAN_PATH" && -d "$OBSIDIAN_PATH" ]]; then
+  ln -sf "$OBSIDIAN_PATH" "$WORKSPACE_PATH/Obsidian"
+  echo "  Obsidian: linked to $OBSIDIAN_PATH"
+else
+  echo "  Obsidian: skipped (vault not found)"
+fi
+
+#------------------------------------------------------------------------------
+# Step 9: Create tmux session
 #------------------------------------------------------------------------------
 
 echo "Creating tmux session..."
@@ -468,7 +672,7 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 8: Verification
+# Step 10: Verification
 #------------------------------------------------------------------------------
 
 echo ""
@@ -560,6 +764,7 @@ fi
 
 # Check 9: direnv allowed
 if command -v direnv &>/dev/null; then
+  # Check if .envrc is in direnv's allow list
   if direnv status 2>/dev/null | grep -q "Found RC allowed true" || [[ -f "$WORKSPACE_PATH/.direnv" ]] || direnv allow "$WORKSPACE_PATH" 2>/dev/null; then
     verify_check "direnv allowed" "pass"
   else
@@ -610,3 +815,232 @@ fi
 echo ""
 echo "Next steps:"
 echo "  tmux attach -t \"$(echo "$SESSION_NAME" | sed 's/:/-/g; s/\.//g')\""
+}
+
+#------------------------------------------------------------------------------
+# create_node_workspace - Create a node workspace within a goal-tree project
+#------------------------------------------------------------------------------
+
+create_node_workspace() {
+  echo "Creating node workspace for $NODE_ID..."
+
+  # Derive paths
+  NODE_SLUG=$(generate_slug "$HEADLINE")
+  WORKSPACE_PATH="$PROJECT_DIR/$NODE_ID-$NODE_SLUG"
+
+  # Extract project branch from project .envrc or use provided value
+  if [[ -z "$PROJECT_BRANCH" ]]; then
+    PROJECT_BRANCH=$(grep -oP 'PROJECT_BRANCH="\K[^"]+' "$PROJECT_DIR/.envrc" 2>/dev/null || echo "")
+    if [[ -z "$PROJECT_BRANCH" ]]; then
+      # Fallback: derive from project dir name
+      PROJECT_BRANCH="$(basename "$PROJECT_DIR")/mbp/integration"
+    fi
+  fi
+
+  NODE_BRANCH="$PROJECT_BRANCH/$NODE_ID"
+
+  echo "  Path: $WORKSPACE_PATH"
+  echo "  Branch: $NODE_BRANCH"
+
+  # Step 1: Check if workspace already exists
+  if [[ -d "$WORKSPACE_PATH" ]]; then
+    echo "Error: Node workspace already exists: $WORKSPACE_PATH" >&2
+    exit 2
+  fi
+
+  # Validate repositories exist
+  IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
+  for repo in "${REPO_ARRAY[@]}"; do
+    repo=$(echo "$repo" | xargs)
+    if ! resolve_repo_path "$repo" &>/dev/null; then
+      echo "Error: Repository not found: $repo" >&2
+      echo "Searched in ~/src/github and ~/src/azdevops" >&2
+      exit 2
+    fi
+  done
+
+  # Step 2: Create workspace directory
+  mkdir -p "$WORKSPACE_PATH"
+
+  # Step 3: Render NODE_CLAUDE.md template
+  export NODE_ID HEADLINE PROJECT_DIR PROJECT_BRANCH NODE_BRANCH
+  export WORKSPACE_PATH
+  export PROJECT_SLUG="$(basename "$PROJECT_DIR")"
+  export REPOS_LIST=$(format_repos_list "$REPOS" "$WORKSPACE_PATH")
+
+  if envsubst < "$TEMPLATE_DIR/NODE_CLAUDE.md.tmpl" > "$WORKSPACE_PATH/CLAUDE.md"; then
+    echo "  CLAUDE.md: created"
+  else
+    echo "Error: Failed to render CLAUDE.md" >&2
+    exit 3
+  fi
+
+  # Step 3b: Render NODE_DESIGN.md template
+  if envsubst < "$TEMPLATE_DIR/NODE_DESIGN.md.tmpl" > "$WORKSPACE_PATH/DESIGN.md"; then
+    echo "  DESIGN.md: created"
+  else
+    echo "Error: Failed to render DESIGN.md" >&2
+    exit 3
+  fi
+
+  # Step 4: Create .envrc that sources parent
+  cat > "$WORKSPACE_PATH/.envrc" << EOF
+# Node workspace - inherits from project
+source_up
+
+export NODE_ID="$NODE_ID"
+export NODE_BRANCH="$NODE_BRANCH"
+EOF
+  echo "  .envrc: created"
+
+  # Step 5: Create git worktrees
+  echo "Creating git worktrees..."
+  for repo in "${REPO_ARRAY[@]}"; do
+    repo=$(echo "$repo" | xargs)
+    repo_path=$(resolve_repo_path "$repo")
+    worktree_path="$WORKSPACE_PATH/$repo"
+
+    echo "  $repo:"
+    echo "    Source: $repo_path"
+    echo "    Worktree: $worktree_path"
+    echo "    Branch: $NODE_BRANCH"
+
+    cd "$repo_path"
+    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+    git fetch origin "$default_branch" --quiet 2>/dev/null || true
+
+    if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" "origin/$default_branch" 2>/dev/null; then
+      if ! git worktree add "$worktree_path" "$NODE_BRANCH" 2>/dev/null; then
+        echo "Error: Failed to create worktree for $repo" >&2
+        exit 4
+      fi
+    fi
+    echo "    Created worktree"
+  done
+
+  # Step 6: Copy .claude/settings.json
+  echo "Copying settings..."
+  mkdir -p "$WORKSPACE_PATH/.claude"
+  if cp "$TEMPLATE_DIR/settings.json.tmpl" "$WORKSPACE_PATH/.claude/settings.json"; then
+    echo "  .claude/settings.json: created"
+  else
+    echo "  .claude/settings.json: failed (non-fatal)" >&2
+  fi
+
+  # Step 7: Configure child session auth (GitHub App)
+  AUTH_SCRIPT="$HOME/.claude/skills/goal-tree/scripts/configure-child-auth.sh"
+  if [[ -x "$AUTH_SCRIPT" ]]; then
+    echo "Configuring child session auth..."
+    IFS=',' read -ra AUTH_REPOS <<< "$REPOS"
+    TRIMMED_REPOS=()
+    for r in "${AUTH_REPOS[@]}"; do
+      TRIMMED_REPOS+=("$(echo "$r" | xargs)")
+    done
+    "$AUTH_SCRIPT" "$WORKSPACE_PATH" "${TRIMMED_REPOS[@]}"
+  else
+    echo "  Warning: configure-child-auth.sh not found, skipping app auth" >&2
+  fi
+
+  # Step 8: Run direnv allow
+  if command -v direnv &>/dev/null; then
+    direnv allow "$WORKSPACE_PATH"
+    echo "  direnv: allowed"
+  fi
+
+  # Step 9: Create Obsidian symlink
+  echo "Creating Obsidian symlink..."
+  OBSIDIAN_PATH=""
+  if [[ -d "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" ]]; then
+    OBSIDIAN_PATH=$(find "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" -maxdepth 1 -type d ! -name Documents | head -1)
+  fi
+  if [[ -n "$OBSIDIAN_PATH" && -d "$OBSIDIAN_PATH" ]]; then
+    ln -sf "$OBSIDIAN_PATH" "$WORKSPACE_PATH/Obsidian"
+    echo "  Obsidian: linked to $OBSIDIAN_PATH"
+  else
+    echo "  Obsidian: skipped (vault not found)"
+  fi
+
+  # Step 10: Create tmux session (identical to task mode)
+  SESSION_NAME="$NODE_ID: $HEADLINE"
+  SANITIZED_SESSION=$(echo "$SESSION_NAME" | sed 's/:/-/g; s/\.//g')
+  echo "Creating tmux session..."
+  if "$SCRIPT_DIR/create-tmuxp-session.sh" "$SESSION_NAME" "$WORKSPACE_PATH"; then
+    echo "  Tmux session created: $SANITIZED_SESSION"
+  else
+    echo "Error: Failed to create tmux session" >&2
+    exit 6
+  fi
+
+  # Step 11: Verification
+  echo ""
+  echo "Running verification checks..."
+  VERIFICATION_FAILED=0
+
+  [[ -d "$WORKSPACE_PATH" ]] && verify_check "Workspace directory exists" "pass" || verify_check "Workspace directory exists" "fail"
+  [[ -f "$WORKSPACE_PATH/CLAUDE.md" ]] && verify_check "CLAUDE.md exists" "pass" || verify_check "CLAUDE.md exists" "fail"
+  [[ -f "$WORKSPACE_PATH/DESIGN.md" ]] && verify_check "DESIGN.md exists" "pass" || verify_check "DESIGN.md exists" "fail"
+  [[ -f "$WORKSPACE_PATH/.envrc" ]] && verify_check ".envrc exists" "pass" || verify_check ".envrc exists" "fail"
+  [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && verify_check ".claude/settings.json exists" "pass" || verify_check ".claude/settings.json exists" "fail"
+
+  # Check worktrees
+  for repo in "${REPO_ARRAY[@]}"; do
+    repo=$(echo "$repo" | xargs)
+    worktree_path="$WORKSPACE_PATH/$repo"
+    if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
+      actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD)
+      if [[ "$actual_branch" == "$NODE_BRANCH" ]]; then
+        verify_check "Worktree $repo on correct branch" "pass"
+      else
+        verify_check "Worktree $repo on correct branch ($actual_branch != $NODE_BRANCH)" "fail"
+      fi
+    else
+      verify_check "Worktree $repo exists" "fail"
+    fi
+  done
+
+  # Check tmux session
+  if tmux has-session -t "$SANITIZED_SESSION" 2>/dev/null; then
+    verify_check "Tmux session running" "pass"
+  else
+    verify_check "Tmux session running" "fail"
+  fi
+
+  # Check .tmuxp.yaml
+  if [[ -f "$WORKSPACE_PATH/.tmuxp.yaml" ]]; then
+    verify_check ".tmuxp.yaml exists" "pass"
+  else
+    verify_check ".tmuxp.yaml exists" "fail"
+  fi
+
+  if [[ $VERIFICATION_FAILED -eq 1 ]]; then
+    echo ""
+    echo "Error: One or more verification checks failed" >&2
+    exit 7
+  fi
+
+  echo ""
+  echo "All verification checks passed!"
+
+  # Summary
+  echo ""
+  echo "=========================================="
+  echo "Node workspace created successfully!"
+  echo "=========================================="
+  echo ""
+  echo "  Path:         $WORKSPACE_PATH"
+  echo "  Branch:       $NODE_BRANCH"
+  echo "  Tmux Session: $SANITIZED_SESSION"
+  echo ""
+  echo "Next steps:"
+  echo "  tmux attach -t \"$SANITIZED_SESSION\""
+  echo ""
+}
+
+#------------------------------------------------------------------------------
+# Mode dispatcher
+#------------------------------------------------------------------------------
+
+case "$MODE" in
+  task) create_task_workspace ;;
+  node) create_node_workspace ;;
+esac

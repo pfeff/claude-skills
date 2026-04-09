@@ -13,7 +13,7 @@ None — uses the workspace's task list and DESIGN.md for all context.
 If `COORDINATOR_URL` and `COORDINATOR_TOKEN` are set, mirror task state changes to the coordinator API. This is additive — native `TaskList`/`TaskUpdate` remain the primary interface.
 
 ```bash
-source ~/.claude/skills/goal-tree/scripts/coord-helpers.sh
+source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
 ```
 
 This provides `coord_create_task`, `coord_sync_status`, and `coord_report_progress`. All are no-ops when coordinator env vars are unset.
@@ -523,7 +523,7 @@ When all tasks are complete (no blocked tasks remaining):
 
    | Condition | Action |
    |-----------|--------|
-   | `## Auto-Advance` section found | Invoke `/finish` — this handles review, knowledge capture, metrics, and close. Commit and PR steps in `/finish` are idempotent and will find the already-created PR. |
+   | `## Auto-Advance` section found | Invoke `/finish` — this handles knowledge capture, metrics, and close. Commit and PR steps in `/finish` are idempotent and will find the already-created PR. |
    | `## Auto-Advance` section not found | Stop — the completion summary is the final output. The user invokes `/finish` manually. |
 
 **7b. Blocked tasks remain — no PR**:
@@ -718,7 +718,7 @@ Task complete ✓
 Committing remaining changes... (none)
 Checking for existing PR... (none found)
 Creating PR via /gh-pr-create...
-  ✓  https://github.com/user/repo/pull/18
+  ✓  https://github.com/pfeff/cursor-rules/pull/18
 Waiting for CI checks...
   CI: no checks configured
 
@@ -730,14 +730,14 @@ Waiting for CI checks...
   - Update SKILL.md and permissions (ghi9012)
 
 **Commits**: 3 total
-**PR**: https://github.com/user/repo/pull/18
+**PR**: https://github.com/pfeff/cursor-rules/pull/18
 **CI**: no checks configured
 **Termination**: All tasks complete
 
 Checking CLAUDE.md for ## Auto-Advance section... found
 Invoking /finish...
   [/finish runs: task check, checkbox reconciliation, commit (no changes),
-   PR (exists), review, knowledge capture, metrics, close instructions]
+   PR (exists), knowledge capture, metrics, close instructions]
 ```
 
 ### Pause on validation failure
@@ -896,14 +896,14 @@ Task complete ✓
 
 **Dispatch summary**: 2 subagent, 1 inline fallback
 **Commits**: 3 total
-**PR**: https://github.com/user/repo/pull/19
+**PR**: https://github.com/pfeff/cursor-rules/pull/19
 **CI**: no checks configured
 **Termination**: All tasks complete
 
 Checking CLAUDE.md for ## Auto-Advance section... found
 Invoking /finish...
   [/finish runs: task check, checkbox reconciliation, commit (no changes),
-   PR (exists), review, knowledge capture, metrics, close instructions]
+   PR (exists), knowledge capture, metrics, close instructions]
 ```
 
 ### Stuck detection with skip-task
@@ -963,7 +963,7 @@ Task complete ✓
   - Implement auth middleware (detector: repeated-failure, detail: 3/3)
 
 **Commits**: 3 total
-**PR**: https://github.com/user/repo/pull/20
+**PR**: https://github.com/pfeff/cursor-rules/pull/20
 **CI**: passed
 **Termination**: All completable tasks done (1 skipped)
 ```
@@ -971,7 +971,7 @@ Task complete ✓
 ## Integration Points
 
 - **Predecessor**: `/init-workspace` (creates task list) or session resume (tasks already exist)
-- **Successor**: `/finish` (review, knowledge capture, metrics, close) — auto-invoked in step 7a sub-step 6 when workspace CLAUDE.md contains `## Auto-Advance` section; otherwise invoked manually by user
+- **Successor**: `/finish` (knowledge capture, metrics, close) — auto-invoked in step 7a sub-step 6 when workspace CLAUDE.md contains `## Auto-Advance` section; otherwise invoked manually by user
 - **PR creation**: `commands/gh-pr-create.md` — invoked in step 7a when all tasks complete
 - **validate-implementation**: `operations/validate-implementation.md` — test + lint with retries
 - **Git commit**: `skills/git/operations/commit.md` — atomic commits per task

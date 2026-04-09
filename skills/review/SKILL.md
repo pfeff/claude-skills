@@ -1,6 +1,6 @@
 ---
 name: review
-description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. Use when the user requests a code review or invokes /review.
+description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. Use when the user requests a code review or invokes /claude-skills:review.
 argument-hint: "[PR number, branch name, or blank for current branch]"
 allowed-tools:
   - Bash(git diff:*)
@@ -27,9 +27,9 @@ Parallel multi-agent code review. Spawns security, simplicity, architecture, and
 ## Invocation
 
 ```
-/review              # Current branch vs main
-/review 42           # PR #42
-/review feature-xyz  # Branch feature-xyz vs main
+/claude-skills:review              # Current branch vs main
+/claude-skills:review 42           # PR #42
+/claude-skills:review feature-xyz  # Branch feature-xyz vs main
 ```
 
 ## Execution Flow
@@ -48,7 +48,7 @@ Parallel multi-agent code review. Spawns security, simplicity, architecture, and
 
 ### Run Review
 **File**: `operations/run-review.md`
-**When**: User invokes `/review` with any arguments
+**When**: User invokes `/claude-skills:review` with any arguments
 
 ### Post Review
 **File**: `operations/post-review.md`

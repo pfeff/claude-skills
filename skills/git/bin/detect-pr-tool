@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+# detect-pr-tool - Detect appropriate PR tool based on remote origin
+#
+# Returns the appropriate command prefix for creating PRs based on
+# whether the repo's origin points to Azure DevOps or GitHub.
+#
+# Usage:
+#   detect-pr-tool [--remote REMOTE] [--verbose]
+#
+# Options:
+#   --remote REMOTE   Check specific remote (default: origin)
+#   --verbose         Show detection details
+#
+# Output:
+#   "gh" for GitHub repos
+#   "az" for Azure DevOps repos
+#   "unknown" if cannot determine
+#
+# Exit codes:
+#   0 - Success (gh or az detected)
+#   1 - Unknown remote type
+#   2 - Not a git repository
+#
+# Examples:
+#   # Basic usage
+#   tool=$(detect-pr-tool)
+#   if [[ "$tool" == "gh" ]]; then
+#     gh pr create ...
+#   elif [[ "$tool" == "az" ]]; then
+#     az repos pr create ...
+#   fi
+#
+#   # Check specific remote
+#   detect-pr-tool --remote github
+#
+#   # Verbose output
+#   detect-pr-tool --verbose
+
+set -euo pipefail
+
+REMOTE="origin"
+VERBOSE=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --remote)
+      REMOTE="$2"
+      shift 2
+      ;;
+    --verbose)
+      VERBOSE=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Check if in a git repo
+if ! git rev-parse --git-dir &>/dev/null; then
+  echo "unknown"
+  exit 2
+fi
+
+# Get remote URL
+REMOTE_URL=$(git remote get-url "$REMOTE" 2>/dev/null || echo "")
+
+if [[ -z "$REMOTE_URL" ]]; then
+  if $VERBOSE; then
+    echo "Remote '$REMOTE' not found" >&2
+  fi
+  echo "unknown"
+  exit 1
+fi
+
+if $VERBOSE; then
+  echo "Remote: $REMOTE" >&2
+  echo "URL: $REMOTE_URL" >&2
+fi
+
+# Detect provider
+if [[ "$REMOTE_URL" == *"github.com"* ]]; then
+  if $VERBOSE; then
+    echo "Detected: GitHub" >&2
+  fi
+  echo "gh"
+  exit 0
+elif [[ "$REMOTE_URL" == *"dev.azure.com"* ]] || [[ "$REMOTE_URL" == *"visualstudio.com"* ]]; then
+  if $VERBOSE; then
+    echo "Detected: Azure DevOps" >&2
+  fi
+  echo "az"
+  exit 0
+else
+  if $VERBOSE; then
+    echo "Unknown provider" >&2
+  fi
+  echo "unknown"
+  exit 1
+fi

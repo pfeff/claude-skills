@@ -116,7 +116,7 @@ If directory exists:
 Call the workspace creation script:
 
 ```bash
-~/.claude/skills/task-workflow/scripts/create-workspace.sh \
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-workspace.sh \
   --node \
   --node-id "<node.id>" \
   --headline "<node.title>" \

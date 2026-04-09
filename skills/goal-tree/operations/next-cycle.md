@@ -38,6 +38,16 @@ Present a 2-3 line summary:
 
 Do NOT re-read all repos or run full agent surveys. This is a delta observation, not a full scan. Only reach out to repos or external state if completed work revealed something that needs verification.
 
+#### Content Flow: SCAN Checkpoint
+
+Check the content pipeline alongside tree state:
+
+1. **Pipeline state**: Identify content-tagged nodes in the tree (nodes with `content:` prefix or content tag). Report their current stage (pending, in-progress, completed, shipped). If a content project is already active, note it and skip to Orient — do not re-SCAN for new signals.
+
+2. **Demand signal scan** (only when no content project is active and capacity is available): Review demand signals from target companies — job postings, engineering blogs, OSS activity, conference talks. Sources: `career-targets.md` in guardian, target company public activity. This is a manual checklist, not automated.
+
+3. **Signal inventory**: Note any new or existing unmatched signals. Signals persist until manually pruned — there is no auto-drop threshold.
+
 ### 1b. Review Prior Lessons
 
 Before scoping new work, check for lessons from previous iterations:
@@ -61,6 +71,18 @@ In 2-3 sentences, connect the current state to the mission:
 - Is anything drifting from the mission?
 
 If a completed node's result changes the strategic picture (new gap, invalidated assumption, unlocked opportunity), flag it. Otherwise, keep moving.
+
+#### Content Flow: MATCH Checkpoint
+
+If the SCAN checkpoint surfaced unmatched demand signals:
+
+1. **Match signals against artifacts**: Compare each signal against the artifact registry (cursor-rules skills, guardian docs, agent-coordinator, agent-orchestrator, ai-agents-book, career intelligence). A match requires a real, shipped artifact that speaks to the signal — no speculative content.
+
+2. **Evaluate content worthiness**: Does a matched signal warrant a content node? Consider: is there a real audience asking this question? Does the artifact demonstrate genuine capability?
+
+3. **WIP limit gate**: Check if a content project is already active (WIP limit: 1 active content project at a time). If at capacity, note the matched signal for next cycle — do not create a new content node.
+
+4. **Prioritize alongside system nodes**: Content nodes compete on the same tree as system nodes. They don't get special priority or deferral — evaluate on leverage like any other work.
 
 ### 2a. Cycle Metrics
 
@@ -143,6 +165,16 @@ Either:
   - **Mixed**: Dispatch Tier 1/2 immediately, hold Tier 3 for confirmation.
 - **No actionable nodes**: If the next move is entirely ambiguous or strategic (all Tier 3), ask one focused question and wait for operator input.
 
+#### Content Flow: Dispatch Content Nodes
+
+If the MATCH checkpoint produced a matched signal that warrants a content node and WIP capacity is available:
+
+1. **Propose content node**: Include in the proposal alongside system nodes. Content nodes are regular goal tree nodes — use the same proposal format. Include the demand signal source in the node description for traceability.
+
+2. **Drop stale signals**: During proposal, review unmatched signals. If any are no longer relevant (operator judgment), note them for pruning. Signals are only dropped by explicit operator decision, never automatically.
+
+3. **Standard dispatch**: Content nodes dispatch via the same workspace mechanism as system nodes — no special handling.
+
 ### 4. Dispatch
 
 If there are ready nodes (new or existing), enter the execute-tree loop:
@@ -153,6 +185,16 @@ execute_tree(tree_id, project_dir, project_branch)
 ```
 
 If no nodes are ready and the conversation produced no new work, say so and wait for operator input.
+
+#### Content Flow: SHIP Awareness
+
+When a content node completes (merged PR containing content):
+
+1. **Publish**: The content goes from merged PR to published via the SHIP pipeline — merge to pfeff.github.io (GitHub Pages). If the site repo doesn't exist yet, the first content node's implementation includes site setup.
+
+2. **Update traceability**: Link the demand signal → artifact → published content in guardian docs. Update GOAL.md if the content project was a tree node.
+
+3. **Release WIP capacity**: Mark the content project complete, freeing capacity for the next content cycle. The next Observe phase can SCAN for new signals.
 
 ## Auto-Continue
 

@@ -67,7 +67,7 @@
 ### 9. No workspace/worktree created (still)
 - **Severity**: Workflow compliance — high
 - **Where**: Bootstrap execution
-- **What happened**: Agent created project directory (`~/src/work/ac-local-prod/`) and wrote `setup.sh` directly there. No worktree from the agent-coordinator repo. The setup script references the source repo directly (`AC_REPO="<source-repo-path>"`) rather than working from a worktree.
+- **What happened**: Agent created project directory (`~/src/work/ac-local-prod/`) and wrote `setup.sh` directly there. No worktree from the agent-coordinator repo. The setup script references the source repo directly (`AC_REPO="~/src/github/pfeff/agent-coordinator"`) rather than working from a worktree.
 - **Root cause**: Despite fix in start-project.md step 9 saying "create node workspace via scripted path", the agent still didn't do it. The bootstrap execution guidance may not be strong enough, or the agent doesn't see worktrees as relevant for a deployment task (no code changes to isolate).
 - **Assessment**: For this specific task (local deployment), a worktree is arguably unnecessary — the agent is building a release from main, not modifying code. But the approval prompt issue remains because the working directory doesn't cover the source repo path.
 
@@ -81,16 +81,16 @@
 ### 13. Skill never loaded — agent improvised the entire session
 - **Severity**: Root cause — critical
 - **Where**: Session start
-- **What happened**: User opened with `Continue with /goal-tree project. Continue with bootstrapping sub-goal...` The agent treated `/goal-tree` as a conversational reference, not a skill invocation. The goal-tree skill was never loaded. The agent explored the codebase with Explore agents and improvised all behavior — no hard rules, no workspace conventions, no scripted paths. Every subsequent observation (#8-#12) stems from this.
+- **What happened**: User opened with `Continue with /claude-skills:goal-tree project. Continue with bootstrapping sub-goal...` The agent treated `/claude-skills:goal-tree` as a conversational reference, not a skill invocation. The goal-tree skill was never loaded. The agent explored the codebase with Explore agents and improvised all behavior — no hard rules, no workspace conventions, no scripted paths. Every subsequent observation (#8-#12) stems from this.
 - **Root cause**: The skill system requires a slash command (`/start-project`, `/resume-project`) to trigger skill loading. Saying "the goal-tree project" in natural language doesn't load the skill. The agent has no way to know it should self-load a skill from a conversational reference.
 - **Fix direction**: Two options: (1) The `/resume-project` command should be the documented way to re-enter a goal-tree session — make this prominent in project CLAUDE.md files. (2) Consider whether SKILL.md should be referenced from the project CLAUDE.md so that even without a slash command, the agent sees the hard rules when it reads the project context.
 
-### 14. Mid-sentence `/goal-tree` not recognized as skill invocation
+### 14. Mid-sentence `/claude-skills:goal-tree` not recognized as skill invocation
 - **Severity**: Platform / instruction-following
-- **Where**: Session start — user said `Continue with /goal-tree project. Continue with bootstrapping sub-goal.`
-- **What happened**: The `/goal-tree` command exists and appears in the skills list, but the agent did not invoke the Skill tool. It treated `/goal-tree` as a conversational reference and proceeded without loading the skill. When explicitly told to start over, the agent called `Skill(goal-tree)` and then followed the workflow correctly — reading CLAUDE.md, checking coordinator state, asking before acting.
+- **Where**: Session start — user said `Continue with /claude-skills:goal-tree project. Continue with bootstrapping sub-goal.`
+- **What happened**: The `/claude-skills:goal-tree` command exists and appears in the skills list, but the agent did not invoke the Skill tool. It treated `/claude-skills:goal-tree` as a conversational reference and proceeded without loading the skill. When explicitly told to start over, the agent called `Skill(goal-tree)` and then followed the workflow correctly — reading CLAUDE.md, checking coordinator state, asking before acting.
 - **Root cause**: The model doesn't reliably recognize mid-sentence `/` references as Skill tool invocations. This is an instruction-following gap at the model level, not a missing feature. The command file, skill definition, and skill list entry all exist.
-- **Mitigation options**: (1) Put the hard rules directly in project CLAUDE.md so they're in context regardless of skill loading. (2) Document that `/goal-tree` should be used at the start of a message, not mid-sentence. (3) Accept that users may need to say "start over" occasionally when the agent misses the reference.
+- **Mitigation options**: (1) Put the hard rules directly in project CLAUDE.md so they're in context regardless of skill loading. (2) Document that `/claude-skills:goal-tree` should be used at the start of a message, not mid-sentence. (3) Accept that users may need to say "start over" occasionally when the agent misses the reference.
 
 ### 12. No planning before implementation
 - **Severity**: Workflow compliance — high

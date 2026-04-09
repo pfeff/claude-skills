@@ -6,8 +6,8 @@
 #   "personal" - Non-TCETRA hostname, use coordinator backend
 #
 # Usage:
-#   ENV=$(~/.claude/skills/goal-tree/scripts/detect-env.sh)
-#   source ~/.claude/skills/goal-tree/scripts/detect-env.sh
+#   ENV=$(${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/detect-env.sh)
+#   source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/detect-env.sh
 
 if hostname | grep -q '^TCETRA'; then
     echo "work"

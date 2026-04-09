@@ -194,7 +194,7 @@ Export audit report?
 
 1. Markdown file (docs/AUDIT-REPORT.md)
 2. GitHub issue (list of tasks)
-3. Task list (for /task-workflow)
+3. Task list (for /claude-skills:task-workflow)
 ```
 
 ## Interactive Analysis
