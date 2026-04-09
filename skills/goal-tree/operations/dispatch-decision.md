@@ -1,6 +1,6 @@
 # Dispatch Decision Operation
 
-Evaluates a ready node and selects the appropriate execution strategy: subagent, sub-session, inline, or escalate.
+Evaluates a ready node and selects the appropriate execution strategy: subagent, sub-session, container, inline, or escalate.
 
 ## Inputs
 
@@ -14,7 +14,7 @@ Evaluates a ready node and selects the appropriate execution strategy: subagent,
 
 ```
 decision:
-  strategy: "subagent" | "sub-session" | "inline" | "escalate"
+  strategy: "subagent" | "sub-session" | "container" | "inline" | "escalate"
   tier: 1 | 2 | 3
   reason: "<why this strategy was chosen>"
   context: { ... }  # strategy-specific context
@@ -64,10 +64,11 @@ Is the node a leaf task?
 │   │   └── No
 │   │       ├── Is the spec clear and self-contained?
 │   │       │   ├── Yes
+│   │       │   │   ├── Repo(s) have Taskfile + Docker available? → CONTAINER
 │   │       │   │   ├── Single repo or few repos? → SUBAGENT
 │   │       │   │   └── Many repos with complex coordination? → INLINE
 │   │       │   └── No (ambiguous, underspecified) → INLINE
-│   │       └── Is it a fallback from failed subagent? → INLINE
+│   │       └── Is it a fallback from failed subagent/container? → INLINE
 │   └──
 └── No (goal with children)
     ├── Shallow subtree (≤3 leaves, all ready)? → dispatch children as SUBAGENT batch
@@ -97,6 +98,27 @@ context:
     - relevant design decisions
     - dependency results from Results Log
     - repo paths
+```
+
+### Container
+
+Choose container when:
+
+- Leaf task with clear acceptance criteria (Tier 2)
+- Targets 1-2 repos that have `Taskfile.yml` (standard gate targets)
+- Docker is available on the dispatch host
+- No "clarify", "discuss", "decide" in description
+- No unresolved spec gaps
+- Task benefits from sandboxed execution (no permission prompts)
+
+Container is preferred over subagent when available because it eliminates permission prompts entirely. Fall back to subagent when Docker is unavailable or repos lack Taskfile.
+
+**Context provided**:
+```
+context:
+  repos: [list of repos]
+  node_workspace: "<path to node workspace>"
+  taskfile_targets: { repo: [available targets] }
 ```
 
 ### Sub-Session
@@ -214,6 +236,21 @@ Node: A.2 "Implement user CRUD endpoints"
 Decision:
   strategy: "subagent"
   reason: "Clear spec, single repo, dependencies met"
+```
+
+### Leaf with Taskfile → Container
+
+```
+Node: A.3 "Add pagination to list endpoint"
+  - repos: [api-service]  (has Taskfile.yml with test, lint, build)
+  - criteria: 3 items
+  - depends_on: [A.2] (completed)
+  - description: clear, no ambiguity keywords
+  - Docker: available
+
+Decision:
+  strategy: "container"
+  reason: "Clear spec, Taskfile-enabled repo, Docker available — sandboxed execution"
 ```
 
 ### Complex leaf → Inline
