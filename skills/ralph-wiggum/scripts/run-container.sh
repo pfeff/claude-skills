@@ -158,9 +158,9 @@ generate_merged_config() {
     echo "  Config: merging project + ralph requirements"
     # Merge project config with Ralph's requirements
     jq --slurpfile ralph "$ralph_config" '
-      # Ensure node feature exists for Claude Code, and GitHub CLI for PR creation
-      .features["ghcr.io/devcontainers/features/node:1"] //= {} |
-      .features["ghcr.io/devcontainers/features/github-cli:1"] //= {} |
+      # Inject all of Ralph's required features (node, github-cli, go-task, ...)
+      # Project values win on key collision; otherwise the ralph default is used.
+      .features = (($ralph[0].features // {}) * (.features // {})) |
 
       # Append Claude Code install and SSH setup to postCreateCommand
       .postCreateCommand = (

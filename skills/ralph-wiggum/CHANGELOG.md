@@ -2,6 +2,17 @@
 
 All notable changes to the **ralph-wiggum** skill will be documented in this file.
 
+## [1.4.0] - 2026-04-10
+
+### Added
+- `ghcr.io/eitsupi/devcontainer-features/go-task:1` devcontainer feature so `task <target>` works inside the Ralph sandbox. Closes the gap surfaced by C.2.1 where container dispatch used Taskfile as the standardized repo interface but the binary was missing.
+
+### Changed
+- `run-container.sh` feature merge generalized: instead of hand-listing `node` and `github-cli`, it now does an additive merge of all ralph features into the project's `.features` (project values win on collision). Future ralph features propagate without per-feature touch-ups.
+- README invocation paths updated to use `$CLAUDE_PLUGIN_ROOT/skills/ralph-wiggum/scripts/run-container.sh` (the in-tree migration done in 1.3.x left the README pointing at the old `scripts/ralph/` path).
+
+**Reasoning**: C.2.6 (autoresearch). DESIGN.md asked for `task` in the Ralph container; validated end-to-end with the go-task feature: `task --version` returns 3.49.1 in a clean container and survives a `--build-no-cache` rebuild. Source: autoresearch tree #5, node C.2.6.
+
 ## [1.3.0] - 2026-03-03
 
 ### Added

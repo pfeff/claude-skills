@@ -3,7 +3,8 @@
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/eitsupi/devcontainer-features/go-task:1": {}
   },
   "postCreateCommand": "mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null && sudo env \"PATH=$PATH\" npm install -g @anthropic-ai/claude-code",
   "postStartCommand": "sudo chmod 777 /run/host-services/ssh-auth.sock 2>/dev/null || true",

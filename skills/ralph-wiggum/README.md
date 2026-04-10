@@ -86,11 +86,11 @@ Configure commands in `.ralph/gates.md`. Skip gates by leaving the command empty
 
 ## Running the Loop
 
-The host-side scripts live in `scripts/ralph/`:
+The host-side scripts ship with this skill at `skills/ralph-wiggum/scripts/`. Invoke them via `$CLAUDE_PLUGIN_ROOT`:
 
 ```bash
 # Run in sandbox (recommended)
-./scripts/ralph/run-container.sh /path/to/project -- ./loop.sh build
+"$CLAUDE_PLUGIN_ROOT/skills/ralph-wiggum/scripts/run-container.sh" /path/to/project -- ./loop.sh build
 
 # Or directly on host (less secure)
 ./loop.sh build
@@ -121,10 +121,10 @@ For autonomous execution, run the loop inside a sandboxed container:
 
 ```bash
 # Build and run the sandbox container (uses Claude account auth by default)
-./scripts/ralph/run-container.sh /path/to/project --network
+"$CLAUDE_PLUGIN_ROOT/skills/ralph-wiggum/scripts/run-container.sh" /path/to/project --network
 
 # Or use API key instead
-ANTHROPIC_API_KEY=... ./scripts/ralph/run-container.sh /path/to/project --api-key --network
+ANTHROPIC_API_KEY=... "$CLAUDE_PLUGIN_ROOT/skills/ralph-wiggum/scripts/run-container.sh" /path/to/project --api-key --network
 
 # Container provides:
 # - Filesystem isolation (only project dir mounted)
@@ -133,7 +133,7 @@ ANTHROPIC_API_KEY=... ./scripts/ralph/run-container.sh /path/to/project --api-ke
 # - Read-only filesystem with tmpfs for scratch
 ```
 
-See `scripts/ralph/CREDENTIALS.md` for credential management details.
+See `skills/ralph-wiggum/scripts/CREDENTIALS.md` for credential management details.
 
 ## Example Workflow
 
