@@ -421,7 +421,7 @@ emit_did_not_finish() {
   cat <<RESULT
 {
   "status": "did_not_finish",
-  "node_id": "${NODE_ID}",
+  "node_id": $(printf '%s' "$NODE_ID" | jq -Rs .),
   "files_modified": [],
   "changes_summary": $(printf '%s' "$reason" | jq -Rs .),
   "commits": [],

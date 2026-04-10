@@ -28,10 +28,10 @@ dispatch_result:
   acceptance_criteria_met: [list of met criteria]
   issues: "<problems encountered>" | "none"
   dispatch_method: "subagent" | "sub-session" | "container" | "inline" | "escalated"
-  duration_seconds: <integer wall-clock seconds>  # container dispatch only
+  duration_seconds: <integer wall-clock seconds>  # container dispatch only; field is omitted (not null) for other strategies
 ```
 
-The `did_not_finish` status is emitted exclusively by container dispatch when the wall-clock timeout is exceeded (see Container Dispatch below). Subagent, sub-session, and inline strategies do not produce it. The `duration_seconds` field is populated by container dispatch on every emission branch.
+The `did_not_finish` status is emitted exclusively by container dispatch when the wall-clock timeout is exceeded (see Container Dispatch below). Subagent, sub-session, and inline strategies do not produce it. The `duration_seconds` field is populated by container dispatch on every emission branch and is **omitted entirely** from `dispatch_result` for non-container strategies — consumers should treat the absence of the key as "duration not measured", not as zero.
 
 ## Node Workspace Setup
 

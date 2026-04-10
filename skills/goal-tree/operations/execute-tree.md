@@ -202,13 +202,11 @@ elif result.status == "partial":
     --result "<changes summary> (partial)"
   # Decide: retry remaining criteria or accept partial
 
-elif result.status == "failure":
-  retry_node(node, result)
-
-elif result.status == "did_not_finish":
-  # Container exceeded the wall-clock budget. Route through the same retry
-  # path as failure, but mark the parameter change as a timeout increase so
-  # retry_dispatch can widen the budget on the next attempt.
+elif result.status in ("failure", "did_not_finish"):
+  # did_not_finish (container exceeded wall-clock budget) routes through the
+  # same retry path as failure. retry_dispatch inspects the failure_status
+  # captured on the attempt and selects the widen-timeout parameter change
+  # for did_not_finish, or the prompt-change strategies for failure.
   retry_node(node, result)
 
 elif result.status == "blocked":
