@@ -177,10 +177,10 @@ generate_merged_config() {
 
     # Merge project config with Ralph's requirements
     jq --slurpfile ralph "$ralph_config" '
-      # Inject all of Ralph's required features (node, github-cli, go-task, ...)
+      # Inject all of the Ralph required features (node, github-cli, go-task, ...)
       # Project values win on key collision; otherwise the ralph default is used.
       # If a project sets a feature key to a non-object (e.g., null to "disable"),
-      # coerce it to {} so jq's recursive merge does not error.
+      # coerce it to {} so jq recursive merge does not error.
       .features = (
         ($ralph[0].features // {}) * (
           (.features // {}) | with_entries(
