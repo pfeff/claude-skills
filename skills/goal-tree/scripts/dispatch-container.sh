@@ -36,8 +36,8 @@ Options:
                         phases combined). Accepts duration suffixes: 30m, 1h, 90s,
                         or bare integer seconds. Default: ${DEFAULT_TIMEOUT}.
                         If exceeded, the dispatch terminates and emits a
-                        dispatch_result with status "did_not_finish" and
-                        duration_seconds populated.
+                        dispatch_result with status "did_not_finish",
+                        duration_seconds and timeout_seconds populated.
   --dry-run             Prepare the workspace (specs, gates, prompts) without
                         invoking the container.
   -h, --help            Show this help and exit.
@@ -175,33 +175,51 @@ PROJECT_CONTEXT=$(extract_section "$DESIGN" "Project Context")
 PARENT_GOAL=$(echo "$PROJECT_CONTEXT" | sed -n 's/^- \*\*Parent goal\*\*: *//p' 2>/dev/null | head -1)
 ROOT_OBJECTIVE=$(echo "$PROJECT_CONTEXT" | sed -n 's/^- \*\*Root objective\*\*: *//p' 2>/dev/null | head -1)
 
-echo "Dispatching node $NODE_ID to container..."
-echo "  Title: $NODE_TITLE"
-echo "  Workspace: $NODE_WORKSPACE"
+echo "Dispatching node $NODE_ID to container..." >&2
+echo "  Title: $NODE_TITLE" >&2
+echo "  Workspace: $NODE_WORKSPACE" >&2
 
 # --- Detect repos in workspace ---
+#
+# Two valid layouts:
+#   single-repo: $NODE_WORKSPACE itself is a git repo (or worktree)
+#                → loop.sh runs git from the workspace root
+#   multi-repo:  $NODE_WORKSPACE contains one or more subdirectories with .git
+#                → loop.sh cd's into each repo per task
+#
+# The two are mutually exclusive — if the workspace itself has .git, treat
+# as single-repo and ignore any nested .git subdirectories.
 
-# Repos are subdirectories with .git (file or directory)
 REPOS=()
 REPO_NAMES=()
-for dir in "$NODE_WORKSPACE"/*/; do
-  if [[ -e "$dir/.git" ]]; then
-    repo_name=$(basename "$dir")
-    REPOS+=("$dir")
-    REPO_NAMES+=("$repo_name")
+MULTI_REPO=false
+
+if [[ -e "$NODE_WORKSPACE/.git" ]]; then
+  # Single-repo: workspace IS the repo
+  REPOS+=("$NODE_WORKSPACE")
+  REPO_NAMES+=("$(basename "$NODE_WORKSPACE")")
+else
+  # Multi-repo: scan subdirectories
+  for dir in "$NODE_WORKSPACE"/*/; do
+    if [[ -e "$dir/.git" ]]; then
+      repo_name=$(basename "$dir")
+      REPOS+=("$dir")
+      REPO_NAMES+=("$repo_name")
+    fi
+  done
+  if [[ ${#REPOS[@]} -gt 0 ]]; then
+    MULTI_REPO=true
   fi
-done
+fi
 
 if [[ ${#REPOS[@]} -eq 0 ]]; then
   echo "Error: No git repos found in $NODE_WORKSPACE" >&2
+  echo "  Expected either $NODE_WORKSPACE/.git (single-repo) or" >&2
+  echo "  $NODE_WORKSPACE/<repo>/.git (multi-repo)" >&2
   exit 1
 fi
 
-echo "  Repos: ${REPO_NAMES[*]}"
-MULTI_REPO=false
-if [[ ${#REPOS[@]} -gt 1 ]]; then
-  MULTI_REPO=true
-fi
+echo "  Repos: ${REPO_NAMES[*]}" >&2
 
 # --- Set up Ralph workspace structure ---
 
@@ -236,16 +254,16 @@ ${DESIGN_DECISIONS}
 DECISIONS
 fi
 
-echo "  Created: specs/task.md"
+echo "  Created: specs/task.md" >&2
 
 # --- Copy PROMPT files ---
 
 for prompt_file in PROMPT_plan.md PROMPT_build.md; do
   if [[ ! -f "$NODE_WORKSPACE/$prompt_file" ]]; then
     cp "$RALPH_SKILL_DIR/$prompt_file" "$NODE_WORKSPACE/$prompt_file"
-    echo "  Copied: $prompt_file"
+    echo "  Copied: $prompt_file" >&2
   else
-    echo "  Skipped: $prompt_file (exists)"
+    echo "  Skipped: $prompt_file (exists)" >&2
   fi
 done
 
@@ -292,7 +310,7 @@ Project-specific commands for the Ralph Wiggum autonomous build loop.
 
 Run gates in order: lint → typecheck → test → build. Skip gates with empty commands.
 GATES
-    echo "  Generated gates.md for $repo_name (from Taskfile)"
+    echo "  Generated gates.md for $repo_name (from Taskfile)" >&2
   else
     # No Taskfile — generate empty gates
     echo "  Warning: No Taskfile.yml in $repo_name — gates will be empty" >&2
@@ -359,37 +377,46 @@ Branch strategy:
 - The agent cds to the repo path before implementing each task
 - Commits are made in the repo that changed
 WORKSPACE
-  echo "  Created: .ralph/workspace.md (multi-repo: ${REPO_NAMES[*]})"
+  echo "  Created: .ralph/workspace.md (multi-repo: ${REPO_NAMES[*]})" >&2
 else
-  # Single-repo: copy gates.md to workspace root .ralph/
+  # Single-repo: gates.md must live at workspace root .ralph/
+  # If the workspace IS the repo, gates.md is already at the right path —
+  # generate_gates wrote it to "$repo/.ralph/gates.md" which equals
+  # "$NODE_WORKSPACE/.ralph/gates.md". Otherwise (subdirectory repo) copy it up.
   repo="${REPOS[0]}"
   mkdir -p "$NODE_WORKSPACE/.ralph"
-  cp "$repo/.ralph/gates.md" "$NODE_WORKSPACE/.ralph/gates.md"
-  echo "  Copied gates.md to workspace root (single-repo)"
+  src="$repo/.ralph/gates.md"
+  dst="$NODE_WORKSPACE/.ralph/gates.md"
+  if [[ "$(cd "$(dirname "$src")" && pwd)/$(basename "$src")" != "$(cd "$(dirname "$dst")" && pwd)/$(basename "$dst")" ]]; then
+    cp "$src" "$dst"
+    echo "  Copied gates.md to workspace root (single-repo)" >&2
+  else
+    echo "  gates.md already at workspace root (single-repo, workspace == repo)" >&2
+  fi
 fi
 
 # --- Dry run: stop here ---
 
 if [[ "$DRY_RUN" == true ]]; then
-  echo ""
-  echo "=== Dry run complete ==="
-  echo "Workspace prepared at: $NODE_WORKSPACE"
-  echo "Files created:"
-  echo "  specs/task.md"
-  echo "  PROMPT_plan.md"
-  echo "  PROMPT_build.md"
+  echo "" >&2
+  echo "=== Dry run complete ===" >&2
+  echo "Workspace prepared at: $NODE_WORKSPACE" >&2
+  echo "Files created:" >&2
+  echo "  specs/task.md" >&2
+  echo "  PROMPT_plan.md" >&2
+  echo "  PROMPT_build.md" >&2
   for repo in "${REPOS[@]}"; do
-    echo "  $(basename "$repo")/.ralph/gates.md"
+    echo "  $(basename "$repo")/.ralph/gates.md" >&2
   done
   if [[ "$MULTI_REPO" == true ]]; then
-    echo "  .ralph/workspace.md"
+    echo "  .ralph/workspace.md" >&2
   else
-    echo "  .ralph/gates.md"
+    echo "  .ralph/gates.md" >&2
   fi
-  echo ""
-  echo "To run manually:"
-  echo "  $RALPH_DIR/run-container.sh $NODE_WORKSPACE -- plan"
-  echo "  $RALPH_DIR/run-container.sh $NODE_WORKSPACE -- build"
+  echo "" >&2
+  echo "To run manually:" >&2
+  echo "  $RALPH_DIR/run-container.sh $NODE_WORKSPACE -- plan" >&2
+  echo "  $RALPH_DIR/run-container.sh $NODE_WORKSPACE -- build" >&2
   exit 0
 fi
 
@@ -407,9 +434,9 @@ fi
 
 # --- Invoke Ralph ---
 
-echo ""
-echo "=== Starting container dispatch ==="
-echo "  Timeout: ${TIMEOUT} (${TIMEOUT_SEC}s combined wall-clock budget)"
+echo "" >&2
+echo "=== Starting container dispatch ===" >&2
+echo "  Timeout: ${TIMEOUT} (${TIMEOUT_SEC}s combined wall-clock budget)" >&2
 
 START_TS=$(date +%s)
 
@@ -428,7 +455,8 @@ emit_did_not_finish() {
   "acceptance_criteria_met": [],
   "issues": $(printf '%s' "$reason" | jq -Rs .),
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
 }
@@ -440,9 +468,9 @@ if [[ "$PLAN_BUDGET" -le 0 ]]; then
   emit_did_not_finish "Budget exhausted before plan phase started"
   exit 0
 fi
-echo "Phase 1: Planning... (budget: ${PLAN_BUDGET}s)"
+echo "Phase 1: Planning... (budget: ${PLAN_BUDGET}s)" >&2
 PLAN_EXIT=0
-"$TIMEOUT_BIN" "${PLAN_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- plan || PLAN_EXIT=$?
+"$TIMEOUT_BIN" "${PLAN_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- plan >&2 || PLAN_EXIT=$?
 
 if [[ "$PLAN_EXIT" -eq 124 ]]; then
   echo "Plan phase exceeded wall-clock budget" >&2
@@ -466,7 +494,8 @@ if [[ "$PLAN_EXIT" -ne 0 ]]; then
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
     exit 0
@@ -482,7 +511,8 @@ RESULT
   "acceptance_criteria_met": [],
   "issues": "run-container.sh plan exited with non-zero status",
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
   exit 0
@@ -502,7 +532,8 @@ if [[ -f "$NODE_WORKSPACE/BLOCKERS.md" ]] && [[ -s "$NODE_WORKSPACE/BLOCKERS.md"
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
   exit 0
@@ -515,9 +546,9 @@ if [[ "$BUILD_BUDGET" -le 0 ]]; then
   emit_did_not_finish "Budget exhausted by plan phase; build phase skipped"
   exit 0
 fi
-echo "Phase 2: Building... (budget: ${BUILD_BUDGET}s)"
+echo "Phase 2: Building... (budget: ${BUILD_BUDGET}s)" >&2
 BUILD_EXIT=0
-"$TIMEOUT_BIN" "${BUILD_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- build || BUILD_EXIT=$?
+"$TIMEOUT_BIN" "${BUILD_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- build >&2 || BUILD_EXIT=$?
 
 if [[ "$BUILD_EXIT" -eq 124 ]]; then
   echo "Build phase exceeded wall-clock budget" >&2
@@ -527,8 +558,8 @@ fi
 
 # --- Parse result ---
 
-echo ""
-echo "=== Parsing results ==="
+echo "" >&2
+echo "=== Parsing results ===" >&2
 
 # Check for blockers
 if [[ -f "$NODE_WORKSPACE/BLOCKERS.md" ]] && [[ -s "$NODE_WORKSPACE/BLOCKERS.md" ]]; then
@@ -544,7 +575,8 @@ if [[ -f "$NODE_WORKSPACE/BLOCKERS.md" ]] && [[ -s "$NODE_WORKSPACE/BLOCKERS.md"
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
   exit 0
@@ -571,17 +603,21 @@ if [[ -f "$NODE_WORKSPACE/PLAN.md" ]]; then
   CRITERIA_MET=$(grep '^\- \[x\]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null | sed 's/^- \[x\] //' | jq -R . | jq -s .)
 fi
 
-# Collect modified files across repos
+# Collect modified files and commits — only when the dispatch made progress.
+# On failure, preserving an empty list avoids polluting the payload with
+# pre-existing branch history that has nothing to do with this dispatch.
 FILES_MODIFIED="[]"
 COMMITS="[]"
-for repo in "${REPOS[@]}"; do
-  if [[ -d "$repo/.git" ]] || [[ -f "$repo/.git" ]]; then
-    repo_files=$(git -C "$repo" diff --name-only HEAD~1 HEAD 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
-    repo_commits=$(git -C "$repo" log --oneline -5 --format="%H" 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
-    FILES_MODIFIED=$(echo "$FILES_MODIFIED $repo_files" | jq -s 'add')
-    COMMITS=$(echo "$COMMITS $repo_commits" | jq -s 'add')
-  fi
-done
+if [[ "$STATUS" == "success" ]] || [[ "$STATUS" == "partial" ]]; then
+  for repo in "${REPOS[@]}"; do
+    if [[ -d "$repo/.git" ]] || [[ -f "$repo/.git" ]]; then
+      repo_files=$(git -C "$repo" diff --name-only HEAD~1 HEAD 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
+      repo_commits=$(git -C "$repo" log --oneline -5 --format="%H" 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
+      FILES_MODIFIED=$(echo "$FILES_MODIFIED $repo_files" | jq -s 'add')
+      COMMITS=$(echo "$COMMITS $repo_commits" | jq -s 'add')
+    fi
+  done
+fi
 
 cat <<RESULT
 {
@@ -593,6 +629,7 @@ cat <<RESULT
   "acceptance_criteria_met": ${CRITERIA_MET},
   "issues": "none",
   "dispatch_method": "container",
-  "duration_seconds": $(elapsed_seconds)
+  "duration_seconds": $(elapsed_seconds),
+  "timeout_seconds": ${TIMEOUT_SEC}
 }
 RESULT
