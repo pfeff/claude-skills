@@ -9,7 +9,7 @@
 # Prerequisites:
 #   - Node workspace exists with DESIGN.md populated
 #   - Docker is running
-#   - Ralph infrastructure at RALPH_DIR (default: ~/src/github/pfeff/cursor-rules/scripts/ralph)
+#   - Ralph infrastructure at RALPH_DIR (default: sibling skill in claude-skills)
 #   - GNU coreutils 'timeout' (Linux) or 'gtimeout' (macOS via brew install coreutils)
 #
 # Output: dispatch_result JSON to stdout
@@ -17,8 +17,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RALPH_DIR="${RALPH_DIR:-$HOME/src/github/pfeff/cursor-rules/scripts/ralph}"
-RALPH_SKILL_DIR="${RALPH_SKILL_DIR:-$HOME/src/github/pfeff/cursor-rules/skills/ralph-wiggum}"
+RALPH_DIR="${RALPH_DIR:-$SCRIPT_DIR/../../ralph-wiggum/scripts}"
+RALPH_SKILL_DIR="${RALPH_SKILL_DIR:-$SCRIPT_DIR/../../ralph-wiggum}"
 
 DEFAULT_TIMEOUT="30m"
 TIMEOUT="$DEFAULT_TIMEOUT"

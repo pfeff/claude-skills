@@ -1,0 +1,34 @@
+# Pre-commit hooks for Ralph Wiggum autonomous loops
+# Copy to project as .pre-commit-config.yaml
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: local
+    hooks:
+      # Block commits containing secret files
+      - id: no-secrets
+        name: Block secret files
+        entry: bash -c 'files=$(git diff --cached --name-only | grep -iE "\.(env|pem|key|p12|pfx|jks|keystore|credentials|secret)$|^\.env|secrets\."); if [ -n "$files" ]; then echo "Blocked secret files:"; echo "$files"; exit 1; fi'
+        language: system
+        stages: [commit]
+
+      # Block commits with AWS/cloud credential patterns
+      - id: no-cloud-creds
+        name: Block cloud credentials
+        entry: bash -c 'if git diff --cached | grep -qiE "(AKIA[0-9A-Z]{16}|aws_secret_access_key|private_key|-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY)"; then echo "Potential credentials detected in diff"; exit 1; fi'
+        language: system
+        stages: [commit]
+
+      # Limit diff size to prevent runaway commits
+      - id: diff-size
+        name: Limit diff size (500 lines)
+        entry: bash -c 'insertions=$(git diff --cached --numstat | awk "{sum+=\$1} END {print sum+0}"); if [ "$insertions" -gt 500 ]; then echo "Diff too large: $insertions insertions (max 500)"; exit 1; fi'
+        language: system
+        stages: [commit]
+
+      # Prevent commits to protected branches
+      - id: no-main-commit
+        name: Block direct commits to main/master
+        entry: bash -c 'branch=$(git rev-parse --abbrev-ref HEAD); if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then echo "Direct commits to $branch blocked"; exit 1; fi'
+        language: system
+        stages: [commit]
