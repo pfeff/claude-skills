@@ -4,12 +4,13 @@
 # Translates DESIGN.md → Ralph workspace, invokes run-container.sh,
 # parses result into goal-tree dispatch_result format.
 #
-# Usage: dispatch-container.sh <node-workspace-path> [--dry-run]
+# Usage: dispatch-container.sh <node-workspace-path> [--timeout <duration>] [--dry-run]
 #
 # Prerequisites:
 #   - Node workspace exists with DESIGN.md populated
 #   - Docker is running
 #   - Ralph infrastructure at RALPH_DIR (default: ~/src/github/pfeff/cursor-rules/scripts/ralph)
+#   - GNU coreutils 'timeout' (Linux) or 'gtimeout' (macOS via brew install coreutils)
 #
 # Output: dispatch_result JSON to stdout
 
@@ -18,17 +19,107 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RALPH_DIR="${RALPH_DIR:-$HOME/src/github/pfeff/cursor-rules/scripts/ralph}"
 RALPH_SKILL_DIR="${RALPH_SKILL_DIR:-$HOME/src/github/pfeff/cursor-rules/skills/ralph-wiggum}"
-NODE_WORKSPACE="${1:?Usage: dispatch-container.sh <node-workspace-path> [--dry-run]}"
-DRY_RUN=false
 
-# Parse optional flags
-shift
+DEFAULT_TIMEOUT="30m"
+TIMEOUT="$DEFAULT_TIMEOUT"
+DRY_RUN=false
+NODE_WORKSPACE=""
+
+usage() {
+  cat <<EOF
+Usage: dispatch-container.sh <node-workspace-path> [--timeout <duration>] [--dry-run]
+
+Dispatch a goal-tree node to Ralph's container for L0 execution.
+
+Options:
+  --timeout <duration>  Wall-clock budget for the entire dispatch (plan + build
+                        phases combined). Accepts duration suffixes: 30m, 1h, 90s,
+                        or bare integer seconds. Default: ${DEFAULT_TIMEOUT}.
+                        If exceeded, the dispatch terminates and emits a
+                        dispatch_result with status "did_not_finish" and
+                        duration_seconds populated.
+  --dry-run             Prepare the workspace (specs, gates, prompts) without
+                        invoking the container.
+  -h, --help            Show this help and exit.
+
+Notes:
+  - Timeout applies as a single combined wall-clock budget across plan and build
+    phases. If plan alone exhausts the budget, build is skipped and the dispatch
+    emits did_not_finish.
+  - Requires GNU 'timeout' on Linux or 'gtimeout' on macOS (brew install coreutils).
+EOF
+}
+
+# Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    --timeout)
+      [[ $# -ge 2 ]] || { echo "Error: --timeout requires a value" >&2; exit 2; }
+      TIMEOUT="$2"
+      shift 2
+      ;;
+    -h|--help) usage; exit 0 ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [[ -z "$NODE_WORKSPACE" ]]; then
+        NODE_WORKSPACE="$1"
+        shift
+      else
+        echo "Error: unexpected argument: $1" >&2
+        exit 2
+      fi
+      ;;
   esac
 done
+
+if [[ -z "$NODE_WORKSPACE" ]]; then
+  echo "Error: <node-workspace-path> is required" >&2
+  usage >&2
+  exit 2
+fi
+
+# --- Timeout parsing and binary detection ---
+
+parse_duration() {
+  # Convert "30m" / "1h" / "90s" / bare integer → seconds
+  local input="$1"
+  [[ -n "$input" ]] || return 1
+  if [[ "$input" =~ ^([0-9]+)([smh]?)$ ]]; then
+    local n="${BASH_REMATCH[1]}"
+    local unit="${BASH_REMATCH[2]}"
+    case "$unit" in
+      ""|s) echo "$n" ;;
+      m)    echo "$((n * 60))" ;;
+      h)    echo "$((n * 3600))" ;;
+    esac
+    return 0
+  fi
+  return 1
+}
+
+TIMEOUT_SEC=$(parse_duration "$TIMEOUT") || {
+  echo "Error: invalid --timeout value: '$TIMEOUT' (expected format: 30s, 30m, 1h)" >&2
+  exit 2
+}
+if [[ "$TIMEOUT_SEC" -le 0 ]]; then
+  echo "Error: --timeout must be > 0 (got: '$TIMEOUT')" >&2
+  exit 2
+fi
+
+if command -v timeout &>/dev/null; then
+  TIMEOUT_BIN=timeout
+elif command -v gtimeout &>/dev/null; then
+  TIMEOUT_BIN=gtimeout
+else
+  echo "Error: neither 'timeout' (Linux) nor 'gtimeout' (macOS) is available on PATH" >&2
+  echo "  Install GNU coreutils: brew install coreutils" >&2
+  exit 2
+fi
 
 # Resolve to absolute path
 NODE_WORKSPACE="$(cd "$NODE_WORKSPACE" && pwd)"
@@ -318,10 +409,48 @@ fi
 
 echo ""
 echo "=== Starting container dispatch ==="
+echo "  Timeout: ${TIMEOUT} (${TIMEOUT_SEC}s combined wall-clock budget)"
+
+START_TS=$(date +%s)
+
+elapsed_seconds() { echo $(( $(date +%s) - START_TS )); }
+remaining_seconds() { echo $(( TIMEOUT_SEC - $(elapsed_seconds) )); }
+
+emit_did_not_finish() {
+  local reason="$1"
+  cat <<RESULT
+{
+  "status": "did_not_finish",
+  "node_id": "${NODE_ID}",
+  "files_modified": [],
+  "changes_summary": $(printf '%s' "$reason" | jq -Rs .),
+  "commits": [],
+  "acceptance_criteria_met": [],
+  "issues": $(printf '%s' "$reason" | jq -Rs .),
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
+}
+RESULT
+}
 
 # Phase 1: Plan
-echo "Phase 1: Planning..."
-if ! "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- plan; then
+PLAN_BUDGET=$(remaining_seconds)
+if [[ "$PLAN_BUDGET" -le 0 ]]; then
+  echo "Budget exhausted before plan phase started" >&2
+  emit_did_not_finish "Budget exhausted before plan phase started"
+  exit 0
+fi
+echo "Phase 1: Planning... (budget: ${PLAN_BUDGET}s)"
+PLAN_EXIT=0
+"$TIMEOUT_BIN" "${PLAN_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- plan || PLAN_EXIT=$?
+
+if [[ "$PLAN_EXIT" -eq 124 ]]; then
+  echo "Plan phase exceeded wall-clock budget" >&2
+  emit_did_not_finish "Plan phase exceeded wall-clock budget"
+  exit 0
+fi
+
+if [[ "$PLAN_EXIT" -ne 0 ]]; then
   echo "Error: Plan phase failed" >&2
 
   # Check for blockers
@@ -336,7 +465,8 @@ if ! "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- plan; then
   "commits": [],
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
-  "dispatch_method": "container"
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
 }
 RESULT
     exit 0
@@ -351,7 +481,8 @@ RESULT
   "commits": [],
   "acceptance_criteria_met": [],
   "issues": "run-container.sh plan exited with non-zero status",
-  "dispatch_method": "container"
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
 }
 RESULT
   exit 0
@@ -370,16 +501,29 @@ if [[ -f "$NODE_WORKSPACE/BLOCKERS.md" ]] && [[ -s "$NODE_WORKSPACE/BLOCKERS.md"
   "commits": [],
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
-  "dispatch_method": "container"
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
 }
 RESULT
   exit 0
 fi
 
 # Phase 2: Build
-echo "Phase 2: Building..."
+BUILD_BUDGET=$(remaining_seconds)
+if [[ "$BUILD_BUDGET" -le 0 ]]; then
+  echo "Budget exhausted by plan phase; build phase skipped" >&2
+  emit_did_not_finish "Budget exhausted by plan phase; build phase skipped"
+  exit 0
+fi
+echo "Phase 2: Building... (budget: ${BUILD_BUDGET}s)"
 BUILD_EXIT=0
-"$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- build || BUILD_EXIT=$?
+"$TIMEOUT_BIN" "${BUILD_BUDGET}s" "$RALPH_DIR/run-container.sh" "$NODE_WORKSPACE" -- build || BUILD_EXIT=$?
+
+if [[ "$BUILD_EXIT" -eq 124 ]]; then
+  echo "Build phase exceeded wall-clock budget" >&2
+  emit_did_not_finish "Build phase exceeded wall-clock budget"
+  exit 0
+fi
 
 # --- Parse result ---
 
@@ -399,7 +543,8 @@ if [[ -f "$NODE_WORKSPACE/BLOCKERS.md" ]] && [[ -s "$NODE_WORKSPACE/BLOCKERS.md"
   "commits": [],
   "acceptance_criteria_met": [],
   "issues": $(echo "$BLOCKER_TEXT" | jq -Rs .),
-  "dispatch_method": "container"
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
 }
 RESULT
   exit 0
@@ -447,6 +592,7 @@ cat <<RESULT
   "commits": ${COMMITS},
   "acceptance_criteria_met": ${CRITERIA_MET},
   "issues": "none",
-  "dispatch_method": "container"
+  "dispatch_method": "container",
+  "duration_seconds": $(elapsed_seconds)
 }
 RESULT

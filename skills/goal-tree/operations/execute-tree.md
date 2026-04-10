@@ -205,6 +205,12 @@ elif result.status == "partial":
 elif result.status == "failure":
   retry_node(node, result)
 
+elif result.status == "did_not_finish":
+  # Container exceeded the wall-clock budget. Route through the same retry
+  # path as failure, but mark the parameter change as a timeout increase so
+  # retry_dispatch can widen the budget on the next attempt.
+  retry_node(node, result)
+
 elif result.status == "blocked":
   coord node update $TREE_ID $NODE_DB_ID --status blocked
 
@@ -212,6 +218,8 @@ elif result.status == "escalated":
   # Already handled in step 3a
   pass
 ```
+
+`did_not_finish` is unique to container dispatch (`dispatch-container.sh --timeout`). It indicates the dispatch ran out of wall-clock time, not that the underlying work was wrong. The retry path treats it as a failure and may widen the timeout budget on the next attempt — see the parameter change strategies below.
 
 #### Retry Loop (`retry_node`)
 
@@ -247,11 +255,22 @@ function retry_node(node, initial_result):
 |---------|-----------------|-------------|
 | 2 | Add error context | Append prior failure reason and error output to dispatch prompt |
 | 3 | Alternative approach hint | Add instruction to use a different implementation strategy (e.g., "The previous approach failed because X. Try Y instead.") |
+| any (timeout) | Widen timeout budget | When the prior failure is `did_not_finish`, double the container `--timeout` for the next attempt instead of changing the prompt. |
 
 ```
 function retry_dispatch(node, attempts):
   n = len(attempts)
   last = attempts[-1]
+
+  # Timeout-driven retries get a wider budget rather than a prompt change.
+  if last.failure_status == "did_not_finish":
+    new_timeout = double_timeout(last.timeout)
+    result = dispatch_node(node, {
+      reason: "retry-widen-timeout",
+      prior_failures: attempts,
+      timeout: new_timeout
+    })
+    return result
 
   if n == 1:
     result = dispatch_node(node, {
@@ -277,7 +296,9 @@ Each failed attempt emits a structured telemetry record that N+1 can consume:
 failure_telemetry_record:
   node_id: <node ID>
   attempt_number: <1-based>
+  failure_status: "failure" | "did_not_finish"
   failure_reason: <error description>
+  duration_seconds: <wall-clock seconds, when reported by dispatch>
   parameter_change_applied: <description of what changed>
   outcome: "retry" | "escalated"
   timestamp: <ISO 8601>

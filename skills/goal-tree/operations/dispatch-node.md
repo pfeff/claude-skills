@@ -19,7 +19,7 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 
 ```
 dispatch_result:
-  status: "success" | "partial" | "failure" | "blocked" | "escalated"
+  status: "success" | "partial" | "failure" | "blocked" | "escalated" | "did_not_finish"
   node_id: "<node ID>"
   files_modified: [list of paths]
   changes_summary: "<description>"
@@ -27,7 +27,10 @@ dispatch_result:
   acceptance_criteria_met: [list of met criteria]
   issues: "<problems encountered>" | "none"
   dispatch_method: "subagent" | "sub-session" | "container" | "inline" | "escalated"
+  duration_seconds: <integer wall-clock seconds>  # container dispatch only
 ```
+
+The `did_not_finish` status is emitted exclusively by container dispatch when the wall-clock timeout is exceeded (see Container Dispatch below). Subagent, sub-session, and inline strategies do not produce it. The `duration_seconds` field is populated by container dispatch on every emission branch.
 
 ## Node Workspace Setup
 
@@ -274,8 +277,9 @@ dispatch_result:
 | `partial` | Some tasks completed — return to caller for retry decision |
 | `blocked` | Ralph wrote BLOCKERS.md — return `status: blocked` with blocker text |
 | `failure` | Max iterations or error — return `status: failure` for caller retry loop |
+| `did_not_finish` | Container exceeded the wall-clock budget (`--timeout`) — return for caller retry. The retry path may increase the timeout as a parameter change. |
 
-On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline.
+On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline. `did_not_finish` is unique to container dispatch — `dispatch-container.sh` configures the timeout via its `--timeout` flag (default 30m, applied as a single combined wall-clock budget across plan and build phases).
 
 #### 4. Dry Run
 
