@@ -229,10 +229,13 @@ When a node fails, retry with parameter changes before escalating. This implemen
 function retry_node(node, initial_result):
   attempts = failure_telemetry.get(node.id, [])
 
-  # Record this failure as attempt
+  # Record this failure as attempt. failure_status and duration_seconds are
+  # required by retry_dispatch's timeout-widen branch — see below.
   attempt = {
     attempt_number: len(attempts) + 1,
+    failure_status: initial_result.status,            # "failure" | "did_not_finish"
     failure_reason: initial_result.issues,
+    duration_seconds: initial_result.duration_seconds, # populated by container dispatch
     dispatch_method: initial_result.dispatch_method,
     parameter_change: "initial dispatch"
   }
@@ -263,12 +266,15 @@ function retry_dispatch(node, attempts):
   last = attempts[-1]
 
   # Timeout-driven retries get a wider budget rather than a prompt change.
+  # The killed dispatch ran for `duration_seconds` (≈ the budget that was
+  # applied) before the timeout fired. Doubling that is a clean signal to the
+  # next attempt without needing to track the prior --timeout flag separately.
   if last.failure_status == "did_not_finish":
-    new_timeout = double_timeout(last.timeout)
+    new_timeout_seconds = last.duration_seconds * 2
     result = dispatch_node(node, {
       reason: "retry-widen-timeout",
       prior_failures: attempts,
-      timeout: new_timeout
+      timeout: "${new_timeout_seconds}s"
     })
     return result
 

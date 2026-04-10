@@ -12,8 +12,9 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
-| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_reason, parameter_change_applied. |
+| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, duration_seconds, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to dispatch prompt on retry (error details, approach hints). |
+| `timeout` | No | Wall-clock budget for container dispatch (e.g. `30m`, `45m`, `3600s`). Sourced from `decision.context.timeout` on initial dispatch and from `retry_dispatch`'s widen-timeout branch on retries. Container strategy only — passed to `dispatch-container.sh` as `--timeout`. Defaults to `dispatch-container.sh`'s `DEFAULT_TIMEOUT` (30m) when omitted. |
 
 ## Output
 
@@ -242,8 +243,11 @@ For leaf tasks where repos have Taskfile and Docker is available. Runs inside Ra
 #### 1. Invoke Wrapper Script
 
 ```bash
-skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}"
+skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}" \
+  --timeout "${TIMEOUT:-${DECISION.CONTEXT.TIMEOUT:-30m}}"
 ```
+
+Resolve the `--timeout` value in this order: explicit `timeout` input to `dispatch-node` (set by `retry_dispatch`'s widen-timeout branch), then `decision.context.timeout` (set by `dispatch-decision` per-node), then the script default (`30m`).
 
 The wrapper script handles the full lifecycle:
 1. Translates `DESIGN.md` → `specs/task.md` (L1→L0 spec format)
