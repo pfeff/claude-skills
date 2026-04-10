@@ -113,12 +113,15 @@ Choose container when:
 
 Container is preferred over subagent when available because it eliminates permission prompts entirely. Fall back to subagent when Docker is unavailable or repos lack Taskfile.
 
+**Container timeout**: Container dispatch is bounded by a wall-clock timeout configured via `dispatch-container.sh --timeout <duration>` (default `30m`, applied as a single combined budget across the plan and build phases). Per-dispatch override is the primary tuning surface for the retry-with-parameter-change loop in `execute-tree.md` — when a prior attempt returned `did_not_finish`, the retry path widens the timeout instead of changing the prompt.
+
 **Context provided**:
 ```
 context:
   repos: [list of repos]
   node_workspace: "<path to node workspace>"
   taskfile_targets: { repo: [available targets] }
+  timeout: "<duration>"  # optional, defaults to dispatch-container.sh DEFAULT_TIMEOUT (30m)
 ```
 
 ### Sub-Session

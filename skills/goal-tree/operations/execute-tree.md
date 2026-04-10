@@ -202,7 +202,11 @@ elif result.status == "partial":
     --result "<changes summary> (partial)"
   # Decide: retry remaining criteria or accept partial
 
-elif result.status == "failure":
+elif result.status in ("failure", "did_not_finish"):
+  # did_not_finish (container exceeded wall-clock budget) routes through the
+  # same retry path as failure. retry_dispatch inspects the failure_status
+  # captured on the attempt and selects the widen-timeout parameter change
+  # for did_not_finish, or the prompt-change strategies for failure.
   retry_node(node, result)
 
 elif result.status == "blocked":
@@ -213,6 +217,8 @@ elif result.status == "escalated":
   pass
 ```
 
+`did_not_finish` is unique to container dispatch (`dispatch-container.sh --timeout`). It indicates the dispatch ran out of wall-clock time, not that the underlying work was wrong. The retry path treats it as a failure and may widen the timeout budget on the next attempt — see the parameter change strategies below.
+
 #### Retry Loop (`retry_node`)
 
 When a node fails, retry with parameter changes before escalating. This implements the design principle: "Failure is normal — rejection → parameter change + re-dispatch, not stop-and-ask."
@@ -221,10 +227,13 @@ When a node fails, retry with parameter changes before escalating. This implemen
 function retry_node(node, initial_result):
   attempts = failure_telemetry.get(node.id, [])
 
-  # Record this failure as attempt
+  # Record this failure as attempt. failure_status and duration_seconds are
+  # required by retry_dispatch's timeout-widen branch — see below.
   attempt = {
     attempt_number: len(attempts) + 1,
+    failure_status: initial_result.status,            # "failure" | "did_not_finish"
     failure_reason: initial_result.issues,
+    duration_seconds: initial_result.duration_seconds, # populated by container dispatch
     dispatch_method: initial_result.dispatch_method,
     parameter_change: "initial dispatch"
   }
@@ -247,11 +256,25 @@ function retry_node(node, initial_result):
 |---------|-----------------|-------------|
 | 2 | Add error context | Append prior failure reason and error output to dispatch prompt |
 | 3 | Alternative approach hint | Add instruction to use a different implementation strategy (e.g., "The previous approach failed because X. Try Y instead.") |
+| any (timeout) | Widen timeout budget | When the prior failure is `did_not_finish`, double the container `--timeout` for the next attempt instead of changing the prompt. |
 
 ```
 function retry_dispatch(node, attempts):
   n = len(attempts)
   last = attempts[-1]
+
+  # Timeout-driven retries get a wider budget rather than a prompt change.
+  # The killed dispatch ran for `duration_seconds` (≈ the budget that was
+  # applied) before the timeout fired. Doubling that is a clean signal to the
+  # next attempt without needing to track the prior --timeout flag separately.
+  if last.failure_status == "did_not_finish":
+    new_timeout_seconds = last.duration_seconds * 2
+    result = dispatch_node(node, {
+      reason: "retry-widen-timeout",
+      prior_failures: attempts,
+      timeout: "${new_timeout_seconds}s"
+    })
+    return result
 
   if n == 1:
     result = dispatch_node(node, {
@@ -277,7 +300,9 @@ Each failed attempt emits a structured telemetry record that N+1 can consume:
 failure_telemetry_record:
   node_id: <node ID>
   attempt_number: <1-based>
+  failure_status: "failure" | "did_not_finish"
   failure_reason: <error description>
+  duration_seconds: <wall-clock seconds, when reported by dispatch>
   parameter_change_applied: <description of what changed>
   outcome: "retry" | "escalated"
   timestamp: <ISO 8601>

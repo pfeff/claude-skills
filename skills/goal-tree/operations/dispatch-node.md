@@ -12,14 +12,15 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
-| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_reason, parameter_change_applied. |
+| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, duration_seconds, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to dispatch prompt on retry (error details, approach hints). |
+| `timeout` | No | Wall-clock budget for container dispatch (e.g. `30m`, `45m`, `3600s`). Sourced from `decision.context.timeout` on initial dispatch and from `retry_dispatch`'s widen-timeout branch on retries. Container strategy only — passed to `dispatch-container.sh` as `--timeout`. Defaults to `dispatch-container.sh`'s `DEFAULT_TIMEOUT` (30m) when omitted. |
 
 ## Output
 
 ```
 dispatch_result:
-  status: "success" | "partial" | "failure" | "blocked" | "escalated"
+  status: "success" | "partial" | "failure" | "blocked" | "escalated" | "did_not_finish"
   node_id: "<node ID>"
   files_modified: [list of paths]
   changes_summary: "<description>"
@@ -27,7 +28,10 @@ dispatch_result:
   acceptance_criteria_met: [list of met criteria]
   issues: "<problems encountered>" | "none"
   dispatch_method: "subagent" | "sub-session" | "container" | "inline" | "escalated"
+  duration_seconds: <integer wall-clock seconds>  # container dispatch only; field is omitted (not null) for other strategies
 ```
+
+The `did_not_finish` status is emitted exclusively by container dispatch when the wall-clock timeout is exceeded (see Container Dispatch below). Subagent, sub-session, and inline strategies do not produce it. The `duration_seconds` field is populated by container dispatch on every emission branch and is **omitted entirely** from `dispatch_result` for non-container strategies — consumers should treat the absence of the key as "duration not measured", not as zero.
 
 ## Node Workspace Setup
 
@@ -239,8 +243,11 @@ For leaf tasks where repos have Taskfile and Docker is available. Runs inside Ra
 #### 1. Invoke Wrapper Script
 
 ```bash
-skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}"
+skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}" \
+  --timeout "${TIMEOUT:-${DECISION.CONTEXT.TIMEOUT:-30m}}"
 ```
+
+Resolve the `--timeout` value in this order: explicit `timeout` input to `dispatch-node` (set by `retry_dispatch`'s widen-timeout branch), then `decision.context.timeout` (set by `dispatch-decision` per-node), then the script default (`30m`).
 
 The wrapper script handles the full lifecycle:
 1. Translates `DESIGN.md` → `specs/task.md` (L1→L0 spec format)
@@ -274,8 +281,9 @@ dispatch_result:
 | `partial` | Some tasks completed — return to caller for retry decision |
 | `blocked` | Ralph wrote BLOCKERS.md — return `status: blocked` with blocker text |
 | `failure` | Max iterations or error — return `status: failure` for caller retry loop |
+| `did_not_finish` | Container exceeded the wall-clock budget (`--timeout`) — return for caller retry. The retry path may increase the timeout as a parameter change. |
 
-On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline.
+On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline. `did_not_finish` is unique to container dispatch — `dispatch-container.sh` configures the timeout via its `--timeout` flag (default 30m, applied as a single combined wall-clock budget across plan and build phases).
 
 #### 4. Dry Run
 
