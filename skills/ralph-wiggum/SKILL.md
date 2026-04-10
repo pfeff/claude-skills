@@ -6,7 +6,7 @@ allowed-tools:
   - Write
   - Glob
   - AskUserQuestion
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Ralph Wiggum Project Scaffolding
@@ -91,3 +91,4 @@ Load only what you need:
 - `operations/scaffold-project.md` - File creation from templates (supports both modes)
 - `references/environment.md` - Pre-flight checks and prerequisites
 - `templates/` - File generation templates (gates, services, specs, prompts, workspace)
+- `scripts/` - Host-side runtime: `run-container.sh`, `loop.sh`, `lib.sh`, `setup-network.sh`, devcontainer config

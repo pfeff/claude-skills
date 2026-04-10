@@ -1,34 +1,35 @@
 ---
-target: PR #1
-timestamp: 2026-03-25T06:00:00Z
+target: PR #30 (pfeff/claude-skills)
+timestamp: 2026-04-10T17:15:00Z
 agents: 4
 blocking: 0
-advisory: 9
+advisory: 5
 verdict: CLEAN
 ---
 
 ## Review Summary
 
-**Target**: PR #1 (mission/T.1 → main)
+**Target**: PR #30 — feat(ralph-wiggum): install task in container, generalize feature merge
 **Agents**: 4 (security, simplicity, architecture, correctness)
 **Verdict**: CLEAN — advisory findings only
 
 ### Advisory
 
-- **skills/compound/operations/document-solution.md:23** — [architecture] _coupling_ (warning) — Glob fallback for SCHEMA.md reaches outside plugin boundary into workspace repos. Should read bundled `${CLAUDE_PLUGIN_ROOT}/skills/compound/references/SCHEMA.md` directly instead of falling back to `Glob(pattern: "**/docs/solutions/SCHEMA.md")`.
+- **skills/ralph-wiggum/scripts/.devcontainer/devcontainer.json:6** — [security] _supply chain_ (warning) — New third-party devcontainer feature `ghcr.io/eitsupi/devcontainer-features/go-task:1` is pulled from a personal GHCR namespace (not the official `devcontainers/` org) and uses an unpinned floating tag (`:1`). A compromised or hijacked upstream would execute arbitrary code during container build. Worth pinning to an immutable digest or documenting the trust decision. Note: existing `node:1` and `github-cli:1` features are also unpinned, but those are from the more trusted `devcontainers/` namespace.
+- **skills/ralph-wiggum/scripts/run-container.sh:163** — [security] _override surface_ (warning) — The generalized merge `(($ralph[0].features // {}) * (.features // {}))` expands the project-config override surface to all current and future ralph features (project values win on key collision). Not a regression — the prior `//=` form also let project values fully replace ralph defaults — but the additive merge means any future ralph feature is automatically overridable. Consider whether security-critical features should be locked.
+- **skills/ralph-wiggum/scripts/run-container.sh:163** — [correctness] _merge edge case_ (info) — jq's `*` is a recursive merge. If a project sets a feature key to a non-object (e.g., `null` or `false` to disable), the merge raises a jq type error (`object and null cannot be multiplied`). Not a regression and unlikely in practice, but worth noting if anyone tries to "disable" a ralph feature this way.
+- **skills/ralph-wiggum/scripts/run-container.sh:163** — [security] _nested options_ (info) — Because `*` is recursive, project-supplied nested feature options will deep-merge into ralph's, which could silently enable options ralph did not intend (e.g., `installTools`, `version` overrides). Worth an explicit test case if security-relevant options are ever added.
+- **skills/ralph-wiggum/scripts/run-container.sh:161** — [simplicity] _generalization_ (info) — The refactor from hardcoded `//=` lines to the merge expression is a net win: scales to N features without edits, removes coupling between this script and the specific feature list. Smaller diff long-term than adding a third `//=` line. No action needed.
 
-- **skills/testing-without-mocks/SKILL.md, skills/ci-feedback-loop/SKILL.md** — [architecture] _pattern adherence_ (warning) — These two skills reference operations/references via relative markdown links, while compound and diataxis use explicit `Read(file_path: "${CLAUDE_PLUGIN_ROOT}/...")` calls. Inconsistent loading pattern across skills.
+### Correctness check (DESIGN.md acceptance criteria)
 
-- **README.md:29** — [correctness] _attribution_ (warning) — The `gstack` repo URL should be verified — `github.com/garrytan/gstack` may be a dead link. Confirm the correct URL for Garry Tan's gstack repo.
+- ✓ Criterion 1 (`task --version` succeeds): satisfied — `eitsupi/go-task` is Debian/Ubuntu-compatible and installs to `/usr/local/bin/task`.
+- ✓ Criterion 2 (`task lint` / `task test` work): satisfied — binary on PATH for all users including `vscode` remoteUser.
+- ✓ Criterion 3 (no manual step): satisfied — declarative feature in devcontainer.json.
+- ✓ Criterion 4 (works on rebuild): satisfied — features re-apply on every `devcontainer up` from clean. Verified end-to-end with `--build-no-cache`.
 
-- **skills/testing-without-mocks/TOKEN-OPTIMIZATION.md** — [simplicity] _dead code / YAGNI_ (warning) — Internal meta-doc about a refactoring decision. Never referenced from SKILL.md. Contains a fabricated install section (`unzip testing-without-mocks.skill`) that doesn't match actual installation. Remove it.
+### Architecture
 
-- **skills/testing-without-mocks/CHANGELOG.md** — [simplicity] _YAGNI_ (warning) — Single-entry changelog ("Initial version tracking") adds no value beyond git history. Remove until meaningful.
-
-- **skills/testing-without-mocks/README-testing-without-mocks.md** — [simplicity] _redundancy_ (warning) — Duplicates SKILL.md content. Shadow documentation that will drift. Remove or replace with pointer to SKILL.md.
-
-- **skills/diataxis/SKILL.md:138-157** — [simplicity] _redundancy_ (warning) — Auto-Loading body section repeats trigger phrases already declared in `auto-load-triggers` frontmatter. Remove body section, keep frontmatter.
-
-- **skills/compound/operations/document-solution.md (Step 1)** — [simplicity] _unnecessary indirection_ (info) — Two-step schema loading (read template, then glob for SCHEMA.md) is unconditional in practice. Simplify to direct read of bundled schema.
-
-- **skills/diataxis/operations/audit.md (Step 8)** — [simplicity] _YAGNI_ (info) — Export audit report with three format options is never referenced from SKILL.md. Remove.
+- ✓ `$CLAUDE_PLUGIN_ROOT` convention in README matches established usage in `skills/goal-tree/operations/*.md` and `skills/goal-tree/scripts/*.sh`.
+- ✓ Progressive disclosure entry for `scripts/` mirrors how `templates/` is listed in SKILL.md.
+- ✓ Version bump aligned across SKILL.md frontmatter and CHANGELOG.

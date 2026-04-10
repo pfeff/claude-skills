@@ -156,11 +156,38 @@ generate_merged_config() {
 
   if [[ -f "$project_config" ]]; then
     echo "  Config: merging project + ralph requirements"
+
+    # Warn if the project's devcontainer.json overrides any ralph feature key.
+    # The merge below keeps project values winning (so legitimate options like
+    # `node.version` still work), but security-relevant features could be
+    # silently swapped out — surface that here so operators see it.
+    OVERRIDDEN_FEATURES=$(jq -r --slurpfile ralph "$ralph_config" '
+      ((.features // {}) | keys) as $project
+      | (($ralph[0].features // {}) | keys) as $ralph_keys
+      | ($project - ($project - $ralph_keys))
+      | .[]
+    ' "$project_config" 2>/dev/null || true)
+    if [[ -n "$OVERRIDDEN_FEATURES" ]]; then
+      echo "  Warning: project devcontainer.json overrides ralph feature(s):" >&2
+      while IFS= read -r feat; do
+        echo "    - $feat" >&2
+      done <<< "$OVERRIDDEN_FEATURES"
+      echo "  Project values win on key collision. Verify this is intentional." >&2
+    fi
+
     # Merge project config with Ralph's requirements
     jq --slurpfile ralph "$ralph_config" '
-      # Ensure node feature exists for Claude Code, and GitHub CLI for PR creation
-      .features["ghcr.io/devcontainers/features/node:1"] //= {} |
-      .features["ghcr.io/devcontainers/features/github-cli:1"] //= {} |
+      # Inject all of Ralph's required features (node, github-cli, go-task, ...)
+      # Project values win on key collision; otherwise the ralph default is used.
+      # If a project sets a feature key to a non-object (e.g., null to "disable"),
+      # coerce it to {} so jq's recursive merge does not error.
+      .features = (
+        ($ralph[0].features // {}) * (
+          (.features // {}) | with_entries(
+            if (.value | type) == "object" then . else .value = {} end
+          )
+        )
+      ) |
 
       # Append Claude Code install and SSH setup to postCreateCommand
       .postCreateCommand = (
