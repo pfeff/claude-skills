@@ -307,7 +307,7 @@ REAL_PATH=$(realpath ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md)
 
 See `skills/git/operations/commit.md` for the full symlink resolution pattern.
 
-**Submodule Management**: Repositories with submodules (like dotfiles with cursor-rules) require sync before work:
+**Submodule Management**: Repositories with submodules (historically, dotfiles included a cursor-rules submodule) require sync before work:
 ```bash
 git -C <submodule> checkout main && git -C <submodule> pull origin main
 ```
@@ -360,7 +360,7 @@ The skill requires these bash commands for workspace management:
 
 ## Commands
 
-Commands that invoke this skill live in `~/.claude/commands/` (symlinked from `dotfiles/claude/commands/` or `cursor-rules/commands/`).
+Commands that invoke this skill live in `~/.claude/commands/` (symlinked from `dotfiles/claude/commands/`; previously also from `cursor-rules/commands/`).
 
 | Command | Operation |
 |---------|-----------|
