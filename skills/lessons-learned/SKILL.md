@@ -30,7 +30,7 @@ Interactive retrospective that surfaces problems from the current session, discu
 
 **Output**: Obsidian note capturing discussed problems, agreed root causes, and confirmed recommendations. Optionally also creates solution docs via `/claude-skills:compound` for problems with concrete, reusable fixes.
 
-**Implementation Path**: Skill/command improvements are submitted via PR to [`pfeff/cursor-rules`](https://github.com/pfeff/cursor-rules). Files in `${CLAUDE_PLUGIN_ROOT}/skills/` are symlinked from this repo.
+**Implementation Path**: Skill/command improvements are submitted via PR to the `claude-skills` repo. (Skills were previously symlinked from `pfeff/cursor-rules`, which is now deprecated.)
 
 **Target Duration**: ~15 minutes
 
@@ -147,8 +147,8 @@ The Five Whys is the core analytical technique for this skill. Apply it conversa
 - **Effort**: Quick (<30m) / Medium (30-120m) / Complex (>2h)
 - **Impact**: High / Medium / Low
 - **Category**: Workflow / Commands / Utilities / Skills / Documentation / Permission Whitelist / User Practices
-- **Target**: File path in `pfeff/cursor-rules` repo (symlinked to `~/.claude/`)
-- **Implementation**: Via PR to [`pfeff/cursor-rules`](https://github.com/pfeff/cursor-rules)
+- **Target**: File path in `claude-skills` repo
+- **Implementation**: Via PR to `claude-skills`
 
 ## Progressive Disclosure
 
