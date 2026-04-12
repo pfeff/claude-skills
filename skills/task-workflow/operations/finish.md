@@ -232,8 +232,11 @@ Check the background subagent dispatched in step 4b. If the dispatch completed s
 | criteria_passed | `.metrics/evaluation.json` — number of acceptance criteria passed (optional) |
 | criteria_total | `.metrics/evaluation.json` — total acceptance criteria evaluated (optional) |
 | acceptance_rate | `.metrics/evaluation.json` — `criteria_passed / criteria_total` (optional) |
+| rules_passed | `.metrics/evaluation.json` — number of standing rules passed (optional) |
+| rules_total | `.metrics/evaluation.json` — total standing rules evaluated (optional) |
+| rules_pass_rate | `.metrics/evaluation.json` — `rules_passed / rules_total` (optional) |
 
-**Evaluation metrics**: Check for `.metrics/evaluation.json` in the workspace root. This file is written by execute-tree step 4a (Scalar Metrics) when the task was dispatched via goal-tree. If the file exists, include `criteria_passed`, `criteria_total`, and `acceptance_rate` in the finish record. If absent (e.g., standalone task-workflow without goal-tree), omit these fields.
+**Evaluation metrics**: Check for `.metrics/evaluation.json` in the workspace root. This file is written by execute-tree step 4a (Scalar Metrics) when the task was dispatched via goal-tree. If the file exists, include `criteria_passed`, `criteria_total`, and `acceptance_rate` in the finish record. If the file also contains a non-empty `standing_rules` array, include `rules_passed`, `rules_total`, and `rules_pass_rate`. If absent (e.g., standalone task-workflow without goal-tree), omit these fields.
 
 ```bash
 EVAL_METRICS="${WORKSPACE_ROOT}/.metrics/evaluation.json"
@@ -241,6 +244,13 @@ if [[ -f "$EVAL_METRICS" ]]; then
   CRITERIA_PASSED=$(jq -r '.criteria_passed' "$EVAL_METRICS")
   CRITERIA_TOTAL=$(jq -r '.criteria_total' "$EVAL_METRICS")
   ACCEPTANCE_RATE=$(jq -r '.acceptance_rate' "$EVAL_METRICS")
+
+  # Standing rules aggregate metrics
+  RULES_TOTAL=$(jq -r '.standing_rules | length' "$EVAL_METRICS")
+  if [[ "$RULES_TOTAL" -gt 0 ]]; then
+    RULES_PASSED=$(jq -r '[.standing_rules[] | select(.status == "pass")] | length' "$EVAL_METRICS")
+    RULES_PASS_RATE=$(jq -r "($RULES_PASSED / $RULES_TOTAL)" <<< '{}')
+  fi
 fi
 ```
 
@@ -249,23 +259,33 @@ fi
 **Format** (one JSON object per line):
 
 ```json
-{"task_id":57,"epic":"guardian","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/pfeff/guardian/pull/12","criteria_passed":3,"criteria_total":3,"acceptance_rate":1.0}
+{"task_id":57,"epic":"guardian","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/pfeff/guardian/pull/12","criteria_passed":3,"criteria_total":3,"acceptance_rate":1.0,"rules_passed":1,"rules_total":1,"rules_pass_rate":1.0}
 ```
 
-The `criteria_passed`, `criteria_total`, and `acceptance_rate` fields are optional — omitted when no evaluation data exists.
+The `criteria_*` and `rules_*` fields are optional — omitted when no evaluation data exists or when no standing rules are defined.
 
 ```bash
 mkdir -p ~/src/work/.metrics && chmod 700 ~/src/work/.metrics
 
 EVAL_METRICS="${WORKSPACE_ROOT}/.metrics/evaluation.json"
 EVAL_ARGS=""
+EVAL_FIELDS=""
 if [[ -f "$EVAL_METRICS" ]]; then
   EVAL_ARGS="--argjson criteria_passed $(jq -r '.criteria_passed' "$EVAL_METRICS") \
     --argjson criteria_total $(jq -r '.criteria_total' "$EVAL_METRICS") \
     --argjson acceptance_rate $(jq -r '.acceptance_rate' "$EVAL_METRICS")"
   EVAL_FIELDS=', $criteria_passed, $criteria_total, $acceptance_rate'
-else
-  EVAL_FIELDS=""
+
+  # Include standing rule aggregates if rules were evaluated
+  RULES_TOTAL=$(jq -r '.standing_rules | length' "$EVAL_METRICS")
+  if [[ "$RULES_TOTAL" -gt 0 ]]; then
+    RULES_PASSED=$(jq -r '[.standing_rules[] | select(.status == "pass")] | length' "$EVAL_METRICS")
+    EVAL_ARGS="$EVAL_ARGS \
+      --argjson rules_passed $RULES_PASSED \
+      --argjson rules_total $RULES_TOTAL \
+      --argjson rules_pass_rate $(echo "$RULES_PASSED / $RULES_TOTAL" | bc -l)"
+    EVAL_FIELDS="$EVAL_FIELDS, \$rules_passed, \$rules_total, \$rules_pass_rate"
+  fi
 fi
 
 jq -n \

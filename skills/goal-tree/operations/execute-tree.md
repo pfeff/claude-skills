@@ -349,17 +349,80 @@ function escalate_with_failure_log(node, attempts):
 
 Evaluate each node in `pending_evaluation` against its acceptance criteria before committing or advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
 
+#### Standing Rules
+
+Standing rules are architectural constraints defined in the project CLAUDE.md (`## Standing Rules` section) that apply to every PR in the project. They are evaluated alongside per-task acceptance criteria — same evaluator, same failure path.
+
+##### Rule Format
+
+Each rule is a bullet in the `## Standing Rules` section of the project CLAUDE.md. Format is freeform prose with an optional `**Detector**:` line:
+
+```markdown
+## Standing Rules
+
+- **Rule name.** Rule description in prose.
+  **Detector**: grep pattern or file-path glob that triggers this rule (optional)
+
+- **Another rule.** Description only — no detector, LLM-only evaluation.
+```
+
+When a `**Detector**:` hint is present, the evaluator runs a grep/glob pre-filter against the diff before invoking the LLM judge. If the pre-filter finds no matches, the rule auto-passes (cheap short-circuit). If it finds matches, the LLM judge evaluates the flagged changes. Rules without a detector always go to the LLM judge.
+
+##### Parsing
+
+At evaluation time, read the project CLAUDE.md and extract the `## Standing Rules` section:
+
+```
+PROJECT_CLAUDE_MD = "${PROJECT_DIR}/CLAUDE.md"
+standing_rules = parse_standing_rules(PROJECT_CLAUDE_MD)
+```
+
+Each parsed rule is a struct:
+
+```
+standing_rule:
+  name: <bold text before the first period>
+  description: <full prose text of the rule>
+  detector: <optional detector hint string, or null>
+```
+
+If the `## Standing Rules` section is missing or empty, `standing_rules = []` — evaluation proceeds with per-task criteria only.
+
 #### Evaluation Protocol
 
 For each node in `pending_evaluation`:
 
 1. **Gather evaluation inputs**:
    - Node's acceptance criteria (from the spec/DESIGN.md in the node workspace)
+   - Standing rules (from `## Standing Rules` in project CLAUDE.md — see above)
    - Node's output: diff (`git diff` in node workspace), artifacts produced
    - Node's changes summary from the dispatch result
    - Subagent's self-reported `acceptance_criteria_met` list (advisory input — the LLM-as-judge verdict is authoritative)
 
-2. **LLM-as-judge evaluation**: Assess each acceptance criterion independently:
+1b. **Standing rules pre-filter**: For each standing rule with a `**Detector**:` hint, run the detector against the diff:
+
+```
+for rule in standing_rules:
+  if rule.detector:
+    matches = grep_diff(diff, rule.detector)
+    if not matches:
+      rule.pre_filter_result = "auto_pass"  # no relevant changes
+    else:
+      rule.pre_filter_result = "flagged"    # LLM judge evaluates
+      rule.flagged_lines = matches
+  else:
+    rule.pre_filter_result = "no_detector"  # always goes to LLM judge
+```
+
+Example detector for the cursor-rules deprecation rule:
+
+```
+**Detector**: cursor-rules/
+```
+
+This flags any diff lines adding files under `cursor-rules/` or adding new path/identifier references to cursor-rules. Removals from cursor-rules pass (migration direction).
+
+2. **LLM-as-judge evaluation**: Assess each acceptance criterion and standing rule independently:
 
 ```
 ## Evaluation: ${NODE_ID}. ${NODE_TITLE}
@@ -374,10 +437,28 @@ For each acceptance criterion, determine pass/fail based on the actual changes p
 | 2 | <criterion text> | PASS/FAIL | <reasoning> |
 | ... | ... | ... | ... |
 
+### Standing Rules Assessment
+
+Evaluate each standing rule against the diff. Rules are project-wide architectural constraints — they apply regardless of the task's acceptance criteria.
+
+| # | Rule | Verdict | Reasoning |
+|---|------|---------|-----------|
+| 1 | <rule name> | PASS/FAIL | <1-2 sentence justification> |
+| ... | ... | ... | ... |
+
+For rules with pre-filter results:
+- **auto_pass**: The detector found no relevant changes in the diff. Record as PASS without further analysis.
+- **flagged**: The detector found potentially relevant changes. Evaluate the flagged lines to determine if they violate the rule.
+- **no_detector**: No pre-filter available. Evaluate the full diff against the rule.
+
+Key distinction: additions that violate a rule are failures; removals or migrations away from a deprecated pattern are passes.
+
 ### Summary
 
-- **Pass**: <N>/<total>
-- **Fail**: <N>/<total>
+- **Criteria Pass**: <N>/<total>
+- **Criteria Fail**: <N>/<total>
+- **Rules Pass**: <N>/<total>
+- **Rules Fail**: <N>/<total>
 - **Overall**: ACCEPT / REJECT
 ```
 
@@ -385,9 +466,10 @@ For each acceptance criterion, determine pass/fail based on the actual changes p
 
 | Overall | Action |
 |---------|--------|
-| All criteria pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4c |
+| All criteria AND rules pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4c |
 | Any criteria fail, retries remaining | **REJECT** — re-dispatch with feedback (see below) |
-| Any criteria fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
+| Any standing rule fails, retries remaining | **REJECT** — re-dispatch with standing rule feedback (same retry path) |
+| Any criteria or rule fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
 
 #### Accept Path
 
@@ -420,7 +502,18 @@ ${FOR_EACH_FAILED_CRITERION}
   **Reasoning**: ${REASONING}
 ${END_FOR}
 
-Please address the failed criteria. The passing criteria should not regress.
+${IF_STANDING_RULES_FAILED}
+The following standing rules were violated:
+
+${FOR_EACH_FAILED_RULE}
+- **Rule**: ${RULE_NAME}
+  **Description**: ${RULE_DESCRIPTION}
+  **Verdict**: FAIL
+  **Reasoning**: ${REASONING}
+${END_FOR}
+${END_IF}
+
+Please address the failed criteria and rule violations. The passing items should not regress.
 ```
 
 2. **Re-dispatch** with the augmented prompt (same strategy as original dispatch)
@@ -444,7 +537,7 @@ Log the evaluation result for each assessed node. Telemetry is persisted via the
 
 ```bash
 coord node add-result $TREE_ID $NODE_DB_ID \
-  --summary "Evaluation: ${VERDICT}. ${PASS_COUNT}/${TOTAL} criteria passed. ${REASONING_SUMMARY}"
+  --summary "Evaluation: ${VERDICT}. ${CRITERIA_PASS_COUNT}/${CRITERIA_TOTAL} criteria passed. ${RULES_PASS_COUNT}/${RULES_TOTAL} standing rules passed. ${REASONING_SUMMARY}"
 ```
 
 #### Scalar Metrics (L0)
@@ -454,12 +547,23 @@ After evaluation, write structured scalar metrics to the node workspace so downs
 ```bash
 NODE_METRICS_DIR="${NODE_WORKSPACE}/.metrics"
 mkdir -p "$NODE_METRICS_DIR"
+
+# Build standing_rules JSON array
+STANDING_RULES_JSON="[]"
+if [[ ${#STANDING_RULES_RESULTS[@]} -gt 0 ]]; then
+  STANDING_RULES_JSON=$(for rule in "${STANDING_RULES_RESULTS[@]}"; do
+    jq -n --arg name "$rule_name" --arg status "$rule_status" --arg reasoning "$rule_reasoning" \
+      -c '{$name, $status, $reasoning}'
+  done | jq -s '.')
+fi
+
 jq -n \
-  --argjson criteria_passed ${PASS_COUNT} \
-  --argjson criteria_total ${TOTAL} \
+  --argjson criteria_passed ${CRITERIA_PASS_COUNT} \
+  --argjson criteria_total ${CRITERIA_TOTAL} \
   --arg verdict "${VERDICT}" \
   --arg evaluated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
-  -c '{$criteria_passed, $criteria_total, acceptance_rate: ($criteria_passed / $criteria_total), $verdict, $evaluated_at}' \
+  --argjson standing_rules "$STANDING_RULES_JSON" \
+  -c '{$criteria_passed, $criteria_total, acceptance_rate: ($criteria_passed / $criteria_total), $verdict, $evaluated_at, $standing_rules}' \
   > "${NODE_METRICS_DIR}/evaluation.json"
 ```
 
@@ -472,6 +576,15 @@ The `evaluation.json` file contains:
 | `acceptance_rate` | float | `criteria_passed / criteria_total` (0.0–1.0) |
 | `verdict` | string | `ACCEPT`, `REJECT`, or `FAIL` |
 | `evaluated_at` | string | ISO 8601 timestamp of evaluation |
+| `standing_rules` | array | Per-rule outcomes: `[{name, status, reasoning}]`. `status` is `"pass"` or `"fail"`. Empty array when no standing rules are defined. |
+
+Each entry in `standing_rules`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Rule name (bold text before the first period in the rule bullet) |
+| `status` | string | `"pass"` or `"fail"` |
+| `reasoning` | string | 1-2 sentence justification for the verdict |
 
 This file is read by the task-workflow finish operation (step 7) when writing finish.jsonl.
 
