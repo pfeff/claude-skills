@@ -95,7 +95,7 @@ After discussing all selected problems, synthesize recommendations:
 Based on our discussion, here's what I'd recommend:
 
 1. [Recommendation] — addresses [problem]
-   Target: [file in cursor-rules repo]
+   Target: [file path in claude-skills repo]
    Effort: Quick/Medium/Complex
 
 2. [Recommendation] — addresses [problem]
@@ -145,21 +145,21 @@ Does this capture it? Anything to add or change?
 | Permission Whitelist | Tool/command approval patterns to auto-approve | `.claude/settings.json` or `~/.claude/settings.json` |
 | User Practices | Behavioral changes | (no target - lowest priority) |
 
-> **Note**: Target locations are paths within the [`pfeff/cursor-rules`](https://github.com/pfeff/cursor-rules) repository. Improvements are implemented via PR to that repo. Files in `${CLAUDE_PLUGIN_ROOT}/skills/` are symlinks to this repo.
+> **Note**: Target locations are paths within the `claude-skills` repository. Improvements are implemented via PR to that repo. Files in `${CLAUDE_PLUGIN_ROOT}/skills/` are loaded from this repo. (Previously, `pfeff/cursor-rules` served this role.)
 
 #### Validate Target Paths
 
-**Before including any recommendation**, verify the target file or directory exists in the cursor-rules repo:
+**Before including any recommendation**, verify the target file or directory exists in the claude-skills repo:
 
 ```
 # For skill enhancements
-Glob(pattern: "skills/<skill-name>/SKILL.md", path: "<cursor-rules-repo>")
+Glob(pattern: "skills/<skill-name>/SKILL.md", path: "${CLAUDE_PLUGIN_ROOT}")
 
 # For command additions
-Glob(pattern: "commands/*.md", path: "<cursor-rules-repo>")
+Glob(pattern: "commands/*.md", path: "${CLAUDE_PLUGIN_ROOT}")
 
 # For operation files
-Glob(pattern: "skills/<skill-name>/operations/*.md", path: "<cursor-rules-repo>")
+Glob(pattern: "skills/<skill-name>/operations/*.md", path: "${CLAUDE_PLUGIN_ROOT}")
 ```
 
 **If target doesn't exist**:
@@ -388,11 +388,11 @@ keywords:
 **Category**: [category]
 **Effort**: [effort]
 **Impact**: [HIGH/MEDIUM/LOW]
-**Target**: [path in pfeff/cursor-rules repo]
+**Target**: [file path in claude-skills repo]
 
 [Description of the issue and proposed solution]
 
-**Implementation**: PR to [`pfeff/cursor-rules`](https://github.com/pfeff/cursor-rules) — [specific steps or changes needed]
+**Implementation**: PR to `claude-skills` — [specific steps or changes needed]
 
 ---
 
