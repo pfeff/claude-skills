@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 PROJECT_DIR="$1"
 NODE_ID="$2"
 PROJECT_BRANCH="$3"
-OWNER="$4"
+# $4 is OWNER — accepted for backwards compatibility but not passed to create-workspace.sh
 shift 4
 
 # Convert positional repos to comma-separated

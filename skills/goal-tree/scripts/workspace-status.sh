@@ -45,7 +45,7 @@ for node_dir in "$PROJECT_DIR"/*/; do
       echo "${NODE_ID} ${repo} ${state} ${branch} ${last_commit}"
 
       if [[ "$FORMAT" == "detail" && "$state" == "dirty" ]]; then
-        echo "$porcelain" | sed 's/^/    /'
+        while IFS= read -r sc_line; do printf '    %s\n' "$sc_line"; done <<< "$porcelain"
       fi
     else
       echo "${NODE_ID} ${repo} missing - -"
