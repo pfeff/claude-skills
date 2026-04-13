@@ -28,7 +28,7 @@ git -C <resolved_path> rev-parse --show-toplevel
 
 **Common symlink mappings**:
 - `~/.claude/` → `~/src/github/pfeff/dotfiles/claude/`
-- `${CLAUDE_PLUGIN_ROOT}/skills/` → `~/src/github/pfeff/dotfiles/cursor-rules/` (submodule)
+- `${CLAUDE_PLUGIN_ROOT}/skills/` → `~/src/github/pfeff/claude-skills/` (was previously `~/src/github/pfeff/dotfiles/cursor-rules/` submodule — no longer active)
 
 If the resolved path differs from pwd, run all subsequent git commands with `-C <repo_path>`.
 

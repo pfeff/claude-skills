@@ -38,7 +38,7 @@ Common repositories on this project board:
 | Repository | Description |
 |------------|-------------|
 | `pfeff/guardian` | Meta-repository, project docs, sprint planning |
-| `pfeff/cursor-rules` | Skills, commands, workflow automation |
+| `pfeff/cursor-rules` | Skills, commands, workflow automation (deprecated — migrated to `pfeff/claude-skills`) |
 | `pfeff/agent-coordinator` | Agent coordination service |
 | `pfeff/agent-orchestrator` | Agent orchestration service |
 

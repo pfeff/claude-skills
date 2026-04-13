@@ -124,16 +124,18 @@ Repositories are checked out as git worktrees from their main clones:
 git worktree add ~/src/work/<project>/<task>/<repo> <branch>
 ```
 
-## Submodule Management
+## Submodule Management (Historical)
 
-Repositories using git submodules (like dotfiles with cursor-rules) require special attention.
+> **Note:** The `cursor-rules` submodule in dotfiles is deprecated. Skills and commands have been migrated to `claude-skills`. The patterns below are preserved as reference for any remaining git submodule workflows, but no longer apply to cursor-rules specifically.
+
+Repositories using git submodules require special attention.
 
 ### Detached HEAD Issue
 
 After `git submodule update --init --recursive` or dotbot install, submodules are often in **detached HEAD** state:
 
 ```bash
-$ cd cursor-rules
+$ cd <submodule>
 $ git status
 HEAD detached at abc1234
 ```
@@ -149,11 +151,11 @@ This means:
 
 ```bash
 # Check current state
-git -C cursor-rules status
+git -C <submodule> status
 
 # Sync to main branch
-git -C cursor-rules checkout main
-git -C cursor-rules pull origin main
+git -C <submodule> checkout main
+git -C <submodule> pull origin main
 ```
 
 ### When to Sync
@@ -168,7 +170,7 @@ Perform submodule sync:
 
 ```bash
 # Verify branch state
-git -C cursor-rules branch -v
+git -C <submodule> branch -v
 
 # Should show:
 # * main  abc1234 [ahead N] Latest commit message
@@ -176,7 +178,7 @@ git -C cursor-rules branch -v
 
 ### Workspace-Specific Submodule Notes
 
-When workspaces involve cursor-rules changes:
-1. Create a task noting cursor-rules modifications are involved
+When workspaces involve submodule changes:
+1. Create a task noting submodule modifications are involved
 2. Include submodule sync step in task plan
-3. Commit cursor-rules changes first, then update parent repo's submodule reference
+3. Commit submodule changes first, then update parent repo's submodule reference
