@@ -311,18 +311,17 @@ ensure_branches_multi() {
 # See: https://github.com/anthropics/claude-code/issues/19060
 run_claude() {
   local prompt_file="$1"
-  local temp_output
-  temp_output=$(mktemp)
+  local iter_log=".ralph/iteration-${ITER}.jsonl"
 
   # Start claude in background with stream-json to detect completion
   claude --dangerously-skip-permissions --output-format stream-json --verbose \
-    -p "$(cat "$prompt_file")" > "$temp_output" 2>&1 &
+    -p "$(cat "$prompt_file")" > "$iter_log" 2>&1 &
   local claude_pid=$!
 
   # Poll for result with timeout
   local waited=0
   while kill -0 $claude_pid 2>/dev/null && [[ $waited -lt $MAX_ITER_TIME ]]; do
-    if grep -q '"type":"result"' "$temp_output" 2>/dev/null; then
+    if grep -q '"type":"result"' "$iter_log" 2>/dev/null; then
       # Result received - give process grace period to exit cleanly
       sleep $GRACE_PERIOD
       if kill -0 $claude_pid 2>/dev/null; then
@@ -340,7 +339,6 @@ run_claude() {
     echo "Error: iteration timed out after ${MAX_ITER_TIME}s"
     kill $claude_pid 2>/dev/null || true
     wait $claude_pid 2>/dev/null || true
-    rm -f "$temp_output"
     return 1
   fi
 
@@ -349,39 +347,35 @@ run_claude() {
   # Extract and display assistant text from stream-json output
   if command -v jq &>/dev/null; then
     jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' \
-      "$temp_output" 2>/dev/null || true
+      "$iter_log" 2>/dev/null || true
   else
     # Fallback: show raw output if jq unavailable
-    grep -o '"text":"[^"]*"' "$temp_output" 2>/dev/null | sed 's/"text":"//;s/"$//' || true
+    grep -o '"text":"[^"]*"' "$iter_log" 2>/dev/null | sed 's/"text":"//;s/"$//' || true
   fi
 
   # Check for API errors in output
-  if grep -q '"type":"error"' "$temp_output" 2>/dev/null; then
+  if grep -q '"type":"error"' "$iter_log" 2>/dev/null; then
     echo "API error detected:"
-    grep '"type":"error"' "$temp_output" || true
-    rm -f "$temp_output"
+    grep '"type":"error"' "$iter_log" || true
     return 1
   fi
 
   # Check for credit balance errors (may appear as assistant text, not API error)
-  if grep -qi 'credit balance is too low' "$temp_output" 2>/dev/null; then
+  if grep -qi 'credit balance is too low' "$iter_log" 2>/dev/null; then
     echo "Credit balance error detected"
     echo ""
     echo "To fix: Run 'claude' interactively and follow the prompts to add credits or re-authenticate."
-    rm -f "$temp_output"
     return 1
   fi
 
   # Check for authentication errors (expired tokens, invalid credentials, etc.)
-  if grep -qiE 'authentication.*(error|failed|invalid|expired)|invalid.*(api.?key|token|credential)|expired.*(token|session|credential)|unauthorized|permission.?denied' "$temp_output" 2>/dev/null; then
+  if grep -qiE 'authentication.*(error|failed|invalid|expired)|invalid.*(api.?key|token|credential)|expired.*(token|session|credential)|unauthorized|permission.?denied' "$iter_log" 2>/dev/null; then
     echo "Authentication error detected"
     echo ""
     echo "To fix: Run 'claude' interactively to re-authenticate, or check your API key configuration."
-    rm -f "$temp_output"
     return 1
   fi
 
-  rm -f "$temp_output"
   return 0
 }
 
@@ -392,7 +386,37 @@ else
   ensure_branch
 fi
 
+# Write exit summary and exit
+# Args: $1 = reason, $2 = exit code
+write_exit_summary() {
+  local reason="$1"
+  local exit_code="$2"
+  local tasks_completed=0
+  local tasks_total=0
+
+  if [[ -f PLAN.md ]]; then
+    tasks_completed=$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || echo 0)
+    tasks_total=$(( tasks_completed + $(grep -c '^\- \[ \]' PLAN.md 2>/dev/null || echo 0) ))
+  fi
+
+  cat > .ralph/exit-summary.json <<EXITEOF
+{
+  "reason": "$reason",
+  "iterations_run": $ITER,
+  "iterations_max": $MAX_ITER,
+  "mode": "$MODE",
+  "tasks_completed": $tasks_completed,
+  "tasks_total": $tasks_total
+}
+EXITEOF
+
+  exit "$exit_code"
+}
+
 echo "Starting Ralph loop (mode: $MODE, workspace: $WORKSPACE_MODE, max iterations: $MAX_ITER)"
+
+EXIT_REASON=""
+PREV_PROGRESS=""
 
 while [ $ITER -lt $MAX_ITER ]; do
   ITER=$((ITER + 1))
@@ -403,7 +427,8 @@ while [ $ITER -lt $MAX_ITER ]; do
   # Run Claude with hang detection
   if ! run_claude "$PROMPT_FILE"; then
     echo "Error: Claude invocation failed"
-    exit 1
+    EXIT_REASON="error"
+    break
   fi
 
   # Check for blockers
@@ -411,7 +436,8 @@ while [ $ITER -lt $MAX_ITER ]; do
     echo ""
     echo "=== Blockers found, stopping loop ==="
     cat BLOCKERS.md
-    exit 1
+    EXIT_REASON="blocked"
+    break
   fi
 
   # Check completion (all tasks done in PLAN.md)
@@ -419,7 +445,8 @@ while [ $ITER -lt $MAX_ITER ]; do
     if ! grep -q '^\- \[ \]' PLAN.md 2>/dev/null; then
       echo ""
       echo "=== All tasks complete ==="
-      exit 0
+      EXIT_REASON="completed"
+      break
     fi
   fi
 
@@ -427,10 +454,31 @@ while [ $ITER -lt $MAX_ITER ]; do
   if [[ "$MODE" == "plan" ]]; then
     echo ""
     echo "=== Plan generated ==="
-    exit 0
+    EXIT_REASON="completed"
+    break
   fi
+
+  # Progress detection (build mode only)
+  # md5sum is Linux-only (macOS uses md5) — fine since loop.sh runs in the Ralph container
+  CURRENT_PROGRESS="$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || echo 0):$(git diff --stat 2>/dev/null | md5sum):$(git rev-parse HEAD 2>/dev/null)"
+  if [[ "$CURRENT_PROGRESS" == "$PREV_PROGRESS" ]]; then
+    echo ""
+    echo "=== No progress detected, stopping loop ==="
+    EXIT_REASON="no_progress"
+    break
+  fi
+  PREV_PROGRESS="$CURRENT_PROGRESS"
 done
 
-echo ""
-echo "=== Max iterations ($MAX_ITER) reached ==="
-exit 1
+# Fell through without breaking — max iterations
+if [[ -z "$EXIT_REASON" ]]; then
+  echo ""
+  echo "=== Max iterations ($MAX_ITER) reached ==="
+  EXIT_REASON="max_iterations"
+fi
+
+# Common exit
+case "$EXIT_REASON" in
+  completed)   write_exit_summary "$EXIT_REASON" 0 ;;
+  *)           write_exit_summary "$EXIT_REASON" 1 ;;
+esac
