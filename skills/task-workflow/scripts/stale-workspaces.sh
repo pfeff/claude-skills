@@ -40,7 +40,7 @@ usage() {
   echo "  --help     Show this help message"
   echo ""
   echo "Output (tab-separated per stale workspace):"
-  echo "  <workspace_path>\\t<issue_ref>\\t<issue_state>"
+  printf "  <workspace_path>\\t<issue_ref>\\t<issue_state>\\n"
   echo ""
   echo "Exit codes:"
   echo "  0  No stale workspaces found"

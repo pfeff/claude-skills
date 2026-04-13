@@ -29,6 +29,7 @@
 set -euo pipefail
 
 # Script location
+# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Exit codes
@@ -36,6 +37,7 @@ EXIT_SUCCESS=0
 EXIT_INVALID_ARGS=1
 EXIT_WORKSPACE_NOT_FOUND=2
 EXIT_ARCHIVE_FAILED=3
+# shellcheck disable=SC2034
 EXIT_WORKTREE_FAILED=4
 EXIT_VERIFICATION_FAILED=5
 
@@ -172,8 +174,9 @@ fi
 
 # Extract task-id and headline from DESIGN.md first line: "# <task-id>: <headline>"
 FIRST_LINE=$(head -1 "$WORKSPACE_PATH/DESIGN.md")
-TASK_ID=$(echo "$FIRST_LINE" | sed 's/^# \([^:]*\):.*/\1/')
-HEADLINE=$(echo "$FIRST_LINE" | sed 's/^# [^:]*: //')
+TASK_ID="${FIRST_LINE%%:*}"
+TASK_ID="${TASK_ID#\# }"
+HEADLINE="${FIRST_LINE#*: }"
 
 # Extract epic and task directory from path
 EPIC=$(basename "$(dirname "$WORKSPACE_PATH")")

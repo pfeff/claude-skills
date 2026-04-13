@@ -382,8 +382,10 @@ t-cetra|AZURE_PAT|1password|Azure CLI PAT
 t-cetra|OCTOPUS_API_KEY|aws-secrets-manager|tcetra-devops-sso:DevExtTFEnv/octopus/api_key
 "
 
-# Initialize secret variables
+# Initialize secret variables (referenced indirectly via ${!secret_var})
+# shellcheck disable=SC2034
 AZURE_PAT=""
+# shellcheck disable=SC2034
 OCTOPUS_API_KEY=""
 
 # Fetch secrets for current epic
@@ -865,8 +867,10 @@ create_node_workspace() {
   # Step 3: Render NODE_CLAUDE.md template
   export NODE_ID HEADLINE PROJECT_DIR PROJECT_BRANCH NODE_BRANCH
   export WORKSPACE_PATH
-  export PROJECT_SLUG="$(basename "$PROJECT_DIR")"
-  export REPOS_LIST=$(format_repos_list "$REPOS" "$WORKSPACE_PATH")
+  PROJECT_SLUG="$(basename "$PROJECT_DIR")"
+  export PROJECT_SLUG
+  REPOS_LIST=$(format_repos_list "$REPOS" "$WORKSPACE_PATH")
+  export REPOS_LIST
 
   if envsubst < "$TEMPLATE_DIR/NODE_CLAUDE.md.tmpl" > "$WORKSPACE_PATH/CLAUDE.md"; then
     echo "  CLAUDE.md: created"
@@ -976,11 +980,11 @@ EOF
   echo "Running verification checks..."
   VERIFICATION_FAILED=0
 
-  [[ -d "$WORKSPACE_PATH" ]] && verify_check "Workspace directory exists" "pass" || verify_check "Workspace directory exists" "fail"
-  [[ -f "$WORKSPACE_PATH/CLAUDE.md" ]] && verify_check "CLAUDE.md exists" "pass" || verify_check "CLAUDE.md exists" "fail"
-  [[ -f "$WORKSPACE_PATH/DESIGN.md" ]] && verify_check "DESIGN.md exists" "pass" || verify_check "DESIGN.md exists" "fail"
-  [[ -f "$WORKSPACE_PATH/.envrc" ]] && verify_check ".envrc exists" "pass" || verify_check ".envrc exists" "fail"
-  [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && verify_check ".claude/settings.json exists" "pass" || verify_check ".claude/settings.json exists" "fail"
+  if [[ -d "$WORKSPACE_PATH" ]]; then verify_check "Workspace directory exists" "pass"; else verify_check "Workspace directory exists" "fail"; fi
+  if [[ -f "$WORKSPACE_PATH/CLAUDE.md" ]]; then verify_check "CLAUDE.md exists" "pass"; else verify_check "CLAUDE.md exists" "fail"; fi
+  if [[ -f "$WORKSPACE_PATH/DESIGN.md" ]]; then verify_check "DESIGN.md exists" "pass"; else verify_check "DESIGN.md exists" "fail"; fi
+  if [[ -f "$WORKSPACE_PATH/.envrc" ]]; then verify_check ".envrc exists" "pass"; else verify_check ".envrc exists" "fail"; fi
+  if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]]; then verify_check ".claude/settings.json exists" "pass"; else verify_check ".claude/settings.json exists" "fail"; fi
 
   # Check worktrees
   for repo in "${REPO_ARRAY[@]}"; do
