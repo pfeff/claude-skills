@@ -459,7 +459,8 @@ while [ $ITER -lt $MAX_ITER ]; do
   fi
 
   # Progress detection (build mode only)
-  CURRENT_PROGRESS="$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || echo 0):$(git diff --stat 2>/dev/null | md5sum)"
+  # md5sum is Linux-only (macOS uses md5) — fine since loop.sh runs in the Ralph container
+  CURRENT_PROGRESS="$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || echo 0):$(git diff --stat 2>/dev/null | md5sum):$(git rev-parse HEAD 2>/dev/null)"
   if [[ "$CURRENT_PROGRESS" == "$PREV_PROGRESS" ]]; then
     echo ""
     echo "=== No progress detected, stopping loop ==="
