@@ -76,7 +76,7 @@ If a completed node's result changes the strategic picture (new gap, invalidated
 
 If the SCAN checkpoint surfaced unmatched demand signals:
 
-1. **Match signals against artifacts**: Compare each signal against the artifact registry (cursor-rules skills, guardian docs, agent-coordinator, agent-orchestrator, ai-agents-book, career intelligence). A match requires a real, shipped artifact that speaks to the signal — no speculative content.
+1. **Match signals against artifacts**: Compare each signal against the artifact registry (claude-skills, guardian docs, agent-coordinator, agent-orchestrator, ai-agents-book, career intelligence). A match requires a real, shipped artifact that speaks to the signal — no speculative content.
 
 2. **Evaluate content worthiness**: Does a matched signal warrant a content node? Consider: is there a real audience asking this question? Does the artifact demonstrate genuine capability?
 
