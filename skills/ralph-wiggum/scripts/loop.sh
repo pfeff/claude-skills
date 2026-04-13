@@ -399,8 +399,12 @@ write_exit_summary() {
   local tasks_total=0
 
   if [[ -f PLAN.md ]]; then
-    tasks_completed=$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || echo 0)
-    tasks_total=$(( tasks_completed + $(grep -c '^\- \[ \]' PLAN.md 2>/dev/null || echo 0) ))
+    tasks_completed=$(grep -c '^\- \[x\]' PLAN.md 2>/dev/null || true)
+    tasks_completed=${tasks_completed:-0}
+    local tasks_unchecked
+    tasks_unchecked=$(grep -c '^\- \[ \]' PLAN.md 2>/dev/null || true)
+    tasks_unchecked=${tasks_unchecked:-0}
+    tasks_total=$(( tasks_completed + tasks_unchecked ))
   fi
 
   cat > .ralph/exit-summary.json <<EXITEOF
