@@ -8,8 +8,9 @@ find ~/src/work -type f -name "DESIGN.md" 2>/dev/null | while IFS= read -r desig
 
   # Extract task ID and headline from first line of DESIGN.md
   first_line=$(head -n 1 "$design_file" 2>/dev/null)
-  task_id=$(echo "$first_line" | sed 's/^# \([^:]*\):.*/\1/')
-  headline=$(echo "$first_line" | sed 's/^# [^:]*: \(.*\)/\1/')
+  task_id="${first_line%%:*}"
+  task_id="${task_id#\# }"
+  headline="${first_line#*: }"
 
   # If sed didn't extract anything (malformed format), use the whole line
   if [ -z "$headline" ] || [ "$headline" = "$first_line" ]; then
@@ -18,7 +19,8 @@ find ~/src/work -type f -name "DESIGN.md" 2>/dev/null | while IFS= read -r desig
   fi
 
   # Extract epic from path (directory under ~/src/work/)
-  epic=$(echo "$workspace" | sed 's|.*/src/work/\([^/]*\)/.*|\1|')
+  epic="${workspace#*/src/work/}"
+  epic="${epic%%/*}"
 
   # Check PLAN.md status
   plan_file="$workspace/PLAN.md"
@@ -28,13 +30,13 @@ find ~/src/work -type f -name "DESIGN.md" 2>/dev/null | while IFS= read -r desig
     total=""
   else
     # Use wc -l instead of grep -c to avoid empty string issues
-    unchecked=$(grep "^- \[ \]" "$plan_file" 2>/dev/null | wc -l)
-    checked=$(grep "^- \[x\]" "$plan_file" 2>/dev/null | wc -l)
+    unchecked=$(grep -c "^- \[ \]" "$plan_file" 2>/dev/null || true)
+    checked=$(grep -c "^- \[x\]" "$plan_file" 2>/dev/null || true)
     total=$((unchecked + checked))
 
-    if [ $total -eq 0 ]; then
+    if [ "$total" -eq 0 ]; then
       status="no-todos"
-    elif [ $unchecked -gt 0 ]; then
+    elif [ "$unchecked" -gt 0 ]; then
       status="in-progress"
     else
       status="completed"

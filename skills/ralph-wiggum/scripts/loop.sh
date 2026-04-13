@@ -92,6 +92,8 @@ preflight_services_check() {
   while IFS='|' read -r _ service command timeout _; do
     # Skip header, separator, and template rows
     service=$(echo "$service" | xargs)
+    # Single quotes intentional: matching literal backticks
+    # shellcheck disable=SC2016
     command=$(echo "$command" | sed 's/^ *`//;s/` *$//' | xargs)
     timeout=$(echo "$timeout" | xargs | sed 's/s$//')
 
@@ -160,8 +162,10 @@ WORKSPACE_MANIFEST=".ralph/workspace.md"
 # Source shared library (co-located or mounted at /opt/ralph/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/lib.sh" ]]; then
+  # shellcheck disable=SC1091
   source "$SCRIPT_DIR/lib.sh"
 elif [[ -f "/opt/ralph/lib.sh" ]]; then
+  # shellcheck disable=SC1091
   source "/opt/ralph/lib.sh"
 fi
 
@@ -418,7 +422,7 @@ echo "Starting Ralph loop (mode: $MODE, workspace: $WORKSPACE_MODE, max iteratio
 EXIT_REASON=""
 PREV_PROGRESS=""
 
-while [ $ITER -lt $MAX_ITER ]; do
+while [ "$ITER" -lt "$MAX_ITER" ]; do
   ITER=$((ITER + 1))
   echo ""
   echo "=== Iteration $ITER / $MAX_ITER (mode: $MODE) ==="

@@ -63,6 +63,8 @@ parse_workspace_repos() {
   # Parse the Repos table: | repo_name | `repo_path` | `gates_path` |
   grep '|.*|.*|.*|' "$manifest" | grep -v '^\s*|.*---' | while IFS='|' read -r _ name path _rest; do
     name=$(echo "$name" | xargs)
+    # Single quotes intentional: matching literal backticks
+    # shellcheck disable=SC2016
     path=$(echo "$path" | sed 's/^ *`//;s/` *$//' | xargs)
 
     [[ -z "$name" || "$name" == "Repo" ]] && continue

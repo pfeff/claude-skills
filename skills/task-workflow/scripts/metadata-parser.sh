@@ -22,8 +22,9 @@ fi
 first_line=$(head -n 1 "$design_file" 2>/dev/null)
 
 # Extract task-id and headline from pattern: # TASK-ID: Headline
-task_id=$(echo "$first_line" | sed 's/^# \([^:]*\):.*/\1/')
-headline=$(echo "$first_line" | sed 's/^# [^:]*: \(.*\)/\1/')
+task_id="${first_line%%:*}"
+task_id="${task_id#\# }"
+headline="${first_line#*: }"
 
 # Validate extraction
 if [ -z "$headline" ] || [ "$headline" = "$first_line" ]; then
