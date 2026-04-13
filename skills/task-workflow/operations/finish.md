@@ -249,7 +249,7 @@ if [[ -f "$EVAL_METRICS" ]]; then
   RULES_TOTAL=$(jq -r '.standing_rules | length' "$EVAL_METRICS")
   if [[ "$RULES_TOTAL" -gt 0 ]]; then
     RULES_PASSED=$(jq -r '[.standing_rules[] | select(.status == "pass")] | length' "$EVAL_METRICS")
-    RULES_PASS_RATE=$(jq -r "($RULES_PASSED / $RULES_TOTAL)" <<< '{}')
+    RULES_PASS_RATE=$(jq -r '[.standing_rules[] | select(.status == "pass")] | length / (.standing_rules | length)' "$EVAL_METRICS")
   fi
 fi
 ```
@@ -283,7 +283,7 @@ if [[ -f "$EVAL_METRICS" ]]; then
     EVAL_ARGS="$EVAL_ARGS \
       --argjson rules_passed $RULES_PASSED \
       --argjson rules_total $RULES_TOTAL \
-      --argjson rules_pass_rate $(echo "$RULES_PASSED / $RULES_TOTAL" | bc -l)"
+      --argjson rules_pass_rate $(jq -r '[.standing_rules[] | select(.status == "pass")] | length / (.standing_rules | length)' "$EVAL_METRICS")"
     EVAL_FIELDS="$EVAL_FIELDS, \$rules_passed, \$rules_total, \$rules_pass_rate"
   fi
 fi

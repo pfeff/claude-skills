@@ -399,7 +399,7 @@ For each node in `pending_evaluation`:
    - Node's changes summary from the dispatch result
    - Subagent's self-reported `acceptance_criteria_met` list (advisory input — the LLM-as-judge verdict is authoritative)
 
-1b. **Standing rules pre-filter**: For each standing rule with a `**Detector**:` hint, run the detector against the diff:
+2. **Standing rules pre-filter**: For each standing rule with a `**Detector**:` hint, run the detector against the diff:
 
 ```
 for rule in standing_rules:
@@ -420,9 +420,9 @@ Example detector for the cursor-rules deprecation rule:
 **Detector**: cursor-rules/
 ```
 
-This flags any diff lines adding files under `cursor-rules/` or adding new path/identifier references to cursor-rules. Removals from cursor-rules pass (migration direction).
+This flags any diff lines touching files under `cursor-rules/` — additions, modifications, or removals. The pre-filter is intentionally coarse; the LLM judge determines whether flagged changes actually violate the rule (e.g., removals are migration direction and pass).
 
-2. **LLM-as-judge evaluation**: Assess each acceptance criterion and standing rule independently:
+3. **LLM-as-judge evaluation**: Assess each acceptance criterion and standing rule independently:
 
 ```
 ## Evaluation: ${NODE_ID}. ${NODE_TITLE}
@@ -462,7 +462,7 @@ Key distinction: additions that violate a rule are failures; removals or migrati
 - **Overall**: ACCEPT / REJECT
 ```
 
-3. **Decision**:
+4. **Decision**:
 
 | Overall | Action |
 |---------|--------|
@@ -548,13 +548,13 @@ After evaluation, write structured scalar metrics to the node workspace so downs
 NODE_METRICS_DIR="${NODE_WORKSPACE}/.metrics"
 mkdir -p "$NODE_METRICS_DIR"
 
-# Build standing_rules JSON array
-STANDING_RULES_JSON="[]"
-if [[ ${#STANDING_RULES_RESULTS[@]} -gt 0 ]]; then
-  STANDING_RULES_JSON=$(for rule in "${STANDING_RULES_RESULTS[@]}"; do
-    jq -n --arg name "$rule_name" --arg status "$rule_status" --arg reasoning "$rule_reasoning" \
-      -c '{$name, $status, $reasoning}'
-  done | jq -s '.')
+# Build standing_rules JSON array from a temp file written during evaluation.
+# Each line is a JSON object: {"name":"...","status":"pass|fail","reasoning":"..."}
+STANDING_RULES_FILE="${NODE_METRICS_DIR}/standing_rules.jsonl"
+if [[ -f "$STANDING_RULES_FILE" ]]; then
+  STANDING_RULES_JSON=$(jq -s '.' "$STANDING_RULES_FILE")
+else
+  STANDING_RULES_JSON="[]"
 fi
 
 jq -n \
