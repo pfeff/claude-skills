@@ -315,6 +315,7 @@ ensure_branches_multi() {
 # See: https://github.com/anthropics/claude-code/issues/19060
 run_claude() {
   local prompt_file="$1"
+  mkdir -p .ralph
   local iter_log=".ralph/iteration-${ITER}.jsonl"
 
   # Start claude in background with stream-json to detect completion
