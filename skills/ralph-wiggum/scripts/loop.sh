@@ -10,6 +10,7 @@ CLAUDE_PID=""
 # Ensure background Claude process is waited for before exit.
 # Without this, SIGTERM from timeout kills loop.sh while Claude is
 # still writing files, causing dispatch-container.sh to parse partial results.
+# shellcheck disable=SC2317,SC2329  # invoked indirectly via trap
 cleanup_claude() {
   if [[ -n "$CLAUDE_PID" ]] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
     echo "  [cleanup: waiting for Claude PID $CLAUDE_PID]"
