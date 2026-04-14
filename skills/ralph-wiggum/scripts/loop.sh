@@ -4,6 +4,22 @@
 
 set -euo pipefail
 
+# Track background Claude PID for signal cleanup
+CLAUDE_PID=""
+
+# Ensure background Claude process is waited for before exit.
+# Without this, SIGTERM from timeout kills loop.sh while Claude is
+# still writing files, causing dispatch-container.sh to parse partial results.
+cleanup_claude() {
+  if [[ -n "$CLAUDE_PID" ]] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
+    echo "  [cleanup: waiting for Claude PID $CLAUDE_PID]"
+    kill "$CLAUDE_PID" 2>/dev/null || true
+    wait "$CLAUDE_PID" 2>/dev/null || true
+  fi
+  sync 2>/dev/null || true
+}
+trap cleanup_claude EXIT
+
 # Verify running inside container
 is_container() {
   [[ -f /.dockerenv ]] || \
@@ -321,17 +337,17 @@ run_claude() {
   # Start claude in background with stream-json to detect completion
   claude --dangerously-skip-permissions --output-format stream-json --verbose \
     -p "$(cat "$prompt_file")" > "$iter_log" 2>&1 &
-  local claude_pid=$!
+  CLAUDE_PID=$!
 
   # Poll for result with timeout
   local waited=0
-  while kill -0 $claude_pid 2>/dev/null && [[ $waited -lt $MAX_ITER_TIME ]]; do
+  while kill -0 $CLAUDE_PID 2>/dev/null && [[ $waited -lt $MAX_ITER_TIME ]]; do
     if grep -q '"type":"result"' "$iter_log" 2>/dev/null; then
       # Result received - give process grace period to exit cleanly
       sleep $GRACE_PERIOD
-      if kill -0 $claude_pid 2>/dev/null; then
+      if kill -0 $CLAUDE_PID 2>/dev/null; then
         echo "  [killing hung process]"
-        kill $claude_pid 2>/dev/null || true
+        kill $CLAUDE_PID 2>/dev/null || true
       fi
       break
     fi
@@ -342,12 +358,17 @@ run_claude() {
   # Handle timeout
   if [[ $waited -ge $MAX_ITER_TIME ]]; then
     echo "Error: iteration timed out after ${MAX_ITER_TIME}s"
-    kill $claude_pid 2>/dev/null || true
-    wait $claude_pid 2>/dev/null || true
+    kill $CLAUDE_PID 2>/dev/null || true
+    wait $CLAUDE_PID 2>/dev/null || true
+    CLAUDE_PID=""
     return 1
   fi
 
-  wait $claude_pid 2>/dev/null || true
+  wait $CLAUDE_PID 2>/dev/null || true
+  CLAUDE_PID=""
+
+  # Flush filesystem writes so devcontainer exec caller sees complete files
+  sync 2>/dev/null || true
 
   # Extract and display assistant text from stream-json output
   if command -v jq &>/dev/null; then

@@ -461,6 +461,18 @@ emit_did_not_finish() {
 RESULT
 }
 
+# Preflight: verify workspace is writable (catches broken paths / permissions early)
+SMOKE_FILE="$NODE_WORKSPACE/.ralph/smoke-test-$$"
+echo "Preflight: testing workspace file writes..." >&2
+mkdir -p "$NODE_WORKSPACE/.ralph"
+if ! touch "$SMOKE_FILE" 2>/dev/null; then
+  echo "Error: cannot write to workspace $NODE_WORKSPACE" >&2
+  emit_did_not_finish "Workspace is not writable"
+  exit 0
+fi
+rm -f "$SMOKE_FILE"
+echo "Preflight: workspace writable" >&2
+
 # Phase 1: Plan
 PLAN_BUDGET=$(remaining_seconds)
 if [[ "$PLAN_BUDGET" -le 0 ]]; then
@@ -557,6 +569,9 @@ if [[ "$BUILD_EXIT" -eq 124 ]]; then
 fi
 
 # --- Parse result ---
+
+# Ensure filesystem writes from the container are visible before parsing
+sync 2>/dev/null || true
 
 echo "" >&2
 echo "=== Parsing results ===" >&2
