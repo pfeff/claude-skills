@@ -196,5 +196,6 @@ Called by operations — use these instead of raw commands:
 | `scripts/cleanup-sessions.sh` | Kill project tmux sessions |
 | `scripts/close-project.sh` | Close and archive a project |
 | `scripts/discuss-dispatch.sh` | Atomic setup: coord node + workspace + DESIGN.md + .active-nodes |
+| `scripts/patch-finish-metrics.sh` | Patch finish.jsonl with evaluation.json metrics after L1 evaluation |
 
 **Prefer scripts over pipelines**: Before composing `jq`/`python` pipelines, check if a script above already provides the data. See `docs/reference/command-simplification.md` for common patterns and alternatives.
