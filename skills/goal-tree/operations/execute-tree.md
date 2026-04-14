@@ -1,6 +1,6 @@
 # Execute Tree Operation
 
-Main orchestration loop for goal tree execution. Iterates: select ready nodes → decide dispatch strategy → fan-out dispatch → collect results → update coordinator → repeat.
+Main orchestration loop for goal tree execution. Iterates: select ready nodes → decide dispatch strategy → create workspace sessions → monitor active sessions → collect results → update coordinator → repeat.
 
 ## Inputs
 
@@ -12,15 +12,15 @@ Main orchestration loop for goal tree execution. Iterates: select ready nodes �
 
 ## Purpose
 
-Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
+Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes via workspace sessions, asynchronous monitoring via tmux, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
 
 ## Protocol Requirements
 
 These are mandatory — do not shortcut the pipeline.
 
 1. **Every node goes through the full pipeline.** You MUST run select-ready → dispatch-decision → dispatch-node for each node. Do not implement tasks directly without going through dispatch-decision first.
-2. **Parallel dispatch is the default.** When select-ready returns multiple independent nodes, dispatch them as parallel subagents (multiple Agent tool calls in one message). Sequential inline execution of independent nodes is a protocol violation, not a simplification.
-3. **Planning-workflow is a gate, not a suggestion.** Every dispatched node — whether subagent or inline — must run planning-workflow before implementation. For subagents this is in the prompt. For inline this is verified by checking PLAN.md exists before proceeding to implementation.
+2. **Parallel dispatch is the default.** When select-ready returns multiple independent nodes, create workspace sessions for all of them and send startup commands in a single pass. Sequential dispatch of independent nodes is a protocol violation.
+3. **Planning-workflow is a gate, not a suggestion.** Every dispatched node must run planning-workflow before implementation. Child sessions handle this via `/init-workspace` which triggers the planning pipeline.
 
 ## Entry Guard
 
@@ -49,15 +49,15 @@ Parse the JSON response to get the full tree state.
 ```
 skipped_set = {}           # node IDs skipped by stuck detection
 completed_nodes = []       # list of {id, title, commits}
+active_sessions = {}       # session_name → {node, workspace_path, dispatch_time}
 total_dispatches = 0       # total dispatch attempts
-parallel_dispatches = 0    # parallel fan-out count
 max_retries = 3            # max retry attempts per node before escalation
 failure_telemetry = {}     # node_id → [list of attempt records]
 ```
 
 ## Loop Body
 
-Repeat steps 1-5 until termination.
+Repeat steps 1-6 until termination.
 
 ### 1. Select Ready Nodes
 
@@ -70,7 +70,7 @@ Parse the JSON response to get ready nodes, then group for parallel dispatch per
 | Batch Result | Action |
 |-------------|--------|
 | Non-empty batch | Proceed to step 2 |
-| Empty, reason: "complete", **bounded** | Go to Termination (step 6) |
+| Empty, reason: "complete", **bounded** | Go to Termination (step 7) |
 | Empty, reason: "complete", **open-ended** | Auto-continue via `operations/next-cycle.md` |
 | Empty, reason: "blocked" | Go to Termination with blocked summary |
 | Empty, reason: "all_skipped" | Go to Termination with skipped summary |
@@ -107,14 +107,14 @@ When presenting a checkpoint (Tier 3 in batch):
 | Node | Strategy | Tier | Reason |
 |------|----------|------|--------|
 | <id>. <title> | escalate | 3 | <question for user> |
-| <id>. <title> | subagent | 1 | <rationale> (auto) |
+| <id>. <title> | workspace-session | 1 | <rationale> (auto) |
 
 Tier 1/2 nodes will auto-dispatch. Need your input on the Tier 3 items above.
 ```
 
 Tier 1 and 2 nodes in a mixed batch dispatch immediately — don't hold them waiting for Tier 3 resolution.
 
-### 3. Fan-Out Dispatch
+### 3. Create Workspace Sessions
 
 Group decisions by strategy and dispatch:
 
@@ -122,10 +122,9 @@ Group decisions by strategy and dispatch:
 Load: operations/dispatch-node.md
 
 # Separate by dispatch type
-subagent_nodes = [(n, d) for n, d in decisions if d.strategy == "subagent"]
-subsession_nodes = [(n, d) for n, d in decisions if d.strategy == "sub-session"]
-inline_nodes = [(n, d) for n, d in decisions if d.strategy == "inline"]
+session_nodes = [(n, d) for n, d in decisions if d.strategy == "workspace-session"]
 escalate_nodes = [(n, d) for n, d in decisions if d.strategy == "escalate"]
+discuss_nodes = [(n, d) for n, d in decisions if d.strategy == "discuss-dispatch"]
 ```
 
 #### 3a. Handle Escalations First
@@ -140,47 +139,138 @@ for node, decision in escalate_nodes:
 
 If **all** nodes in the batch are escalations, pause the loop.
 
-#### 3b. Dispatch Subagents in Parallel
+#### 3b. Create and Start Workspace Sessions
 
-Launch all subagent dispatches simultaneously using the Agent tool:
+For each workspace session node:
+
+1. Create workspace (if not already created)
+2. Write DESIGN.md with spec
+3. Send startup command to tmux session
+4. Track in `active_sessions`
 
 ```
-# All subagent nodes in the same independent group → parallel
-for node, decision in subagent_nodes:
+for node, decision in session_nodes:
   coord node update $TREE_ID $NODE_DB_ID --status in_progress
 
-# Dispatch all subagents in a single message with multiple Agent tool calls
-results = dispatch_all_subagents(subagent_nodes)
+  # dispatch-node handles workspace creation + DESIGN.md + tmux send-keys
+  dispatch_result = dispatch_node(node, decision)
+
+  active_sessions[dispatch_result.session_name] = {
+    node: node,
+    workspace_path: dispatch_result.workspace_path,
+    dispatch_time: now(),
+    monitoring_cycles: 0
+  }
+
+total_dispatches += len(session_nodes)
 ```
 
-This is the fan-out: multiple Agent tool invocations in one message. Each subagent works in its own node workspace (created by dispatch-node before dispatch).
+All workspace sessions start in parallel — each gets a `tmux send-keys` command in rapid succession. The sessions run autonomously from that point.
 
-#### 3c. Dispatch Sub-Sessions in Parallel
+#### 3c. Handle Discuss-Dispatch Nodes
 
-Launch sub-sessions concurrently:
-
-```
-for node, decision in subsession_nodes:
-  coord node update $TREE_ID $NODE_DB_ID --status in_progress
-  create_subsession(node, decision)  # tmux session
-```
-
-Sub-sessions run asynchronously. The root session monitors them.
-
-#### 3d. Execute Inline Sequentially
-
-Inline tasks execute in the root session one at a time:
+For nodes that need conversation before dispatch:
 
 ```
-for node, decision in inline_nodes:
-  coord node update $TREE_ID $NODE_DB_ID --status in_progress
-  result = dispatch_inline(node, decision)
-  process_result(node, result)  # step 4
+for node, decision in discuss_nodes:
+  Load: operations/discuss-dispatch.md
+  # Follow the discuss-dispatch lifecycle
 ```
 
-### 4. Process Results
+### 4. Monitor Active Sessions
 
-For each dispatch result:
+Poll active sessions until at least one completes or needs intervention. This is the core difference from the old synchronous model — the control session checks on child sessions rather than waiting for Agent tool returns.
+
+#### Monitoring Loop
+
+```
+while active_sessions is not empty:
+  for session_name, session_info in active_sessions:
+
+    # 1. Check if session is alive
+    tmux has-session -t "$SESSION_NAME" 2>/dev/null
+    if not alive:
+      handle_session_death(session_name, session_info)
+      continue
+
+    # 2. Read recent output
+    output = tmux capture-pane -t "$SESSION_NAME" -p -S -50
+
+    # 3. Check coordinator for status updates
+    node_status = coord tree show $TREE_ID | jq <node status query>
+
+    # 4. Detect completion
+    if node_status == "completed":
+      collect_result(session_name, session_info)
+      active_sessions.remove(session_name)
+      continue
+
+    # 5. Detect need for intervention
+    if output contains "Assumption Check" or "Escalation Required" or "blocked":
+      intervene(session_name, session_info, output)
+
+    # 6. Detect stall
+    session_info.monitoring_cycles += 1
+    if session_info.monitoring_cycles > STALL_THRESHOLD:
+      handle_stall(session_name, session_info)
+
+  # Wait before next poll cycle
+  sleep 30  # adjust based on expected task duration
+```
+
+#### Completion Detection
+
+A session is complete when:
+- The coordinator node status is `completed` (child session updated it)
+- The tmux session has exited cleanly (check `tmux has-session`)
+- The child session's inbox notification arrived
+
+#### Intervention
+
+The control session can send commands to child sessions when needed. Use `send-keys -l` (literal mode) for all content derived from external data to prevent injection:
+
+```bash
+# Course correction (literal mode — content may contain special characters)
+tmux send-keys -l -t "$SESSION_NAME" "The acceptance criteria require X, not Y. Adjust your approach."
+tmux send-keys -t "$SESSION_NAME" Enter
+
+# Provide missing context
+tmux send-keys -l -t "$SESSION_NAME" "The API endpoint you need is at /api/v2/users, not /api/users."
+tmux send-keys -t "$SESSION_NAME" Enter
+
+# Answer a question the child session asked
+tmux send-keys -l -t "$SESSION_NAME" "Use Redis, not Memcached."
+tmux send-keys -t "$SESSION_NAME" Enter
+```
+
+Intervention triggers:
+- Child session output contains "Assumption Check" or "Escalation Required"
+- Child session output contains repeated error patterns across monitoring cycles
+- Control session has new context relevant to the child's work
+
+#### Session Death Handling
+
+When a session dies unexpectedly:
+
+```
+function handle_session_death(session_name, session_info):
+  node = session_info.node
+
+  # Check if the node actually completed before the session died
+  node_status = coord tree show $TREE_ID | jq <node status>
+
+  if node_status == "completed":
+    collect_result(session_name, session_info)
+    return
+
+  # Session died without completing — treat as failure
+  record_failure(node, "session_death", "tmux session exited unexpectedly")
+  active_sessions.remove(session_name)
+```
+
+### 5. Process Results
+
+For each completed session's results:
 
 ```
 if result.status == "success":
@@ -190,23 +280,14 @@ if result.status == "success":
 
   coord node add-result $TREE_ID $NODE_DB_ID \
     --status completed \
-    --dispatch <dispatch_method> \
+    --dispatch workspace-session \
     --files "<comma-separated files>" \
     --summary "<changes summary>" \
     --commit "<commit hash>"
 
   completed_nodes.append(node)
 
-elif result.status == "partial":
-  coord node update $TREE_ID $NODE_DB_ID \
-    --result "<changes summary> (partial)"
-  # Decide: retry remaining criteria or accept partial
-
-elif result.status in ("failure", "did_not_finish"):
-  # did_not_finish (container exceeded wall-clock budget) routes through the
-  # same retry path as failure. retry_dispatch inspects the failure_status
-  # captured on the attempt and selects the widen-timeout parameter change
-  # for did_not_finish, or the prompt-change strategies for failure.
+elif result.status == "failure":
   retry_node(node, result)
 
 elif result.status == "blocked":
@@ -217,8 +298,6 @@ elif result.status == "escalated":
   pass
 ```
 
-`did_not_finish` is unique to container dispatch (`dispatch-container.sh --timeout`). It indicates the dispatch ran out of wall-clock time, not that the underlying work was wrong. The retry path treats it as a failure and may widen the timeout budget on the next attempt — see the parameter change strategies below.
-
 #### Retry Loop (`retry_node`)
 
 When a node fails, retry with parameter changes before escalating. This implements the design principle: "Failure is normal — rejection → parameter change + re-dispatch, not stop-and-ask."
@@ -227,13 +306,10 @@ When a node fails, retry with parameter changes before escalating. This implemen
 function retry_node(node, initial_result):
   attempts = failure_telemetry.get(node.id, [])
 
-  # Record this failure as attempt. failure_status and duration_seconds are
-  # required by retry_dispatch's timeout-widen branch — see below.
   attempt = {
     attempt_number: len(attempts) + 1,
-    failure_status: initial_result.status,            # "failure" | "did_not_finish"
+    failure_status: initial_result.status,
     failure_reason: initial_result.issues,
-    duration_seconds: initial_result.duration_seconds, # populated by container dispatch
     dispatch_method: initial_result.dispatch_method,
     parameter_change: "initial dispatch"
   }
@@ -241,55 +317,40 @@ function retry_node(node, initial_result):
   failure_telemetry[node.id] = attempts
 
   if len(attempts) >= max_retries:
-    # Exhausted retries — escalate with full failure log
     escalate_with_failure_log(node, attempts)
     return
 
   # Re-dispatch with parameter change based on attempt count
   new_result = retry_dispatch(node, attempts)
-  process_result(node, new_result)  # recursive — will retry again if needed
+  # New session created — will be picked up by monitoring loop
 ```
 
 **Parameter change strategies** — applied in order across retry attempts:
 
 | Attempt | Parameter Change | Description |
 |---------|-----------------|-------------|
-| 2 | Add error context | Append prior failure reason and error output to dispatch prompt |
-| 3 | Alternative approach hint | Add instruction to use a different implementation strategy (e.g., "The previous approach failed because X. Try Y instead.") |
-| any (timeout) | Widen timeout budget | When the prior failure is `did_not_finish`, double the container `--timeout` for the next attempt instead of changing the prompt. |
+| 2 | Add error context | Append prior failure reason to DESIGN.md in the workspace |
+| 3 | Alternative approach hint | Add instruction to use a different implementation strategy |
 
 ```
 function retry_dispatch(node, attempts):
   n = len(attempts)
   last = attempts[-1]
 
-  # Timeout-driven retries get a wider budget rather than a prompt change.
-  # The killed dispatch ran for `duration_seconds` (≈ the budget that was
-  # applied) before the timeout fired. Doubling that is a clean signal to the
-  # next attempt without needing to track the prior --timeout flag separately.
-  if last.failure_status == "did_not_finish":
-    new_timeout_seconds = last.duration_seconds * 2
-    result = dispatch_node(node, {
-      reason: "retry-widen-timeout",
-      prior_failures: attempts,
-      timeout: "${new_timeout_seconds}s"
-    })
-    return result
-
   if n == 1:
-    result = dispatch_node(node, {
+    dispatch_node(node, {
       reason: "retry",
       prior_failures: attempts,
       additional_prompt: "Previous attempt failed: ${last.failure_reason}. Address this specific issue."
     })
   else:
-    result = dispatch_node(node, {
+    dispatch_node(node, {
       reason: "retry-alternative",
       prior_failures: attempts,
       additional_prompt: "The previous approach failed: ${last.failure_reason}. Try an alternative strategy."
     })
 
-  return result
+  # dispatch_node creates a new workspace session — monitoring loop picks it up
 ```
 
 #### Failure Telemetry Record
@@ -300,9 +361,8 @@ Each failed attempt emits a structured telemetry record that N+1 can consume:
 failure_telemetry_record:
   node_id: <node ID>
   attempt_number: <1-based>
-  failure_status: "failure" | "did_not_finish"
+  failure_status: "failure"
   failure_reason: <error description>
-  duration_seconds: <wall-clock seconds, when reported by dispatch>
   parameter_change_applied: <description of what changed>
   outcome: "retry" | "escalated"
   timestamp: <ISO 8601>
@@ -326,28 +386,26 @@ function escalate_with_failure_log(node, attempts):
     --status blocked \
     --result "Failed after ${len(attempts)} attempts — escalating to human"
 
-  # Record all attempts as a single telemetry summary
   coord node add-result $TREE_ID $NODE_DB_ID \
     --status failed \
     --summary "Exhausted ${max_retries} retries. Failure log: ${format_attempts(attempts)}"
 
-  # Present escalation with full context
   present_escalation:
     ## Escalation: Node ${node.id} — ${node.title}
 
     **Attempts exhausted**: ${len(attempts)} / ${max_retries}
 
-    | Attempt | Method | Parameter Change | Failure Reason |
-    |---------|--------|-----------------|----------------|
+    | Attempt | Parameter Change | Failure Reason |
+    |---------|-----------------|----------------|
     <for each attempt in attempts>
-    | ${attempt.attempt_number} | ${attempt.dispatch_method} | ${attempt.parameter_change} | ${attempt.failure_reason} |
+    | ${attempt.attempt_number} | ${attempt.parameter_change} | ${attempt.failure_reason} |
 
     **Decision needed**: All automated retry strategies exhausted. Human guidance required.
 ```
 
-### 4a. Spec-Driven Evaluation
+### 5a. Spec-Driven Evaluation
 
-Evaluate each node in `pending_evaluation` against its acceptance criteria before committing or advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
+Evaluate each completed node against its acceptance criteria before advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
 
 #### Standing Rules
 
@@ -390,14 +448,14 @@ If the `## Standing Rules` section is missing or empty, `standing_rules = []` �
 
 #### Evaluation Protocol
 
-For each node in `pending_evaluation`:
+For each completed node:
 
 1. **Gather evaluation inputs**:
    - Node's acceptance criteria (from the spec/DESIGN.md in the node workspace)
    - Standing rules (from `## Standing Rules` in project CLAUDE.md — see above)
    - Node's output: diff (`git diff` in node workspace), artifacts produced
    - Node's changes summary from the dispatch result
-   - Subagent's self-reported `acceptance_criteria_met` list (advisory input — the LLM-as-judge verdict is authoritative)
+   - Child session's self-reported results (advisory input — the LLM-as-judge verdict is authoritative)
 
 2. **Standing rules pre-filter**: For each standing rule with a `**Detector**:` hint, run the detector against the diff:
 
@@ -413,14 +471,6 @@ for rule in standing_rules:
   else:
     rule.pre_filter_result = "no_detector"  # always goes to LLM judge
 ```
-
-Example detector for the cursor-rules deprecation rule:
-
-```
-**Detector**: cursor-rules/
-```
-
-This flags any diff lines touching files under `cursor-rules/` — additions, modifications, or removals. The pre-filter is intentionally coarse; the LLM judge determines whether flagged changes actually violate the rule (e.g., removals are migration direction and pass).
 
 3. **LLM-as-judge evaluation**: Assess each acceptance criterion and standing rule independently:
 
@@ -466,7 +516,7 @@ Key distinction: additions that violate a rule are failures; removals or migrati
 
 | Overall | Action |
 |---------|--------|
-| All criteria AND rules pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 4c |
+| All criteria AND rules pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 5c |
 | Any criteria fail, retries remaining | **REJECT** — re-dispatch with feedback (see below) |
 | Any standing rule fails, retries remaining | **REJECT** — re-dispatch with standing rule feedback (same retry path) |
 | Any criteria or rule fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
@@ -483,13 +533,13 @@ coord node update $TREE_ID $NODE_DB_ID \
 completed_nodes.append(node)
 ```
 
-Then proceed to step 4c (commit) and subsequent steps for this node.
+Then proceed to step 5c (commit) and subsequent steps for this node.
 
 #### Reject Path
 
 When evaluation rejects a node's output:
 
-1. **Build feedback prompt**: Append the failed criteria and reasoning to the original dispatch prompt:
+1. **Build feedback prompt**: Append the failed criteria and reasoning to the workspace DESIGN.md:
 
 ```
 ## Evaluation Feedback (Attempt ${ATTEMPT}/${MAX_RETRIES + 1})
@@ -516,7 +566,7 @@ ${END_IF}
 Please address the failed criteria and rule violations. The passing items should not regress.
 ```
 
-2. **Re-dispatch** with the augmented prompt (same strategy as original dispatch)
+2. **Send feedback to child session** (if still alive) or create a new workspace session with the augmented spec
 3. **Increment retry counter** for this node
 
 #### Re-Dispatch Limits
@@ -549,7 +599,6 @@ NODE_METRICS_DIR="${NODE_WORKSPACE}/.metrics"
 mkdir -p "$NODE_METRICS_DIR"
 
 # Build standing_rules JSON array from a temp file written during evaluation.
-# Each line is a JSON object: {"name":"...","status":"pass|fail","reasoning":"..."}
 STANDING_RULES_FILE="${NODE_METRICS_DIR}/standing_rules.jsonl"
 if [[ -f "$STANDING_RULES_FILE" ]]; then
   STANDING_RULES_JSON=$(jq -s '.' "$STANDING_RULES_FILE")
@@ -576,7 +625,7 @@ The `evaluation.json` file contains:
 | `acceptance_rate` | float | `criteria_passed / criteria_total` (0.0–1.0) |
 | `verdict` | string | `ACCEPT`, `REJECT`, or `FAIL` |
 | `evaluated_at` | string | ISO 8601 timestamp of evaluation |
-| `standing_rules` | array | Per-rule outcomes: `[{name, status, reasoning}]`. `status` is `"pass"` or `"fail"`. Empty array when no standing rules are defined. |
+| `standing_rules` | array | Per-rule outcomes: `[{name, status, reasoning}]`. Empty array when no standing rules are defined. |
 
 Each entry in `standing_rules`:
 
@@ -590,15 +639,15 @@ This file is read by the task-workflow finish operation (step 6) when writing fi
 
 #### Finish Metrics Patch
 
-After writing `evaluation.json`, patch the corresponding `finish.jsonl` entry with evaluation metrics. This closes a sequencing gap: for subagent dispatches, `/finish` runs inside the node workspace *before* execute-tree evaluates the output, so the finish.jsonl entry exists but lacks evaluation fields.
+After writing `evaluation.json`, patch the corresponding `finish.jsonl` entry with evaluation metrics:
 
 ```bash
 skills/goal-tree/scripts/patch-finish-metrics.sh "${NODE_WORKSPACE}" "${NODE_ID}"
 ```
 
-The script is idempotent — entries already patched (criteria_passed present) are left unchanged. If `finish.jsonl` does not exist (e.g., `/finish` was never called), the script exits cleanly.
+The script is idempotent — entries already patched (criteria_passed present) are left unchanged. If `finish.jsonl` does not exist, the script exits cleanly.
 
-### 4b. Outcome Classification
+### 5b. Outcome Classification
 
 For each completed node, classify the outcome relative to the mission:
 
@@ -606,7 +655,7 @@ For each completed node, classify the outcome relative to the mission:
 |----------------|---------|--------|
 | **Advanced** | Node delivered clear mission value | Record advancement in coordinator result |
 | **Neutral** | Node completed but impact is unclear or deferred | Note as "neutral — impact pending" |
-| **Setback** | Node completed but revealed a problem or regression | Flag for strategic review in step 4d |
+| **Setback** | Node completed but revealed a problem or regression | Flag for strategic review in step 5d |
 
 Record the classification alongside the node result:
 
@@ -615,9 +664,9 @@ coord node add-result $TREE_ID $NODE_DB_ID \
   --summary "<changes summary>. Outcome: <advanced|neutral|setback>. <1-sentence justification>"
 ```
 
-Setback classifications automatically trigger the strategic feedback check in step 4d.
+Setback classifications automatically trigger the strategic feedback check in step 5d.
 
-### 4c. Commit After Results
+### 5c. Commit After Results
 
 After processing results from a dispatch round, commit changes in node workspaces:
 
@@ -635,7 +684,7 @@ commit(repo_dir)
 record commit hash in completed_nodes
 ```
 
-### 4d. Completion Checkpoint
+### 5d. Completion Checkpoint
 
 Post-completion behavior is determined by autonomy tier:
 
@@ -683,7 +732,7 @@ Approve, or feedback?
 
 Show results and wait for human input before continuing.
 
-### 4e. Strategic Feedback Check
+### 5e. Strategic Feedback Check
 
 After processing results, evaluate whether results change the strategic picture:
 
@@ -700,30 +749,28 @@ After processing results, evaluate whether results change the strategic picture:
 
 When pausing, present the strategic observation and let the operator steer. Do not present a list of everything that happened — focus on the one thing that matters.
 
-### 5. Re-Query and Continue
+### 6. Re-Query and Continue
 
-Query the coordinator for fresh state (may have been updated by sub-sessions):
+Query the coordinator for fresh state (may have been updated by child sessions):
 
 ```bash
 coord tree show $TREE_ID
 ```
 
-Check for sub-session completions:
+Check for newly completed sessions in `active_sessions`:
 
 ```
-for active sub-session:
-  if session completed:
-    # Query coordinator for node status (sub-session updates coordinator directly)
-    coord tree show $TREE_ID
-    collect results from node statuses
-    # Branch merging deferred to synthesize step
+for session_name, session_info in active_sessions:
+  if session completed since last check:
+    collect results
+    active_sessions.remove(session_name)
 ```
 
-Go to step 1 (select next ready batch).
+Go to step 1 (select next ready batch). If `active_sessions` is non-empty but no new ready nodes are available, continue the monitoring loop (step 4) instead of selecting new nodes.
 
 ## Termination
 
-### 6. Completion
+### 7. Completion
 
 When the loop terminates:
 
@@ -732,7 +779,7 @@ When the loop terminates:
 
 **Nodes completed**: <N>
 <for each completed node>
-  - <node.id>. <node.title> [<dispatch_method>] (<commit>)
+  - <node.id>. <node.title> [workspace-session] (<commit>)
 
 **Nodes skipped**: <N>
 <for each skipped node>
@@ -746,8 +793,8 @@ When the loop terminates:
 <for each node with failure telemetry>
   - <node.id>. <node.title>: <attempts> attempts, final outcome: <completed|escalated>
 
-**Dispatch summary**: <subagent: N, inline: N, sub-session: N, fallback: N>
-**Parallel dispatches**: <N fan-outs>
+**Dispatch summary**: workspace-session: N, escalated: N
+**Active sessions at termination**: <N>
 **Commits**: <N total>
 
 **Termination reason**: all_complete | blocked | all_skipped | escalated
@@ -767,17 +814,23 @@ In open-ended mode, "all nodes complete" means "this batch is done" — not "the
 
 ## Stuck Detection
 
-Reuses stuck detection patterns from task-workflow auto-advance:
+### Stall Detection (Monitoring Loop)
 
-### No-Progress Detection
-
-After each inline implementation step, check `git diff --stat`:
+During the monitoring loop, detect stalled sessions:
 
 ```
-if empty diff:
-  no_progress_count += 1
-  if no_progress_count >= 1:  # threshold
-    handle_stuck(node, "no-progress")
+STALL_THRESHOLD = 10  # monitoring cycles with no progress
+
+for session_name, session_info in active_sessions:
+  current_output = tmux capture-pane -t "$SESSION_NAME" -p
+  if current_output == session_info.last_output:
+    session_info.stall_count += 1
+  else:
+    session_info.stall_count = 0
+    session_info.last_output = current_output
+
+  if session_info.stall_count >= STALL_THRESHOLD:
+    handle_stuck(session_info.node, "stall", "No output change for ${STALL_THRESHOLD} monitoring cycles")
 ```
 
 ### Repeated Failure Detection
@@ -801,6 +854,12 @@ function handle_stuck(node, reason, detail):
 
   skipped_set.add(node.id)
 
+  # Kill the stalled session if still alive
+  tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+
+  # Remove from active sessions
+  active_sessions.remove(session_name)
+
   # Log
   -- Stuck detected --------------------------------
   Node: <node.id>. <node.title>
@@ -815,15 +874,15 @@ When dispatching nodes in parallel:
 
 - One node's failure does **not** block independent siblings
 - Failed nodes are handled individually (retry with parameter change → escalate)
-- Other parallel dispatches continue unaffected
-- Results are collected as each dispatch completes
+- Other parallel sessions continue unaffected
+- Results are collected as each session completes
 
 ```
-# Fan-out: 3 subagents dispatched in parallel
-# Agent 1: success → process result
-# Agent 2: failure → retry with error context → success
-# Agent 3: success → process result
-# All three processed independently
+# Fan-out: 3 workspace sessions started in parallel
+# Session 1: completes successfully → collect result
+# Session 2: fails → retry with error context → new session
+# Session 3: completes successfully → collect result
+# All three processed independently via monitoring loop
 ```
 
 ## Error Handling
@@ -836,10 +895,11 @@ When dispatching nodes in parallel:
 | Transient error (API, network) | Classify via error-classification, retry with backoff |
 | Merge conflict on sub-branch | Escalate to user |
 | Context approaching limit | Output summary, suggest /resume-project in new session |
+| tmux unavailable | Stop with error — tmux is required for workspace sessions |
 
 ## Example
 
-### 3-node parallel dispatch with checkpoints
+### 3-node parallel dispatch with monitoring
 
 ```
 [Goal tree execution starting: 6 nodes (3 ready)]
@@ -848,15 +908,21 @@ When dispatching nodes in parallel:
 
 | Node | Strategy | Reason |
 |------|----------|--------|
-| A.1. Add OAuth config | subagent | Single repo, clear spec |
-| B.1. Add login UI | subagent | Single repo, clear spec |
-| C.1. Update API docs | subagent | Single repo, clear spec |
+| A.1. Add OAuth config | workspace-session | Clear spec, dependencies met |
+| B.1. Add login UI | workspace-session | Clear spec, dependencies met |
+| C.1. Update API docs | workspace-session | Clear spec, dependencies met |
 
-Ready to dispatch, or want to adjust?
+Creating 3 workspace sessions...
+  → A.1 session started: tmux send-keys -t "A.1" "claude /init-workspace" Enter
+  → B.1 session started: tmux send-keys -t "B.1" "claude /init-workspace" Enter
+  → C.1 session started: tmux send-keys -t "C.1" "claude /init-workspace" Enter
 
-  → User: "go"
+── Monitoring ─────────────────────────────
 
-  Dispatching 3 subagents in parallel...
+  [cycle 1] A.1: working... | B.1: working... | C.1: working...
+  [cycle 2] A.1: working... | B.1: working... | C.1: completed ✓
+  [cycle 3] A.1: completed ✓ | B.1: working...
+  [cycle 4] B.1: completed ✓
 
 ── Round 1 Complete ───────────────────────
 
@@ -864,41 +930,35 @@ Ready to dispatch, or want to adjust?
 |------|--------|-------|--------|
 | A.1. Add OAuth config | success | 2 files | abc1234 |
 | B.1. Add login UI | success | 3 files | def5678 |
-| C.1. Update API docs | partial | 1 file | — |
+| C.1. Update API docs | success | 1 file | ghi9012 |
 
-**Next up**: A.2 (depends: A.1 ✓), B.2 (depends: B.1 ✓), C.1 retry
-
-Continuing. Redirect?
-
-  → (no response, continuing)
+**Next up**: A.2 (depends: A.1 ✓), B.2 (depends: B.1 ✓)
 
 ── Dispatch Round 2 ───────────────────────
 
 | Node | Strategy | Reason |
 |------|----------|--------|
-| A.2. Implement OAuth flow | subagent | Depends met, clear spec |
-| C.1. Update API docs | inline | Retry partial completion |
+| A.2. Implement OAuth flow | workspace-session | Depends met, clear spec |
+| B.2. Add token refresh | workspace-session | Depends met, clear spec |
 
-Ready to dispatch?
+Creating 2 workspace sessions...
 
-  → User: "go, auto-advance from here"
+── Monitoring ─────────────────────────────
 
-  (checkpoints compressed to status lines for remaining rounds)
-
-── Round 2: A.2 success (4 files), C.1 success (1 file) ──
-── Round 3: B.2 success (2 files) ──
+  [cycle 1] A.2: working... | B.2: working...
+  [cycle 2] A.2: completed ✓ | B.2: completed ✓
 
 ## Goal Tree Execution Summary
 
 **Nodes completed**: 5
-  - A.1. Add OAuth config [subagent] (abc1234)
-  - A.2. Implement OAuth flow [subagent] (ghi9012)
-  - B.1. Add login UI [subagent] (def5678)
-  - B.2. Add token refresh [subagent] (mno7890)
-  - C.1. Update API docs [inline] (jkl3456)
+  - A.1. Add OAuth config [workspace-session] (abc1234)
+  - A.2. Implement OAuth flow [workspace-session] (jkl3456)
+  - B.1. Add login UI [workspace-session] (def5678)
+  - B.2. Add token refresh [workspace-session] (mno7890)
+  - C.1. Update API docs [workspace-session] (ghi9012)
 
-**Dispatch summary**: subagent: 4, inline: 1
-**Parallel dispatches**: 1 fan-out (3 parallel)
+**Dispatch summary**: workspace-session: 5
+**Active sessions at termination**: 0
 **Commits**: 5 total
 **Termination reason**: all_complete
 ```
