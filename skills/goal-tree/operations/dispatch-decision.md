@@ -57,18 +57,6 @@ Human reviews **indicators of correctness**: spec traces to tests, tests trace t
 ## Decision Flow
 
 ```
-Is the spec complete enough to dispatch autonomously?
-├── Yes
-│   ├── Does it need human judgment? → ESCALATE
-│   └── No → WORKSPACE SESSION
-└── No
-    ├── Does it need human judgment? → ESCALATE
-    └── Needs conversation first → DISCUSS-DISPATCH
-```
-
-More specifically:
-
-```
 Does the node need human judgment?
 ├── Yes → ESCALATE
 └── No

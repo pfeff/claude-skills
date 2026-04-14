@@ -206,7 +206,7 @@ while active_sessions is not empty:
       continue
 
     # 5. Detect need for intervention
-    if session_needs_help(output):
+    if output contains "Assumption Check" or "Escalation Required" or "blocked":
       intervene(session_name, session_info, output)
 
     # 6. Detect stall
@@ -227,22 +227,25 @@ A session is complete when:
 
 #### Intervention
 
-The control session can send commands to child sessions when needed:
+The control session can send commands to child sessions when needed. Use `send-keys -l` (literal mode) for all content derived from external data to prevent injection:
 
 ```bash
-# Course correction
-tmux send-keys -t "$SESSION_NAME" "The acceptance criteria require X, not Y. Adjust your approach." Enter
+# Course correction (literal mode — content may contain special characters)
+tmux send-keys -l -t "$SESSION_NAME" "The acceptance criteria require X, not Y. Adjust your approach."
+tmux send-keys -t "$SESSION_NAME" Enter
 
 # Provide missing context
-tmux send-keys -t "$SESSION_NAME" "The API endpoint you need is at /api/v2/users, not /api/users." Enter
+tmux send-keys -l -t "$SESSION_NAME" "The API endpoint you need is at /api/v2/users, not /api/users."
+tmux send-keys -t "$SESSION_NAME" Enter
 
 # Answer a question the child session asked
-tmux send-keys -t "$SESSION_NAME" "Use Redis, not Memcached." Enter
+tmux send-keys -l -t "$SESSION_NAME" "Use Redis, not Memcached."
+tmux send-keys -t "$SESSION_NAME" Enter
 ```
 
 Intervention triggers:
-- Child session output contains a question or assumption check
-- Child session appears stuck (repeated errors in capture-pane output)
+- Child session output contains "Assumption Check" or "Escalation Required"
+- Child session output contains repeated error patterns across monitoring cycles
 - Control session has new context relevant to the child's work
 
 #### Session Death Handling
@@ -283,11 +286,6 @@ if result.status == "success":
     --commit "<commit hash>"
 
   completed_nodes.append(node)
-
-elif result.status == "partial":
-  coord node update $TREE_ID $NODE_DB_ID \
-    --result "<changes summary> (partial)"
-  # Decide: retry remaining criteria or accept partial
 
 elif result.status == "failure":
   retry_node(node, result)

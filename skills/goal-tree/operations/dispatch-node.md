@@ -12,24 +12,32 @@ Executes the chosen dispatch strategy for a node. Handles workspace session crea
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
-| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, duration_seconds, parameter_change_applied. |
+| `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to DESIGN.md on retry (error details, approach hints). |
 
 ## Output
 
+Dispatch-node returns immediately after sending the startup command. The output is a `dispatch_initiated` record, not a result:
+
 ```
-dispatch_result:
-  status: "success" | "partial" | "failure" | "blocked" | "escalated"
+dispatch_initiated:
   node_id: "<node ID>"
-  files_modified: [list of paths]
-  changes_summary: "<description>"
-  commits: [list of hashes]
-  acceptance_criteria_met: [list of met criteria]
-  issues: "<problems encountered>" | "none"
-  dispatch_method: "workspace-session" | "escalated"
+  session_name: "<tmux session name>"
+  workspace_path: "<path to node workspace>"
+  dispatch_method: "workspace-session"
 ```
 
-Note: The control session does not collect results synchronously. Workspace sessions run autonomously; results are collected later via the monitoring loop in execute-tree. The `dispatch_result` above is populated when execute-tree detects session completion.
+The full `dispatch_result` (status, files_modified, commits, etc.) is populated later by execute-tree's monitoring loop when it detects session completion. See execute-tree step 5 for the result schema.
+
+For escalations, the output is immediate:
+
+```
+dispatch_result:
+  status: "escalated"
+  node_id: "<node ID>"
+  issues: "<escalation reason>"
+  dispatch_method: "escalated"
+```
 
 ## Node Workspace Setup
 
@@ -201,11 +209,16 @@ dispatch_result:
 
 ## tmux Control Patterns
 
-These are the primary interface for interacting with child sessions:
+These are the primary interface for interacting with child sessions.
+
+**Session name sanitization**: `$SESSION_NAME` is derived from node IDs and titles. Before use in any tmux command, sanitize to `[a-zA-Z0-9_-]` only — strip or replace shell metacharacters, spaces, and tmux special characters. This prevents command injection via crafted node titles.
 
 ```bash
 # Send command to child session
 tmux send-keys -t "$SESSION_NAME" "command here" Enter
+
+# Send literal text (no key interpretation — use for content from external sources)
+tmux send-keys -l -t "$SESSION_NAME" "literal text here"
 
 # Read child session output (recent screen)
 tmux capture-pane -t "$SESSION_NAME" -p
@@ -216,6 +229,8 @@ tmux capture-pane -t "$SESSION_NAME" -p -S -100
 # Check if session is alive
 tmux has-session -t "$SESSION_NAME" 2>/dev/null
 ```
+
+**When to use `-l` (literal mode)**: Use `send-keys -l` when the content originates from external data (coordinator fields, error messages, evaluation feedback). Use plain `send-keys` only for known command strings like `"claude /init-workspace" Enter`.
 
 ## Failure Handling
 
