@@ -415,6 +415,79 @@ else
   ensure_branch
 fi
 
+# Invoke Claude with a string prompt, writing output to specified log file.
+# Uses same hang-detection pattern as run_claude.
+# Args: $1 = prompt string, $2 = log file path
+invoke_claude_prompt() {
+  local prompt="$1"
+  local log_file="$2"
+
+  : > "$log_file"
+  claude --dangerously-skip-permissions --output-format stream-json --verbose \
+    -p "$prompt" > "$log_file" 2>&1 &
+  CLAUDE_PID=$!
+
+  local waited=0
+  while kill -0 $CLAUDE_PID 2>/dev/null && [[ $waited -lt $MAX_ITER_TIME ]]; do
+    if grep -q '"type":"result"' "$log_file" 2>/dev/null; then
+      sleep $GRACE_PERIOD
+      if kill -0 $CLAUDE_PID 2>/dev/null; then
+        echo "  [killing hung process]"
+        kill $CLAUDE_PID 2>/dev/null || true
+      fi
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  if [[ $waited -ge $MAX_ITER_TIME ]]; then
+    echo "Warning: Claude timed out after ${MAX_ITER_TIME}s"
+    kill $CLAUDE_PID 2>/dev/null || true
+    wait $CLAUDE_PID 2>/dev/null || true
+    CLAUDE_PID=""
+    return 1
+  fi
+
+  wait $CLAUDE_PID 2>/dev/null || true
+  CLAUDE_PID=""
+  sync 2>/dev/null || true
+  return 0
+}
+
+# Run close-out phase: /finish then /review (build mode, completed only).
+# Sets CLOSEOUT_PR_URL with the PR URL extracted from /finish output.
+run_closeout() {
+  echo ""
+  echo "=== Close-out phase ==="
+  mkdir -p .ralph
+
+  CLOSEOUT_PR_URL=""
+
+  # Run /finish to create PR
+  echo "Running /finish..."
+  local finish_log=".ralph/closeout-finish.jsonl"
+  if invoke_claude_prompt "/finish" "$finish_log"; then
+    CLOSEOUT_PR_URL=$(grep -oE 'https://github\.com/[^/]+/[^/]+/pull/[0-9]+' "$finish_log" 2>/dev/null | head -1 || true)
+    if [[ -n "$CLOSEOUT_PR_URL" ]]; then
+      echo "PR created: $CLOSEOUT_PR_URL"
+    else
+      echo "Warning: No PR URL found in /finish output"
+    fi
+  else
+    echo "Warning: /finish failed"
+  fi
+
+  # Run /review to self-review the PR
+  echo "Running /review..."
+  local review_log=".ralph/closeout-review.jsonl"
+  if ! invoke_claude_prompt "/review" "$review_log"; then
+    echo "Warning: /review failed"
+  fi
+
+  echo "Close-out phase complete"
+}
+
 # Write exit summary and exit
 # Args: $1 = reason, $2 = exit code
 write_exit_summary() {
@@ -432,6 +505,8 @@ write_exit_summary() {
     tasks_total=$(( tasks_completed + tasks_unchecked ))
   fi
 
+  local pr_url="${CLOSEOUT_PR_URL:-}"
+
   cat > .ralph/exit-summary.json <<EXITEOF
 {
   "reason": "$reason",
@@ -439,7 +514,8 @@ write_exit_summary() {
   "iterations_max": $MAX_ITER,
   "mode": "$MODE",
   "tasks_completed": $tasks_completed,
-  "tasks_total": $tasks_total
+  "tasks_total": $tasks_total,
+  "pr_url": $(if [[ -n "$pr_url" ]]; then printf '"%s"' "$pr_url"; else echo 'null'; fi)
 }
 EXITEOF
 
@@ -508,6 +584,12 @@ if [[ -z "$EXIT_REASON" ]]; then
   echo ""
   echo "=== Max iterations ($MAX_ITER) reached ==="
   EXIT_REASON="max_iterations"
+fi
+
+# Close-out phase: /finish and /review (build mode, completed only)
+CLOSEOUT_PR_URL=""
+if [[ "$MODE" == "build" && "$EXIT_REASON" == "completed" ]]; then
+  run_closeout
 fi
 
 # Common exit
