@@ -593,7 +593,7 @@ This file is read by the task-workflow finish operation (step 6) when writing fi
 After writing `evaluation.json`, patch the corresponding `finish.jsonl` entry with evaluation metrics. This closes a sequencing gap: for subagent dispatches, `/finish` runs inside the node workspace *before* execute-tree evaluates the output, so the finish.jsonl entry exists but lacks evaluation fields.
 
 ```bash
-scripts/goal-tree/scripts/patch-finish-metrics.sh "${NODE_WORKSPACE}" "${NODE_ID}"
+skills/goal-tree/scripts/patch-finish-metrics.sh "${NODE_WORKSPACE}" "${NODE_ID}"
 ```
 
 The script is idempotent — entries already patched (criteria_passed present) are left unchanged. If `finish.jsonl` does not exist (e.g., `/finish` was never called), the script exits cleanly.

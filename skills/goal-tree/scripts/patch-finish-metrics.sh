@@ -64,20 +64,21 @@ jq -c --arg tid "$NODE_ID" --slurpfile eval "$EVAL_FILE" '
       criteria_total: $eval[0].criteria_total,
       acceptance_rate: $eval[0].acceptance_rate
     } + (
-      if ($eval[0].standing_rules | length) > 0 then {
-        rules_passed: ([$eval[0].standing_rules[] | select(.status == "pass")] | length),
-        rules_total: ($eval[0].standing_rules | length),
-        rules_pass_rate: (([$eval[0].standing_rules[] | select(.status == "pass")] | length) / ($eval[0].standing_rules | length))
+      if (($eval[0].standing_rules // []) | length) > 0 then {
+        rules_passed: ([($eval[0].standing_rules // [])[] | select(.status == "pass")] | length),
+        rules_total: (($eval[0].standing_rules // []) | length),
+        rules_pass_rate: (([($eval[0].standing_rules // [])[] | select(.status == "pass")] | length) / (($eval[0].standing_rules // []) | length))
       } else {} end
     )
   else . end
 ' "$FINISH_JSONL" > "$tmpfile"
 
-# Verify the output is valid before replacing
-line_count_before=$(wc -l < "$FINISH_JSONL")
-line_count_after=$(wc -l < "$tmpfile")
-[[ "$line_count_before" -eq "$line_count_after" ]] \
-  || die "line count mismatch: $line_count_before -> $line_count_after (aborting)"
+# Verify the output has the same number of entries before replacing.
+# Uses jq -s 'length' instead of wc -l to handle files without trailing newlines.
+entry_count_before=$(jq -s 'length' "$FINISH_JSONL")
+entry_count_after=$(jq -s 'length' "$tmpfile")
+[[ "$entry_count_before" -eq "$entry_count_after" ]] \
+  || die "entry count mismatch: $entry_count_before -> $entry_count_after (aborting)"
 
 mv "$tmpfile" "$FINISH_JSONL"
 trap - EXIT
