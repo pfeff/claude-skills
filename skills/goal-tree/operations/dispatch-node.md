@@ -1,6 +1,6 @@
 # Dispatch Node Operation
 
-Executes the chosen dispatch strategy for a node. Handles subagent invocation, sub-session creation, container dispatch, inline execution, and escalation.
+Executes the chosen dispatch strategy for a node. Handles workspace session creation and startup via tmux, or escalation to the user.
 
 ## Inputs
 
@@ -13,29 +13,27 @@ Executes the chosen dispatch strategy for a node. Handles subagent invocation, s
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
 | `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, duration_seconds, parameter_change_applied. |
-| `additional_prompt` | No | Extra context appended to dispatch prompt on retry (error details, approach hints). |
-| `timeout` | No | Wall-clock budget for container dispatch (e.g. `30m`, `45m`, `3600s`). Sourced from `decision.context.timeout` on initial dispatch and from `retry_dispatch`'s widen-timeout branch on retries. Container strategy only — passed to `dispatch-container.sh` as `--timeout`. Defaults to `dispatch-container.sh`'s `DEFAULT_TIMEOUT` (30m) when omitted. |
+| `additional_prompt` | No | Extra context appended to DESIGN.md on retry (error details, approach hints). |
 
 ## Output
 
 ```
 dispatch_result:
-  status: "success" | "partial" | "failure" | "blocked" | "escalated" | "did_not_finish"
+  status: "success" | "partial" | "failure" | "blocked" | "escalated"
   node_id: "<node ID>"
   files_modified: [list of paths]
   changes_summary: "<description>"
   commits: [list of hashes]
   acceptance_criteria_met: [list of met criteria]
   issues: "<problems encountered>" | "none"
-  dispatch_method: "subagent" | "sub-session" | "container" | "inline" | "escalated"
-  duration_seconds: <integer wall-clock seconds>  # container dispatch only; field is omitted (not null) for other strategies
+  dispatch_method: "workspace-session" | "escalated"
 ```
 
-The `did_not_finish` status is emitted exclusively by container dispatch when the wall-clock timeout is exceeded (see Container Dispatch below). Subagent, sub-session, and inline strategies do not produce it. The `duration_seconds` field is populated by container dispatch on every emission branch and is **omitted entirely** from `dispatch_result` for non-container strategies — consumers should treat the absence of the key as "duration not measured", not as zero.
+Note: The control session does not collect results synchronously. Workspace sessions run autonomously; results are collected later via the monitoring loop in execute-tree. The `dispatch_result` above is populated when execute-tree detects session completion.
 
 ## Node Workspace Setup
 
-**Before any dispatch strategy**, create a node workspace with repo worktrees. This applies to all strategies (subagent, inline, sub-session).
+**Before any dispatch strategy**, create a node workspace with repo worktrees. This applies to all strategies.
 
 ```bash
 skills/goal-tree/scripts/create-node-workspace.sh \
@@ -102,7 +100,7 @@ See `operations/branch-management.md` for the canonical workspace creation opera
 
 ## Assumption Boundary Protocol (DD-22)
 
-During any dispatch strategy (subagent, inline, sub-session), the agent may encounter something unexpected — a missing API, a contradictory schema, an ambiguous requirement. These are **assumption boundaries**: moments where the agent is about to act on an uncertain belief.
+During dispatch, the agent may encounter something unexpected — a missing API, a contradictory schema, an ambiguous requirement. These are **assumption boundaries**: moments where the agent is about to act on an uncertain belief.
 
 **Recognition heuristic** — surface to the user when:
 1. **Something expected is missing**: An endpoint, table, config, or interface that the task spec implies should exist but doesn't
@@ -124,262 +122,57 @@ Proceed with this assumption, or redirect?
 
 **When to skip**: If the assumption is low-risk (cosmetic, easily reversible, local to one file) and doesn't constrain other nodes, proceed without surfacing. The heuristic is: **would the human want to know this before I build on top of it?**
 
-For subagent dispatches, assumption boundaries are handled by the subagent returning `status: blocked` with the question, rather than guessing and proceeding.
-
 ## Strategy Execution
 
-### Subagent Dispatch
+### Workspace Session
 
-Reuses the subagent contract from `task-workflow/references/subagent-dispatch.md`.
+The default execution strategy. Creates a workspace, writes the spec, and starts a tmux session that runs autonomously.
 
-#### 1. Assemble Prompt
-
-Build a self-contained prompt for the subagent:
-
-```
-You are implementing a single task in a goal-tree project. Make the code changes described below, run tests to verify, and report your results.
-
-Do not commit changes. Do not create PRs. Do not modify files outside the scope of this task.
-
-## Task
-
-**ID**: ${NODE_ID}
-**Subject**: ${NODE_TITLE}
-**Description**: ${NODE_DESCRIPTION}
-
-## Acceptance Criteria
-
-${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
-
-Each criterion above is a specific, verifiable statement. Your output will be evaluated against these criteria by the parent session (LLM-as-judge). For each criterion, the evaluator will determine pass/fail based on your actual changes.
-
-## Goal Tree Context
-
-This task is part of a larger project:
-- **Project**: ${ROOT_GOAL_TITLE}
-- **Parent goal**: ${PARENT_GOAL_TITLE}
-- **Position**: ${NODE_ID} of ${TOTAL_NODES} nodes
-
-## Design Decisions
-
-${RELEVANT_DESIGN_DECISIONS}
-
-## Prior Task Results
-
-${DEPENDENCY_RESULTS_LOG_ENTRIES}
-
-(If empty: "This is the first task — no prior context.")
-
-## Working Directory
-
-- Node workspace: ${NODE_DIR}
-- Repository: ${NODE_DIR}/${REPO}
-
-## Important Context
-
-The coordinator API manages this project's goal tree. The tree ID is ${TREE_ID} and this node's database ID is ${NODE_DB_ID}. The `coord` CLI is available for querying project state if needed.
-
-## Instructions
-
-1. Read the planning-workflow skill and run it for this task:
-   Read(${CLAUDE_PLUGIN_ROOT}/skills/planning-workflow/SKILL.md)
-2. Implement the changes following the generated plan
-3. If a test runner is available, run tests
-4. If a linter is available, run lint
-5. If tests or lint fail, attempt to fix (up to 2 retries)
-
-## Required Output Format
-
-When finished, report your results in this exact format:
-
-RESULT_START
-status: success | partial | failure
-files_modified:
-  - path/to/file1.md
-  - path/to/file2.md
-changes_summary: |
-  <1-3 sentence description of what was changed and why>
-test_result: pass | fail | no_tests | skipped
-lint_result: pass | fail | no_linter | skipped
-acceptance_criteria_met:
-  - "criterion 1 text"
-  - "criterion 2 text"
-issues: |
-  <any problems encountered, or "none">
-RESULT_END
-```
-
-#### 2. Dispatch via Agent Tool
-
-The subagent works directly in the node workspace. The node branch provides isolation — no `isolation: "worktree"` needed.
-
-```
-Agent(
-  subagent_type: "general-purpose",
-  description: "Implement: ${NODE_TITLE}",
-  prompt: <assembled prompt>
-)
-```
-
-#### 3. Parse Result
-
-Follow parsing rules from `task-workflow/references/subagent-dispatch.md`:
-
-1. Find `RESULT_START`/`RESULT_END` markers
-2. Parse YAML-like key-value pairs
-3. If no markers found → treat as `status: failure`
-
-#### 4. Handle Failure
-
-| Attempt | Action |
-|---------|--------|
-| First failure | Retry with failure context appended to prompt |
-| Second failure | Return `status: failure` with `dispatch_method: "subagent"` — caller falls back to inline |
-
-### Container Dispatch
-
-For leaf tasks where repos have Taskfile and Docker is available. Runs inside Ralph's sandboxed devcontainer — eliminates permission prompts entirely.
-
-#### 1. Invoke Wrapper Script
+#### 1. Create Workspace (if not already done)
 
 ```bash
-skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}" \
-  --timeout "${TIMEOUT:-${DECISION.CONTEXT.TIMEOUT:-30m}}"
+skills/goal-tree/scripts/create-node-workspace.sh \
+  "$PROJECT_DIR" "$NODE_ID" "$PROJECT_BRANCH" "$OWNER" <repo1> [repo2 ...]
 ```
 
-Resolve the `--timeout` value in this order: explicit `timeout` input to `dispatch-node` (set by `retry_dispatch`'s widen-timeout branch), then `decision.context.timeout` (set by `dispatch-decision` per-node), then the script default (`30m`).
+#### 2. Write DESIGN.md with Spec
 
-The wrapper script handles the full lifecycle:
-1. Translates `DESIGN.md` → `specs/task.md` (L1→L0 spec format)
-2. Generates `.ralph/gates.md` from each repo's `Taskfile.yml`
-3. Generates `.ralph/workspace.md` for multi-repo nodes
-4. Copies `PROMPT_plan.md` and `PROMPT_build.md` from Ralph-wiggum skill
-5. Invokes `run-container.sh` with plan then build phases
-6. Parses results into `dispatch_result` JSON
+Populate the node workspace's DESIGN.md with the full task spec (see Node Workspace Setup above).
 
-#### 2. Parse Result
+If `prior_failures` is provided (retry dispatch), append the failure history to DESIGN.md:
 
-The wrapper outputs structured JSON to stdout. Parse it directly:
+```markdown
+## Prior Failure History
 
-```
-dispatch_result:
-  status: <from wrapper JSON>
-  node_id: <from wrapper JSON>
-  files_modified: <from wrapper JSON>
-  changes_summary: <from wrapper JSON>
-  commits: <from wrapper JSON>
-  acceptance_criteria_met: <from wrapper JSON>
-  issues: <from wrapper JSON>
-  dispatch_method: "container"
+This task has been attempted ${len(prior_failures)} time(s) previously.
+
+### Attempt ${attempt.attempt_number}
+- **Failure reason**: ${attempt.failure_reason}
+- **Parameter change applied**: ${attempt.parameter_change_applied}
+
+${additional_prompt}
 ```
 
-#### 3. Handle Failure
+#### 3. Send Startup Command
 
-| Status | Action |
-|--------|--------|
-| `success` | All tasks completed — proceed to post-implementation lifecycle |
-| `partial` | Some tasks completed — return to caller for retry decision |
-| `blocked` | Ralph wrote BLOCKERS.md — return `status: blocked` with blocker text |
-| `failure` | Max iterations or error — return `status: failure` for caller retry loop |
-| `did_not_finish` | Container exceeded the wall-clock budget (`--timeout`) — return for caller retry. The retry path may increase the timeout as a parameter change. |
-
-On failure, the caller (execute-tree) may retry with parameter changes or fall back to subagent/inline. `did_not_finish` is unique to container dispatch — `dispatch-container.sh` configures the timeout via its `--timeout` flag (default 30m, applied as a single combined wall-clock budget across plan and build phases).
-
-#### 4. Dry Run
-
-For validation without execution, use `--dry-run`:
+Start the child session working on the task:
 
 ```bash
-skills/goal-tree/scripts/dispatch-container.sh "${NODE_DIR}" --dry-run
+tmux send-keys -t "$SESSION_NAME" "claude /init-workspace" Enter
 ```
 
-This prepares the workspace (specs, gates, prompts) without invoking the container. Useful for verifying the translation pipeline.
+The child session picks up CLAUDE.md and DESIGN.md from the workspace, runs `/init-workspace` to decompose into tasks, and autonomously implements them.
 
-### Sub-Session Dispatch
+#### 4. Return
 
-For deep subtrees that exceed subagent capacity.
-
-#### 1. Write Workspace Context
-
-Write CLAUDE.md for the sub-session in the node workspace with coordinator context:
-
-- Project context
-- Subtree scope
-- Tree ID and node DB ID for coordinator API access
-- Instructions to run planning-workflow for each leaf task
-- Auto-advance configuration
-
-#### 2. Spawn Session
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-tmuxp-session.sh \
-  "${NODE_ID}: ${NODE_TITLE}" \
-  "${NODE_DIR}"
-```
-
-#### 3. Monitor
-
-The root session checks sub-session status periodically:
-
-```bash
-tmux has-session -t "${NODE_ID}" 2>/dev/null
-```
-
-```bash
-# Check coordinator for node completion
-coord tree show $TREE_ID | jq ".data.nodes[] | select(.node_id == \"${NODE_ID}\") | .status"
-```
-
-#### 4. Collect Results
-
-When the sub-session completes:
-
-1. Query coordinator for node status and results
-2. Return structured result (branch merging happens during synthesis)
-
-### Inline Execution
-
-The root session implements the task directly in the node workspace.
-
-#### 1. Read Context
+Dispatch-node returns immediately after sending the startup command. The control session does not wait for the child to complete — monitoring happens in execute-tree's polling loop.
 
 ```
-Read: DESIGN.md (relevant requirements)
-Read: dependency results from coordinator (query dependent nodes)
-```
-
-#### 2. Run Planning Workflow (Gate)
-
-Run planning-workflow for the task. This is a **hard gate** — do not proceed to implementation without a plan.
-
-```
-Read: ${CLAUDE_PLUGIN_ROOT}/skills/planning-workflow/SKILL.md
-```
-
-Run the planning pipeline (problem-validation → plan-generation) scoped to this task.
-
-**Verification:** Confirm PLAN.md was created or updated with a plan for this node before proceeding. If planning-workflow was skipped or produced no plan, stop and report `status: failure` with `issues: "planning-workflow gate not satisfied"`.
-
-#### 3. Implement
-
-Follow the generated plan. Execute in the node workspace directory (`${NODE_DIR}/${REPO}`).
-
-#### 4. Validate
-
-Run tests and lint (same as validate-implementation from task-workflow).
-
-#### 5. Report Result
-
-Build the dispatch_result from the inline implementation:
-
-```
-dispatch_result:
-  status: "success"
+dispatch_initiated:
   node_id: "<node ID>"
-  files_modified: <from git diff --name-only>
-  changes_summary: "<inline summary>"
-  commits: []  # root session commits separately
-  dispatch_method: "inline"
+  session_name: "<tmux session name>"
+  workspace_path: "<path to node workspace>"
+  dispatch_method: "workspace-session"
 ```
 
 ### Escalate
@@ -406,69 +199,42 @@ dispatch_result:
   dispatch_method: "escalated"
 ```
 
+## tmux Control Patterns
+
+These are the primary interface for interacting with child sessions:
+
+```bash
+# Send command to child session
+tmux send-keys -t "$SESSION_NAME" "command here" Enter
+
+# Read child session output (recent screen)
+tmux capture-pane -t "$SESSION_NAME" -p
+
+# Read scrollback (more history)
+tmux capture-pane -t "$SESSION_NAME" -p -S -100
+
+# Check if session is alive
+tmux has-session -t "$SESSION_NAME" 2>/dev/null
+```
+
 ## Failure Handling
 
-Dispatch-node returns failures to execute-tree, which owns the retry loop (step 4). Dispatch-node performs one internal retry for subagents (prompt enrichment), then returns `status: failure` for execute-tree to handle via its retry-with-parameter-change loop.
+Dispatch-node returns failures to execute-tree, which owns the retry loop (step 4). Since workspace sessions run asynchronously, failures are detected during execute-tree's monitoring loop, not at dispatch time.
 
-### Subagent Failure Chain
+### Failure Detection
 
-```
-Subagent attempt 1 → failure
-  → Retry with failure context (attempt 2) → failure
-    → Return to caller with status: failure
-      → Caller (execute-tree) retry loop:
-        → Attempt 2: re-dispatch with error context → failure
-        → Attempt 3: re-dispatch with alternative approach hint → failure
-        → Escalate to human with full failure log
-```
-
-When `prior_failures` is provided (retry dispatch from execute-tree), append the failure history to the subagent prompt:
-
-```
-## Prior Failure History
-
-This task has been attempted ${len(prior_failures)} time(s) previously.
-
-<for each prior failure>
-### Attempt ${attempt.attempt_number}
-- **Failure reason**: ${attempt.failure_reason}
-- **Parameter change applied**: ${attempt.parameter_change_applied}
-
-${additional_prompt}
-```
-
-### Container Failure
-
-```
-Container dispatch returns non-success status
-  → status: "blocked" → return to caller with blocker text
-  → status: "partial" → return to caller for retry decision
-  → status: "failure" → return to caller
-    → Caller (execute-tree) retry loop:
-      → Attempt 2: re-dispatch as container with adjusted spec context → failure
-      → Attempt 3: fall back to subagent strategy → failure
-      → Escalate to human with full failure log
-```
-
-Container dispatch does not perform internal retries — Ralph's loop already iterates up to `MAX_ITER` (default 20). If the container exits with failure, the task exhausted Ralph's retry budget.
-
-### Sub-Session Failure
-
-```
-Sub-session completes with failures
-  → Root session queries coordinator for node status
-  → Evaluates: can remaining failures be fixed inline?
-    → Yes: fix inline in node workspace
-    → No: return status: failure → execute-tree retry loop handles retries
-```
+Failures are detected by execute-tree monitoring via:
+1. **Session death**: `tmux has-session` returns non-zero — session crashed or exited
+2. **Coordinator status**: Node status updated to `blocked` or `failed` by the child session
+3. **Stall detection**: No progress observed across multiple monitoring cycles
 
 ### Failure Telemetry
 
-Each dispatch failure emits a structured telemetry record (see execute-tree step 4 "Failure Telemetry Record" for schema). Dispatch-node populates the `dispatch_method` and `failure_reason` fields; execute-tree adds the retry-loop fields (`attempt_number`, `parameter_change_applied`, `parameter_change_strategy`).
+Each dispatch failure emits a structured telemetry record (see execute-tree step 4 "Failure Telemetry Record" for schema). Dispatch-node populates the `dispatch_method` field; execute-tree adds the retry-loop fields (`attempt_number`, `parameter_change_applied`, `parameter_change_strategy`).
 
 ### Error Classification
 
-For transient errors during dispatch (API rate limits, network issues):
+For transient errors during dispatch setup (workspace creation, tmux issues):
 
 1. Load `task-workflow/references/error-classification.md`
 2. Classify the error
@@ -477,7 +243,7 @@ For transient errors during dispatch (API rate limits, network issues):
 
 ## Post-Implementation Lifecycle
 
-After a node's implementation is complete (any dispatch strategy), the root session drives the full landing sequence. Do not stop after committing — continue through the entire pipeline:
+After a node's implementation is complete (detected by execute-tree monitoring), the control session drives the full landing sequence. Do not stop after committing — continue through the entire pipeline:
 
 ### 1. Commit
 Stage and commit changes in the node workspace using the git skill.
@@ -508,7 +274,7 @@ coord node add-result $TREE_ID $NODE_DB_ID \
 Include the traceability chain: what was delivered, which goal it serves, and how it connects to the mission. For non-code deliverables (research, documents, applications), record the artifact location and its strategic link.
 
 ### 6. Lessons-Learned Capture
-Review sub-session or subagent output for lessons worth capturing. Look for:
+Review child session output for lessons worth capturing. Look for:
 
 - **Process friction**: steps that took longer than expected, tooling gaps, unclear specs
 - **Reusable patterns**: approaches that worked well and should be repeated
@@ -535,9 +301,9 @@ If nothing notable occurred, skip — do not generate boilerplate lessons.
 ### 7. Notify and Stop
 Child sessions **stop here**. Do not merge, do not enable auto-merge. The operator reviews, approves, and merges.
 
-If running as a sub-session, notify the parent's inbox:
+If running as a child workspace session, notify the parent's inbox:
 ```bash
-~/.claude/hooks/inbox-write.sh sub-session "<node_id>" "<node_title>: PR ready for review"
+~/.claude/hooks/inbox-write.sh workspace-session "<node_id>" "<node_title>: PR ready for review"
 ```
 
 > **Review gate**: The `PR Review` CI check requires `APPROVED` state. Child sessions (GitHub App) cannot self-approve. The operator must `gh pr review --approve` before the PR can merge.
@@ -553,11 +319,9 @@ After the operator approves and merges:
 ## Integration Points
 
 - **Called by**: execute-tree (step 3)
-- **Depends on**: dispatch-decision output, Agent tool, task-workflow scripts, `coord` CLI, `dispatch-container.sh`
+- **Depends on**: dispatch-decision output, `coord` CLI, tmux
 - **References**:
-  - `task-workflow/references/subagent-dispatch.md` — dispatch contract and result format
-  - `task-workflow/operations/dispatch-task.md` — mechanical dispatch plumbing
   - `task-workflow/references/error-classification.md` — error taxonomy
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm
   - `operations/branch-management.md` — node workspace creation
-  - `scripts/dispatch-container.sh` — container dispatch wrapper (DESIGN.md → Ralph)
+  - `operations/discuss-dispatch.md` — conversation-first dispatch pattern

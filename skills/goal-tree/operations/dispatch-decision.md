@@ -1,6 +1,6 @@
 # Dispatch Decision Operation
 
-Evaluates a ready node and selects the appropriate execution strategy: subagent, sub-session, container, inline, or escalate.
+Evaluates a ready node and selects the appropriate execution strategy: workspace session, discuss-dispatch, or escalate.
 
 ## Inputs
 
@@ -14,7 +14,7 @@ Evaluates a ready node and selects the appropriate execution strategy: subagent,
 
 ```
 decision:
-  strategy: "subagent" | "sub-session" | "container" | "inline" | "escalate"
+  strategy: "workspace-session" | "discuss-dispatch" | "escalate"
   tier: 1 | 2 | 3
   reason: "<why this strategy was chosen>"
   context: { ... }  # strategy-specific context
@@ -28,7 +28,7 @@ Every dispatch decision includes a tier that controls checkpoint behavior:
 |------|----------|----------|-----------------|----------|
 | 1 | Safe / read-only | Auto | Auto | Research, audits, scans, analysis |
 | 2 | Code with solid spec | Auto | Validate → agent review → human review | Features, fixes, refactoring |
-| 3 | Strategic / ambiguous | Escalate or inline | Human review | Architecture decisions, scope changes |
+| 3 | Strategic / ambiguous | Escalate or discuss-dispatch | Human review | Architecture decisions, scope changes |
 
 ### Tier Classification
 
@@ -57,107 +57,66 @@ Human reviews **indicators of correctness**: spec traces to tests, tests trace t
 ## Decision Flow
 
 ```
-Is the node a leaf task?
+Is the spec complete enough to dispatch autonomously?
 ├── Yes
-│   ├── Does it need human judgment?
-│   │   ├── Yes → ESCALATE
-│   │   └── No
-│   │       ├── Is the spec clear and self-contained?
-│   │       │   ├── Yes
-│   │       │   │   ├── Repo(s) have Taskfile + Docker available? → CONTAINER
-│   │       │   │   ├── Single repo or few repos? → SUBAGENT
-│   │       │   │   └── Many repos with complex coordination? → INLINE
-│   │       │   └── No (ambiguous, underspecified) → INLINE
-│   │       └── Is it a fallback from failed subagent/container? → INLINE
-│   └──
-└── No (goal with children)
-    ├── Shallow subtree (≤3 leaves, all ready)? → dispatch children as SUBAGENT batch
-    ├── Deep subtree (4+ nodes, complex)? → SUB-SESSION
-    └── Mixed (some children ready, some not)? → dispatch ready children individually
+│   ├── Does it need human judgment? → ESCALATE
+│   └── No → WORKSPACE SESSION
+└── No
+    ├── Does it need human judgment? → ESCALATE
+    └── Needs conversation first → DISCUSS-DISPATCH
+```
+
+More specifically:
+
+```
+Does the node need human judgment?
+├── Yes → ESCALATE
+└── No
+    ├── Is the spec clear and self-contained?
+    │   ├── Yes → WORKSPACE SESSION
+    │   └── No (ambiguous, underspecified)
+    │       ├── Ambiguity is resolvable via conversation → DISCUSS-DISPATCH
+    │       └── Ambiguity requires human decision → ESCALATE
+    └── Is it a fallback from a failed workspace session? → WORKSPACE SESSION (with adjusted spec)
 ```
 
 ## Strategy Criteria
 
-### Subagent
+### Workspace Session
 
-Choose subagent when:
+Choose workspace session when:
 
-- Leaf task with clear acceptance criteria
-- Targets 1-2 repos
+- Spec has clear acceptance criteria
 - No "clarify", "discuss", "decide" in description
 - No unresolved spec gaps
 - Dependencies are all completed (results available for context)
-- Estimated scope: 1-5 files of changes
 
-**Context provided**:
-```
-context:
-  repos: [list of repos]
-  prompt_includes:
-    - task description and acceptance criteria
-    - relevant design decisions
-    - dependency results from Results Log
-    - repo paths
-```
-
-### Container
-
-Choose container when:
-
-- Leaf task with clear acceptance criteria (Tier 2)
-- Targets 1-2 repos that have `Taskfile.yml` (standard gate targets)
-- Docker is available on the dispatch host
-- No "clarify", "discuss", "decide" in description
-- No unresolved spec gaps
-- Task benefits from sandboxed execution (no permission prompts)
-
-Container is preferred over subagent when available because it eliminates permission prompts entirely. Fall back to subagent when Docker is unavailable or repos lack Taskfile.
-
-**Container timeout**: Container dispatch is bounded by a wall-clock timeout configured via `dispatch-container.sh --timeout <duration>` (default `30m`, applied as a single combined budget across the plan and build phases). Per-dispatch override is the primary tuning surface for the retry-with-parameter-change loop in `execute-tree.md` — when a prior attempt returned `did_not_finish`, the retry path widens the timeout instead of changing the prompt.
+This is the default strategy. Everything dispatches to a workspace session — the decision is about spec completeness, not task complexity. A leaf task with 2 files and a deep subtree with 20 files both go to workspace sessions. The spec scales; the substrate doesn't change.
 
 **Context provided**:
 ```
 context:
   repos: [list of repos]
   node_workspace: "<path to node workspace>"
-  taskfile_targets: { repo: [available targets] }
-  timeout: "<duration>"  # optional, defaults to dispatch-container.sh DEFAULT_TIMEOUT (30m)
+  session_name: "<tmux session name>"
 ```
 
-### Sub-Session
+### Discuss-Dispatch
 
-Choose sub-session when:
+Choose discuss-dispatch when:
 
-- Goal node with 4+ descendants
-- Complex leaf that needs full planning-workflow + auto-advance
-- Multi-repo task requiring workspace-level coordination
-- Subtree deep enough to benefit from dedicated session context
+- Spec has gaps that can be resolved through conversation
+- Task description contains "clarify" or "discuss" but not "decide" (decisions need human judgment)
+- Acceptance criteria are vague or missing
+- The node would benefit from incremental DESIGN.md refinement before autonomous execution
+
+This follows the discuss-dispatch lifecycle: conversation → workspace creation → incremental DESIGN.md → handoff to workspace session.
 
 **Context provided**:
 ```
 context:
-  subtree: <extracted subtree for GOAL partition>
+  gaps: ["<list of spec gaps to resolve>"]
   repos: [list of repos]
-  branch: "<project-branch>/<node-id>"
-  workspace_path: "~/src/work/<project>/<node-id>/"
-```
-
-### Inline
-
-Choose inline when:
-
-- Task description contains "clarify", "discuss", or "decide"
-- Task spans many repos with complex coordination
-- Task's `depends_on` references a failed task
-- Previous subagent dispatch failed (fallback)
-- Spec has unresolved gaps
-- Root session has sufficient context to implement directly
-
-**Context provided**:
-```
-context:
-  reason: "ambiguous" | "multi-repo" | "fallback" | "spec-gap"
-  prior_failure: <issues from failed dispatch, if fallback>
 ```
 
 ### Escalate
@@ -166,7 +125,7 @@ Choose escalate when:
 
 - Task requires human judgment (architecture decisions, external API choices)
 - Task involves external dependencies not accessible to the agent
-- Task description explicitly says "needs discussion" or similar
+- Task description explicitly says "needs discussion" or "decide"
 - Task has acceptance criteria that can't be verified automatically
 
 **Context provided**:
@@ -190,29 +149,10 @@ ambiguity_keywords = [
 ]
 
 if any keyword in node.description.lower():
-  strategy = "inline" or "escalate"
-```
-
-### Complexity Estimation
-
-```
-complexity_signals = {
-  "repos_count": len(node.repos),
-  "criteria_count": len(node.acceptance_criteria),
-  "description_length": len(node.description),
-  "dependency_count": len(node.depends_on),
-  "subtree_size": count_descendants(node)  # 0 for leaves
-}
-
-# Simple leaf, low complexity → subagent
-if complexity_signals.repos_count <= 2 and
-   complexity_signals.criteria_count <= 5 and
-   complexity_signals.subtree_size == 0:
-  → subagent candidate
-
-# Deep subtree → sub-session
-if complexity_signals.subtree_size >= 4:
-  → sub-session candidate
+  if "decide" or "choose between" in keywords_found:
+    strategy = "escalate"
+  else:
+    strategy = "discuss-dispatch"
 ```
 
 ### Failed Dependency Check
@@ -221,13 +161,13 @@ if complexity_signals.subtree_size >= 4:
 for dep_id in node.depends_on:
   log_entry = results_log.find(dep_id)
   if log_entry and log_entry.status == "failed":
-    strategy = "inline"
+    strategy = "escalate"
     reason = "dependency failed — needs human judgment for recovery"
 ```
 
-## Example
+## Examples
 
-### Simple leaf → Subagent
+### Clear spec → Workspace Session
 
 ```
 Node: A.2 "Implement user CRUD endpoints"
@@ -237,26 +177,40 @@ Node: A.2 "Implement user CRUD endpoints"
   - description: clear, no ambiguity keywords
 
 Decision:
-  strategy: "subagent"
-  reason: "Clear spec, single repo, dependencies met"
+  strategy: "workspace-session"
+  tier: 2
+  reason: "Clear spec, dependencies met — dispatch to workspace session"
 ```
 
-### Leaf with Taskfile → Container
+### Complex subtree → Workspace Session
 
 ```
-Node: A.3 "Add pagination to list endpoint"
-  - repos: [api-service]  (has Taskfile.yml with test, lint, build)
-  - criteria: 3 items
-  - depends_on: [A.2] (completed)
-  - description: clear, no ambiguity keywords
-  - Docker: available
+Node: C "Frontend redesign" (goal with 6 descendants)
+  - repos: [web-app]
+  - children: 3 sub-goals, 6 total leaves
+  - spec: clear acceptance criteria for each level
 
 Decision:
-  strategy: "container"
-  reason: "Clear spec, Taskfile-enabled repo, Docker available — sandboxed execution"
+  strategy: "workspace-session"
+  tier: 2
+  reason: "Deep subtree but spec is clear — workspace session handles complexity via its own decomposition"
 ```
 
-### Complex leaf → Inline
+### Vague spec → Discuss-Dispatch
+
+```
+Node: B.2 "Improve caching layer"
+  - repos: [api-service, cache-service]
+  - criteria: "Make caching faster" (vague)
+  - description: "clarify what the bottleneck is"
+
+Decision:
+  strategy: "discuss-dispatch"
+  tier: 3
+  reason: "Spec has gaps — needs conversation to refine acceptance criteria"
+```
+
+### Needs judgment → Escalate
 
 ```
 Node: B.3 "Choose caching strategy and implement"
@@ -264,20 +218,9 @@ Node: B.3 "Choose caching strategy and implement"
   - description: "Decide between Redis and Memcached based on..."
 
 Decision:
-  strategy: "inline"
-  reason: "Contains 'decide' — needs judgment"
-```
-
-### Deep subtree → Sub-session
-
-```
-Node: C "Frontend redesign" (goal with 6 descendants)
-  - repos: [web-app]
-  - children: 3 sub-goals, 6 total leaves
-
-Decision:
-  strategy: "sub-session"
-  reason: "Deep subtree (6 descendants) — benefits from dedicated session"
+  strategy: "escalate"
+  tier: 3
+  reason: "Contains 'decide' — needs human judgment"
 ```
 
 ## Integration Points
