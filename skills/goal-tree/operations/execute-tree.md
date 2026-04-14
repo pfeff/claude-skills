@@ -586,40 +586,7 @@ Each entry in `standing_rules`:
 | `status` | string | `"pass"` or `"fail"` |
 | `reasoning` | string | 1-2 sentence justification for the verdict |
 
-This file is read by the task-workflow finish operation (step 6) when writing finish.jsonl.
-
-#### Finish Metrics Patch
-
-After writing `evaluation.json`, patch the corresponding `finish.jsonl` entry with evaluation metrics. This closes a sequencing gap: for subagent dispatches, `/finish` runs inside the node workspace *before* execute-tree evaluates the output, so the finish.jsonl entry exists but lacks evaluation fields.
-
-```bash
-FINISH_JSONL=~/src/work/.metrics/finish.jsonl
-
-if [[ -f "$FINISH_JSONL" && -f "${NODE_METRICS_DIR}/evaluation.json" ]]; then
-  EVAL=$(cat "${NODE_METRICS_DIR}/evaluation.json")
-
-  # Patch finish.jsonl entries matching this node's task_id that lack criteria fields.
-  # Idempotent: entries already patched (criteria_passed != null) are left unchanged.
-  tmpfile=$(mktemp)
-  jq -c --arg tid "${NODE_ID}" --argjson eval "$EVAL" '
-    if (.task_id == $tid and .criteria_passed == null) then
-      . + {
-        criteria_passed: $eval.criteria_passed,
-        criteria_total: $eval.criteria_total,
-        acceptance_rate: $eval.acceptance_rate
-      } + (
-        if ($eval.standing_rules | length) > 0 then {
-          rules_passed: ([$eval.standing_rules[] | select(.status == "pass")] | length),
-          rules_total: ($eval.standing_rules | length),
-          rules_pass_rate: (([$eval.standing_rules[] | select(.status == "pass")] | length) / ($eval.standing_rules | length))
-        } else {} end
-      )
-    else . end
-  ' "$FINISH_JSONL" > "$tmpfile" && mv "$tmpfile" "$FINISH_JSONL"
-fi
-```
-
-If `finish.jsonl` does not exist (e.g., `/finish` was never called), skip silently — the evaluation data is still persisted in `evaluation.json` and will be picked up by any subsequent `/finish` invocation.
+This file is read by the task-workflow finish operation (step 7) when writing finish.jsonl.
 
 ### 4b. Outcome Classification
 
