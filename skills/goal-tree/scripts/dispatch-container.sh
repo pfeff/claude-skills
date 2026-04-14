@@ -588,8 +588,10 @@ SUMMARY="Build phase did not complete all tasks"
 CRITERIA_MET="[]"
 
 if [[ -f "$NODE_WORKSPACE/PLAN.md" ]]; then
-  UNCHECKED=$(grep -c '^\- \[ \]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || echo "0")
-  CHECKED=$(grep -c '^\- \[x\]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || echo "0")
+  UNCHECKED=$(grep -c '^\- \[ \]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || true)
+  UNCHECKED=${UNCHECKED:-0}
+  CHECKED=$(grep -c '^\- \[x\]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || true)
+  CHECKED=${CHECKED:-0}
 
   if [[ "$UNCHECKED" -eq 0 ]] && [[ "$CHECKED" -gt 0 ]]; then
     STATUS="success"
