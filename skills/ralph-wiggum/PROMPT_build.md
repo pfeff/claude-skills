@@ -2,22 +2,35 @@
 
 You are executing one task from PLAN.md in a Ralph Wiggum autonomous build loop.
 
+## Standing Rule: L0 Agents Must Follow task-workflow
+
+This workspace uses the `task-workflow` skill. You **must** follow this workflow — it is a requirement, not a suggestion.
+
+**Required steps:**
+1. **`/init-workspace`** — run before any implementation begins (first iteration only)
+2. **Plan → implement → test cycle** — each task follows this sequence
+3. **`/finish`** — run to cut PRs when all tasks are complete; do not push branches or create PRs manually
+4. **`/review`** — run before finalizing PRs
+
+Do not freelance the workflow. Do not commit and push without `/finish`. Do not skip `/review`.
+
 ## Your Task
 
-1. Read `PLAN.md` and identify the **first unchecked task** (`- [ ]`)
-2. Detect workspace mode:
+1. Run `/init-workspace` if this is the first build iteration (PLAN.md has no checked tasks)
+2. Read `PLAN.md` and identify the **first unchecked task** (`- [ ]`)
+3. Detect workspace mode:
    - If `.ralph/workspace.md` exists → **multi-repo mode**: read it to discover repos and their gate configs
    - Otherwise → **single-repo mode**: read `.ralph/gates.md`
-3. In multi-repo mode, parse the `[repo-name]` prefix from the task to determine the target repo
-4. Read the target repo's `.ralph/gates.md` to understand available gate commands
-5. If `.ralph/services.md` exists, read it and run each health check command. If any service is unhealthy, write to `BLOCKERS.md` and exit — do not attempt the task.
-6. In multi-repo mode, `cd` to the target repo's directory before implementing
-7. Implement the task
-8. Run the target repo's backpressure gates (from its `.ralph/gates.md`)
-9. Update `PLAN.md` marking the task complete
-10. Commit changes in the target repo
-11. If all tasks complete, push branches and create PRs
-12. Exit cleanly
+4. In multi-repo mode, parse the `[repo-name]` prefix from the task to determine the target repo
+5. Read the target repo's `.ralph/gates.md` to understand available gate commands
+6. If `.ralph/services.md` exists, read it and run each health check command. If any service is unhealthy, write to `BLOCKERS.md` and exit — do not attempt the task.
+7. In multi-repo mode, `cd` to the target repo's directory before implementing
+8. Implement the task
+9. Run the target repo's backpressure gates (from its `.ralph/gates.md`)
+10. Update `PLAN.md` marking the task complete
+11. Commit changes in the target repo
+12. If all tasks complete, run `/finish` to cut PRs (do not push or create PRs manually)
+13. Exit cleanly
 
 ## Constraints
 
@@ -141,32 +154,14 @@ Do not attempt partial implementations.
 
 ## Pull Request
 
-### Single-repo
-
 When all tasks in PLAN.md are complete (no remaining `- [ ]` items):
 
-1. Push the branch to remote
-2. Read `.github/PULL_REQUEST_TEMPLATE.md` from the repo (if it exists)
-3. Create a PR using `gh pr create`:
-   - **Title**: Use the plan's purpose from `## Status` or first line
-   - **Body**: If a PR template was found, populate its sections with context from PLAN.md and the commit history. If no template exists, summarize what was implemented.
+1. Run `/review` to validate the changes
+2. Run `/finish` to cut PRs
 
-### Multi-repo
+**Do not** push branches or create PRs manually. `/finish` handles branch pushing, PR template detection, and PR creation for both single-repo and multi-repo workspaces.
 
-When all tasks in PLAN.md are complete:
-
-1. For each repo that has commits on the branch:
-   a. `cd` to the repo directory
-   b. Push the branch to remote
-   c. Read `.github/PULL_REQUEST_TEMPLATE.md` from the repo (if it exists)
-   d. Create a PR using `gh pr create`:
-      - **Title**: Use the plan's purpose, scoped to this repo's changes
-      - **Body**: Summarize what was implemented in this repo. Include a "Related PRs" section listing PRs created for other repos in this workspace.
-2. After all PRs are created, update each PR body with the full list of related PR URLs
-
-Skip repos that have no commits on the branch (no changes were made).
-
-Do not create PRs if tasks remain incomplete.
+Do not run `/finish` if tasks remain incomplete.
 
 ## Exit Conditions
 

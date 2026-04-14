@@ -83,6 +83,18 @@ In multi-repo mode, every task is prefixed with `[repo-name]` matching a repo fr
 - "[api] Add model [web] Add form" (multiple repos in one task)
 - "Make it work better" (not verifiable)
 
+## Standing Rule: L0 Agents Must Follow task-workflow
+
+This workspace uses the `task-workflow` skill. The build agent **must** follow this workflow — it is a requirement, not a suggestion.
+
+**Required steps for the build agent** (enforce via plan structure):
+1. **`/init-workspace`** — must run before any implementation begins
+2. **Plan → implement → test cycle** — each task follows this sequence
+3. **`/finish`** — must run to cut PRs; agents must not push branches or create PRs manually
+4. **`/review`** — must run before finalizing PRs
+
+When writing PLAN.md, include a `## Workflow` section at the top that states these required steps explicitly, so the build agent sees them before starting any task.
+
 ## After Writing PLAN.md
 
 1. Verify each task can pass its repo's backpressure gates independently
