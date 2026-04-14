@@ -362,7 +362,9 @@ if [[ "$WORKTREE_COUNT" -gt 0 ]]; then
 
   # Prune stale worktree references
   for main_repo in $(printf '%s\n' "${WORKTREE_MAIN_REPOS[@]}" | sort -u); do
-    [[ -d "$main_repo" ]] && git -C "$main_repo" worktree prune 2>/dev/null || true
+    if [[ -d "$main_repo" ]]; then
+      git -C "$main_repo" worktree prune 2>/dev/null || true
+    fi
   done
 
   if [[ "$WORKTREE_ERRORS" -eq 1 && "$FORCE" != true ]]; then
