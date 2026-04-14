@@ -266,7 +266,11 @@ format_repos_list() {
   local IFS=','
   for repo in $repos; do
     repo=$(echo "$repo" | xargs)  # trim whitespace
-    echo "- $repo: \`$workspace_path/$repo\`"
+    local repo_path
+    repo_path=$(resolve_repo_path "$repo" 2>/dev/null || echo "$repo")
+    local repo_basename
+    repo_basename=$(basename "$repo_path")
+    echo "- $repo_basename: \`$workspace_path/$repo_basename\`"
   done
 }
 
@@ -902,9 +906,10 @@ EOF
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
     repo_path=$(resolve_repo_path "$repo")
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
 
-    echo "  $repo:"
+    echo "  $repo_basename:"
     echo "    Source: $repo_path"
     echo "    Worktree: $worktree_path"
     echo "    Branch: $NODE_BRANCH"
@@ -915,7 +920,7 @@ EOF
 
     if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" "origin/$default_branch" 2>/dev/null; then
       if ! git worktree add "$worktree_path" "$NODE_BRANCH" 2>/dev/null; then
-        echo "Error: Failed to create worktree for $repo" >&2
+        echo "Error: Failed to create worktree for $repo_basename" >&2
         exit 4
       fi
     fi
@@ -989,16 +994,18 @@ EOF
   # Check worktrees
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_path=$(resolve_repo_path "$repo")
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
     if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
       actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD)
       if [[ "$actual_branch" == "$NODE_BRANCH" ]]; then
-        verify_check "Worktree $repo on correct branch" "pass"
+        verify_check "Worktree $repo_basename on correct branch" "pass"
       else
-        verify_check "Worktree $repo on correct branch ($actual_branch != $NODE_BRANCH)" "fail"
+        verify_check "Worktree $repo_basename on correct branch ($actual_branch != $NODE_BRANCH)" "fail"
       fi
     else
-      verify_check "Worktree $repo exists" "fail"
+      verify_check "Worktree $repo_basename exists" "fail"
     fi
   done
 
