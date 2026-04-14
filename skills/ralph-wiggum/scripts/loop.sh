@@ -373,8 +373,10 @@ run_claude() {
     return 1
   fi
 
-  # Check for authentication errors (expired tokens, invalid credentials, etc.)
-  if grep -qiE 'authentication.*(error|failed|invalid|expired)|invalid.*(api.?key|token|credential)|expired.*(token|session|credential)|unauthorized|permission.?denied' "$iter_log" 2>/dev/null; then
+  # Check for authentication errors — only in error events, not in file contents the agent read
+  local error_lines
+  error_lines=$(grep '"type":"error"' "$iter_log" 2>/dev/null || true)
+  if [[ -n "$error_lines" ]] && echo "$error_lines" | grep -qiE 'authentication|unauthorized|permission.?denied|invalid.*(api.?key|token|credential)|expired.*(token|session|credential)'; then
     echo "Authentication error detected"
     echo ""
     echo "To fix: Run 'claude' interactively to re-authenticate, or check your API key configuration."
