@@ -236,6 +236,50 @@ type: project
 
 Keep this lightweight — 2-3 minutes max. The goal is a short feedback loop, not a ceremony.
 
+### 2c. Deploy and Demonstrate
+
+Before proposing new work, deploy the cycle's merged changes and demonstrate the delivered capability end-to-end. This is the sprint demo — it proves the system works in production, not just in tests.
+
+**Skip conditions**: Skip this step if the cycle produced no deployable changes (e.g., doc-only, research, or planning cycles).
+
+#### Deploy
+
+Deploy all repos that received merged PRs this cycle. Use the project's deployment mechanism:
+
+```
+# AC example — adjust per project
+cd ~/src/github/pfeff/agent-coordinator && mix phx.server
+# or: fly deploy, docker compose up, etc.
+```
+
+Verify the deploy succeeded (health check, logs, no crash loops).
+
+#### Demonstrate
+
+Run a live exercise that exercises the capability the cycle delivered. Not a test suite — an actual usage scenario that a human or agent would perform.
+
+```
+## Sprint Demo: Cycle <N>
+
+**Capability delivered**: <1-sentence summary>
+
+**Demo scenario**: <what you're going to do>
+
+**Result**: <what happened — success, partial, failed>
+
+**Evidence**: <command output, screenshot path, or log snippet>
+```
+
+#### Decision
+
+| Demo Result | Action |
+|-------------|--------|
+| Success | Record in cycle evaluation, proceed to Propose |
+| Partial | Note gaps as candidate nodes for next cycle, proceed |
+| Failed | Stop. Fix before proposing new work — the cycle isn't done |
+
+A failed demo means the cycle stays open. Don't paper over it with new nodes.
+
 ### 3. Propose
 
 Steps 1-2 are strategic phases — **phase gates** apply. Text only, no tool calls.
