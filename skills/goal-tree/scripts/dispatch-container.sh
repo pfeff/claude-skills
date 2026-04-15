@@ -267,6 +267,27 @@ for prompt_file in PROMPT_plan.md PROMPT_build.md; do
   fi
 done
 
+# --- Generate .mcp.json for AC MCP client ---
+
+if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" ]]; then
+  cat > "$NODE_WORKSPACE/.mcp.json" <<'MCPJSON'
+{
+  "mcpServers": {
+    "agent-coordinator": {
+      "type": "url",
+      "url": "${COORDINATOR_URL}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${COORDINATOR_TOKEN}"
+      }
+    }
+  }
+}
+MCPJSON
+  echo "  Created: .mcp.json (AC MCP client)" >&2
+else
+  echo "  Skipped: .mcp.json (COORDINATOR_URL/COORDINATOR_TOKEN not set)" >&2
+fi
+
 # --- Generate gates.md from Taskfile ---
 
 generate_gates() {
