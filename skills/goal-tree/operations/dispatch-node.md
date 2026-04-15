@@ -285,9 +285,14 @@ For feature, refactor, or multi-file changes, also run `/review <PR_NUMBER>` to 
 ### 5. Traceability Update
 Link the deliverable back to the strategic objective. Record traceability context alongside the node result (execute-tree step 4 handles the primary `add-result` with status; this appends the strategic link):
 
-```bash
-coord node add-result $TREE_ID $NODE_DB_ID \
-  --summary "Deliverable: <PR URL or artifact path>. Advances: <parent goal title> → <root objective>."
+```
+ac_node_update(
+  action="progress",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Deliverable: <PR URL or artifact path>. Advances: <parent goal title> → <root objective>.",
+  artifacts=["<PR URL or artifact path>"]
+)
 ```
 
 Include the traceability chain: what was delivered, which goal it serves, and how it connects to the mission. For non-code deliverables (research, documents, applications), record the artifact location and its strategic link.
@@ -338,7 +343,7 @@ After the operator approves and merges:
 ## Integration Points
 
 - **Called by**: execute-tree (step 3)
-- **Depends on**: dispatch-decision output, `coord` CLI, tmux
+- **Depends on**: dispatch-decision output, `ac_node_update` MCP tool (agent-coordinator MCP server), tmux
 - **References**:
   - `task-workflow/references/error-classification.md` — error taxonomy
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm

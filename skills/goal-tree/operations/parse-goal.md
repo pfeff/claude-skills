@@ -44,15 +44,15 @@ goal:
 
 ### 1. Query Coordinator API
 
-```bash
-coord tree show $TREE_ID
+```
+ac_node_query(action="get", tree_id=$TREE_ID)
 ```
 
-This returns JSON with the tree metadata and all nodes.
+This returns the tree metadata and all nodes.
 
 ### 2. Parse JSON Response
 
-The response from `coord tree show` contains:
+The response from `ac_node_query` contains:
 
 ```json
 {
@@ -139,8 +139,8 @@ Return the complete parsed tree with all fields populated.
 
 ### Query
 
-```bash
-coord tree show 1
+```
+ac_node_query(action="get", tree_id=1)
 ```
 
 ### Parsed Output
@@ -184,4 +184,4 @@ goal.tree = [
 ## Integration Points
 
 - **Called by**: All goal-tree operations that need tree state
-- **Depends on**: `coord` CLI, COORDINATOR_URL, COORDINATOR_TOKEN
+- **Depends on**: `ac_node_query` MCP tool (agent-coordinator MCP server), COORDINATOR_TOKEN

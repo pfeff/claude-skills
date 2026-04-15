@@ -22,9 +22,9 @@ Read CLAUDE.md from the project directory. Extract tree ID and repo paths.
 
 In parallel:
 
-```bash
+```
 # AC tree state
-coord tree show $TREE_ID
+ac_node_query(action="get", tree_id=$TREE_ID)
 
 # Guardian strategy docs
 Read ~/src/github/pfeff/guardian/PROJECT.md
@@ -77,5 +77,5 @@ Sprint 3 measurement is overdue. Want to run it, or deprioritize?
 ## Integration Points
 
 - **Called by**: `/status` command
-- **Calls**: `coord tree show`, Read (guardian docs)
+- **Calls**: `ac_node_query` MCP tool, Read (guardian docs)
 - **Does not call**: execute-tree, dispatch-node

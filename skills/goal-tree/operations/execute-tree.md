@@ -32,11 +32,11 @@ Before entering the loop:
 
 ### 1. Query Goal Tree
 
-```bash
-coord tree show $TREE_ID
+```
+ac_node_query(action="get", tree_id=$TREE_ID)
 ```
 
-Parse the JSON response to get the full tree state.
+Parse the response to get the full tree state.
 
 ### 2. Check Preconditions
 
@@ -65,11 +65,11 @@ Repeat steps 1-6 until termination.
 
 ### 1. Select Ready Nodes
 
-```bash
-coord tree ready $TREE_ID
+```
+ac_node_query(action="ready", tree_id=$TREE_ID)
 ```
 
-Parse the JSON response to get ready nodes, then group for parallel dispatch per `operations/select-ready.md`.
+Parse the response to get ready nodes, then group for parallel dispatch per `operations/select-ready.md`.
 
 | Batch Result | Action |
 |-------------|--------|
@@ -137,7 +137,7 @@ If any nodes need escalation, present them to the user before dispatching others
 
 ```
 for node, decision in escalate_nodes:
-  coord node update $TREE_ID $NODE_DB_ID --status blocked
+  ac_node_update(action="blocked", tree_id=$TREE_ID, node_id="$NODE_ID", message="Escalated to user")
   present escalation to user
 ```
 
@@ -154,7 +154,7 @@ For each workspace session node:
 
 ```
 for node, decision in session_nodes:
-  coord node update $TREE_ID $NODE_DB_ID --status in_progress
+  ac_node_update(action="progress", tree_id=$TREE_ID, node_id="$NODE_ID", message="Dispatching")
 
   # dispatch-node handles workspace creation + DESIGN.md + tmux send-keys
   dispatch_result = dispatch_node(node, decision)
@@ -201,7 +201,7 @@ while active_sessions is not empty:
     output = tmux capture-pane -t "$SESSION_NAME" -p -S -50
 
     # 3. Check coordinator for status updates
-    node_status = coord tree show $TREE_ID | jq <node status query>
+    node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
 
     # 4. Detect completion
     if node_status == "completed":
@@ -261,7 +261,7 @@ function handle_session_death(session_name, session_info):
   node = session_info.node
 
   # Check if the node actually completed before the session died
-  node_status = coord tree show $TREE_ID | jq <node status>
+  node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
 
   if node_status == "completed":
     collect_result(session_name, session_info)
@@ -278,16 +278,13 @@ For each completed session's results:
 
 ```
 if result.status == "success":
-  coord node update $TREE_ID $NODE_DB_ID \
-    --status completed \
-    --result "<changes summary>"
-
-  coord node add-result $TREE_ID $NODE_DB_ID \
-    --status completed \
-    --dispatch workspace-session \
-    --files "<comma-separated files>" \
-    --summary "<changes summary>" \
-    --commit "<commit hash>"
+  ac_node_update(
+    action="complete",
+    tree_id=$TREE_ID,
+    node_id="$NODE_ID",
+    message="<changes summary>",
+    artifacts=["<file1>", "<file2>", "<commit hash>"]
+  )
 
   completed_nodes.append(node)
 
@@ -295,7 +292,7 @@ elif result.status == "failure":
   retry_node(node, result)
 
 elif result.status == "blocked":
-  coord node update $TREE_ID $NODE_DB_ID --status blocked
+  ac_node_update(action="blocked", tree_id=$TREE_ID, node_id="$NODE_ID")
 
 elif result.status == "escalated":
   # Already handled in step 3a
@@ -374,10 +371,13 @@ failure_telemetry_record:
 
 These records are appended to the node's result in the coordinator:
 
-```bash
-coord node add-result $TREE_ID $NODE_DB_ID \
-  --status retry \
-  --summary "Attempt ${attempt_number}/${max_retries}: ${failure_reason}. Parameter change: ${parameter_change_applied}."
+```
+ac_node_update(
+  action="progress",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Attempt ${attempt_number}/${max_retries}: ${failure_reason}. Parameter change: ${parameter_change_applied}."
+)
 ```
 
 #### Escalation with Failure Log
@@ -386,13 +386,12 @@ When max_retries is exhausted, escalate with the full failure history attached:
 
 ```
 function escalate_with_failure_log(node, attempts):
-  coord node update $TREE_ID $NODE_DB_ID \
-    --status blocked \
-    --result "Failed after ${len(attempts)} attempts — escalating to human"
-
-  coord node add-result $TREE_ID $NODE_DB_ID \
-    --status failed \
-    --summary "Exhausted ${max_retries} retries. Failure log: ${format_attempts(attempts)}"
+  ac_node_update(
+    action="blocked",
+    tree_id=$TREE_ID,
+    node_id="$NODE_ID",
+    message="Failed after ${len(attempts)} attempts — escalating to human. Failure log: ${format_attempts(attempts)}"
+  )
 
   present_escalation:
     ## Escalation: Node ${node.id} — ${node.title}
@@ -560,10 +559,13 @@ Key distinction: additions that violate a rule are failures; removals or migrati
 
 Write the deferred coordinator status and advance the node:
 
-```bash
-coord node update $TREE_ID $NODE_DB_ID \
-  --status completed \
-  --result "<changes summary>"
+```
+ac_node_update(
+  action="complete",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="<changes summary>"
+)
 
 completed_nodes.append(node)
 ```
@@ -610,19 +612,26 @@ Please address the failed criteria and rule violations. The passing items should
 - Tracked per node: `evaluation_attempts[node_id]`
 - After exhausting retries, mark the node as failed:
 
-```bash
-coord node update $TREE_ID $NODE_DB_ID \
-  --status blocked \
-  --result "Evaluation failed after ${MAX_RETRIES + 1} attempts. Last failures: ${FAILED_CRITERIA_SUMMARY}"
+```
+ac_node_update(
+  action="blocked",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Evaluation failed after ${MAX_RETRIES + 1} attempts. Last failures: ${FAILED_CRITERIA_SUMMARY}"
+)
 ```
 
 #### Evaluation Telemetry
 
-Log the evaluation result for each assessed node. Telemetry is persisted via the coordinator `add-result` call:
+Log the evaluation result for each assessed node. Telemetry is persisted via the coordinator:
 
-```bash
-coord node add-result $TREE_ID $NODE_DB_ID \
-  --summary "Evaluation: ${VERDICT}. ${CRITERIA_PASS_COUNT}/${CRITERIA_TOTAL} criteria passed. ${RULES_PASS_COUNT}/${RULES_TOTAL} standing rules passed. ${REASONING_SUMMARY}"
+```
+ac_node_update(
+  action="progress",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Evaluation: ${VERDICT}. ${CRITERIA_PASS_COUNT}/${CRITERIA_TOTAL} criteria passed. ${RULES_PASS_COUNT}/${RULES_TOTAL} standing rules passed. ${REASONING_SUMMARY}"
+)
 ```
 
 #### Scalar Metrics (L0)
@@ -710,9 +719,13 @@ For each completed node, classify the outcome relative to the mission:
 
 Record the classification alongside the node result:
 
-```bash
-coord node add-result $TREE_ID $NODE_DB_ID \
-  --summary "<changes summary>. Outcome: <advanced|neutral|setback>. <1-sentence justification>"
+```
+ac_node_update(
+  action="progress",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="<changes summary>. Outcome: <advanced|neutral|setback>. <1-sentence justification>"
+)
 ```
 
 Setback classifications automatically trigger the strategic feedback check in step 5d.
@@ -804,8 +817,8 @@ When pausing, present the strategic observation and let the operator steer. Do n
 
 Query the coordinator for fresh state (may have been updated by child sessions):
 
-```bash
-coord tree show $TREE_ID
+```
+ac_node_query(action="get", tree_id=$TREE_ID)
 ```
 
 Check for newly completed sessions in `active_sessions`:
@@ -899,9 +912,12 @@ if error_summary == last_error_summary:
 
 ```
 function handle_stuck(node, reason, detail):
-  coord node update $TREE_ID $NODE_DB_ID \
-    --status skipped \
-    --result "Stuck: ${reason} — ${detail}"
+  ac_node_update(
+    action="blocked",
+    tree_id=$TREE_ID,
+    node_id="$NODE_ID",
+    message="Stuck: ${reason} — ${detail}"
+  )
 
   skipped_set.add(node.id)
 
@@ -1017,7 +1033,7 @@ Creating 2 workspace sessions...
 ## Integration Points
 
 - **Called by**: start-project (after approval), resume-project (after state recovery)
-- **Calls**: select-ready (via `coord tree ready`), dispatch-decision, dispatch-node, update-goal (via `coord node update`)
+- **Calls**: select-ready (via `ac_node_query`), dispatch-decision, dispatch-node, update-goal (via `ac_node_update`)
 - **Hands off to**: synthesize (on completion)
 - **References**:
   - `task-workflow/references/error-classification.md`
