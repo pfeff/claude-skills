@@ -61,6 +61,13 @@ export GIT_AUTHOR_EMAIL
 export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME
 export GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
 
+# Pass coordinator env vars through for MCP client config inside container
+export COORDINATOR_URL="${COORDINATOR_URL:-}"
+export COORDINATOR_TOKEN="${COORDINATOR_TOKEN:-}"
+if [[ -z "$COORDINATOR_URL" || -z "$COORDINATOR_TOKEN" ]]; then
+  echo "Warning: COORDINATOR_URL/COORDINATOR_TOKEN not set — AC MCP tools will be unavailable inside container" >&2
+fi
+
 # SSH agent forwarding (for git push)
 # On macOS with Docker Desktop, Unix sockets don't work across the VM boundary.
 # Docker Desktop provides /run/host-services/ssh-auth.sock for SSH agent forwarding.
