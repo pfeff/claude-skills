@@ -4,9 +4,9 @@ Multi-repo workspace configuration for the Ralph Wiggum autonomous build loop.
 
 ## Repos
 
-| Repo | Path | Gates |
-|------|------|-------|
-| {{repo_name}} | `{{repo_path}}` | `{{repo_path}}/.ralph/gates.md` |
+| Repo | Path | Gates | Image |
+|------|------|-------|-------|
+| {{repo_name}} | `{{repo_path}}` | `{{repo_path}}/.ralph/gates.md` | `{{image}}` |
 
 ## Branch
 
