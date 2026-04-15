@@ -151,7 +151,17 @@ Do not commit changes. Do not create PRs. Do not modify files outside the scope 
 
 ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
-Each criterion above is a specific, verifiable statement. Your output will be evaluated against these criteria by the parent session (LLM-as-judge). For each criterion, the evaluator will determine pass/fail based on your actual changes.
+Each criterion above is a specific, verifiable statement. Your output will be evaluated against these criteria by the parent session (LLM-as-judge) using the L1 review process. For each criterion, the evaluator will determine pass/fail based on your actual changes.
+
+## Evaluation Contract
+
+Your output will be evaluated by the L1 review process before it can be merged. The evaluation checks:
+- **Prerequisites**: Did you run /init-workspace, follow plan→implement→test, run /finish, and run /review?
+- **Per-criterion assessment**: Each acceptance criterion is judged PASS/FAIL with reasoning citing diff evidence
+- **Standing rules**: Project-wide architectural rules are checked against your diff
+- **Test verification**: Did you actually run the code and observe output? Reasoning about correctness without executing is not testing and will be rejected
+
+Skipping workflow steps (/finish, /review) or failing to actually test your changes results in automatic rejection before evaluation even begins.
 
 ## Goal Tree Context
 
@@ -561,3 +571,4 @@ After the operator approves and merges:
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm
   - `operations/branch-management.md` — node workspace creation
   - `scripts/dispatch-container.sh` — container dispatch wrapper (DESIGN.md → Ralph)
+  - Project-level `nodes/C.3/l1-review-process.md` — L1 review procedure that evaluates dispatch output
