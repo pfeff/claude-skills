@@ -340,3 +340,4 @@ After the operator approves and merges:
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm
   - `operations/branch-management.md` — node workspace creation
   - `operations/discuss-dispatch.md` — conversation-first dispatch pattern
+  - Project-level `nodes/C.3/l1-review-process.md` — L1 review procedure that evaluates dispatch output

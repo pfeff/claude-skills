@@ -407,6 +407,37 @@ function escalate_with_failure_log(node, attempts):
 
 Evaluate each completed node against its acceptance criteria before advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
 
+#### Review Step Population
+
+When a node enters evaluation, auto-populate the task list with the L1 review checklist. This ensures every review substep is tracked and none are skipped. Create the following tasks (if they don't already exist for this node):
+
+```
+TaskCreate("${NODE_ID}: Check prerequisites",
+  "Verify L0 agent ran /init-workspace, followed plan→implement→test, ran /finish (finish.jsonl exists), and ran /review (self-review posted to PR). REJECT without evaluation if any prerequisite is missing.")
+
+TaskCreate("${NODE_ID}: Standing rules pre-filter",
+  "Grep diff for detector patterns from project CLAUDE.md Standing Rules section. Auto-pass rules with no matches. Flag rules with matches for LLM judge evaluation.")
+
+TaskCreate("${NODE_ID}: Per-criterion assessment",
+  "For each acceptance criterion in the node's DESIGN.md, determine PASS/FAIL with reasoning citing specific diff evidence.")
+
+TaskCreate("${NODE_ID}: Standing rules assessment",
+  "For each standing rule, determine PASS/FAIL against the diff.")
+
+TaskCreate("${NODE_ID}: Test verification",
+  "Verify the agent actually tested — ran the script, executed the container, observed output. 'Reviewed control flow' or 'logic looks correct' is NOT testing. REJECT if untested.")
+
+TaskCreate("${NODE_ID}: Write evaluation.json",
+  "Write scalar metrics to .metrics/evaluation.json with criteria_passed, criteria_total, acceptance_rate, verdict, standing_rules array.")
+
+TaskCreate("${NODE_ID}: Post evaluation summary",
+  "Post evaluation summary as PR comment. Record verdict and reasoning for L2 review.")
+```
+
+These tasks are sequential — each depends on the prior step completing. Skip task creation if review tasks for this node already exist (idempotency).
+
+Reference: `nodes/C.3/l1-review-process.md` in the project directory documents the full review procedure and quality signals.
+
 #### Standing Rules
 
 Standing rules are architectural constraints defined in the project CLAUDE.md (`## Standing Rules` section) that apply to every PR in the project. They are evaluated alongside per-task acceptance criteria — same evaluator, same failure path.
@@ -646,6 +677,22 @@ skills/goal-tree/scripts/patch-finish-metrics.sh "${NODE_WORKSPACE}" "${NODE_ID}
 ```
 
 The script is idempotent — entries already patched (criteria_passed present) are left unchanged. If `finish.jsonl` does not exist, the script exits cleanly.
+
+### 4a-gate. Evaluation Gate (mandatory)
+
+Before advancing to classification, merge, or any post-evaluation step, verify that `evaluation.json` exists. This is a structural enforcement — the file's presence proves the evaluation protocol ran to completion.
+
+```
+EVAL_FILE="${NODE_WORKSPACE}/.metrics/evaluation.json"
+
+if [[ ! -f "$EVAL_FILE" ]]; then
+  echo "BLOCKED: ${NODE_ID} — .metrics/evaluation.json missing. Run the evaluation protocol (step 4a) before advancing."
+  # Do not proceed. The node stays in pending_evaluation until the gate is satisfied.
+  return
+fi
+```
+
+**This gate cannot be bypassed.** If evaluation.json is missing, the node cannot advance to outcome classification (4b), commit (4c), or merge. The operator must run the full evaluation protocol first.
 
 ### 5b. Outcome Classification
 
