@@ -1,6 +1,6 @@
 # Execute Tree Operation
 
-Main orchestration loop for goal tree execution. Iterates: select ready nodes → decide dispatch strategy → create workspace sessions → monitor active sessions → collect results → update coordinator → repeat.
+Main orchestration loop for goal tree execution. Iterates: select ready nodes → decide dispatch strategy → dispatch (container or tmux) → monitor active nodes → collect results → update coordinator → repeat.
 
 ## Inputs
 
@@ -12,18 +12,18 @@ Main orchestration loop for goal tree execution. Iterates: select ready nodes �
 
 ## Purpose
 
-Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes via workspace sessions, asynchronous monitoring via tmux, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
+Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes via containers (default) or tmux (escape hatch), asynchronous monitoring via AC MCP and/or tmux, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
 
 ## Layer Context
 
-Execute-tree operates as the **L1 control loop**. It dispatches **L0 leaf nodes** to workspace sessions and evaluates their outputs. Non-leaf nodes (L1 structure) are never dispatched — their status is derived from children. See `references/layer-model.md` for the full layer model.
+Execute-tree operates as the **L1 control loop**. It dispatches **L0 leaf nodes** to containers (default) or tmux sessions (escape hatch) and evaluates their outputs. Non-leaf nodes (L1 structure) are never dispatched — their status is derived from children. See `references/layer-model.md` for the full layer model.
 
 ## Protocol Requirements
 
 These are mandatory — do not shortcut the pipeline.
 
 1. **Every node goes through the full pipeline.** You MUST run select-ready → dispatch-decision → dispatch-node for each node. Do not implement tasks directly without going through dispatch-decision first.
-2. **Parallel dispatch is the default.** When select-ready returns multiple independent nodes, create workspace sessions for all of them and send startup commands in a single pass. Sequential dispatch of independent nodes is a protocol violation.
+2. **Parallel dispatch is the default.** When select-ready returns multiple independent nodes, dispatch all of them (container or tmux) in a single pass. Sequential dispatch of independent nodes is a protocol violation.
 3. **Planning-workflow is a gate, not a suggestion.** Every dispatched node must run planning-workflow before implementation. Child sessions handle this via `/init-workspace` which triggers the planning pipeline.
 
 ## Entry Guard
@@ -53,7 +53,9 @@ Parse the response to get the full tree state.
 ```
 skipped_set = {}           # node IDs skipped by stuck detection
 completed_nodes = []       # list of {id, title, commits}
-active_sessions = {}       # session_name → {node, workspace_path, dispatch_time}
+active_nodes = {}          # node_id → {node, dispatch_method, dispatch_time, ...strategy-specific fields}
+                           #   container: {container_id, volume_name}
+                           #   tmux: {session_name, workspace_path}
 total_dispatches = 0       # total dispatch attempts
 max_retries = 3            # max retry attempts per node before escalation
 failure_telemetry = {}     # node_id → [list of attempt records]
@@ -111,14 +113,14 @@ When presenting a checkpoint (Tier 3 in batch):
 | Node | Strategy | Tier | Reason |
 |------|----------|------|--------|
 | <id>. <title> | escalate | 3 | <question for user> |
-| <id>. <title> | workspace-session | 1 | <rationale> (auto) |
+| <id>. <title> | container | 1 | <rationale> (auto) |
 
 Tier 1/2 nodes will auto-dispatch. Need your input on the Tier 3 items above.
 ```
 
 Tier 1 and 2 nodes in a mixed batch dispatch immediately — don't hold them waiting for Tier 3 resolution.
 
-### 3. Create Workspace Sessions
+### 3. Dispatch Nodes
 
 Group decisions by strategy and dispatch:
 
@@ -126,7 +128,8 @@ Group decisions by strategy and dispatch:
 Load: operations/dispatch-node.md
 
 # Separate by dispatch type
-session_nodes = [(n, d) for n, d in decisions if d.strategy == "workspace-session"]
+container_nodes = [(n, d) for n, d in decisions if d.strategy == "container"]
+tmux_nodes = [(n, d) for n, d in decisions if d.strategy == "tmux"]
 escalate_nodes = [(n, d) for n, d in decisions if d.strategy == "escalate"]
 discuss_nodes = [(n, d) for n, d in decisions if d.strategy == "discuss-dispatch"]
 ```
@@ -143,33 +146,61 @@ for node, decision in escalate_nodes:
 
 If **all** nodes in the batch are escalations, pause the loop.
 
-#### 3b. Create and Start Workspace Sessions
+#### 3b. Dispatch Container Nodes (Default)
 
-For each workspace session node:
+For each container node:
 
-1. Create workspace (if not already created)
-2. Write DESIGN.md with spec
-3. Send startup command to tmux session
-4. Track in `active_sessions`
+1. Call `ac_node_update` action=dispatch (AC handles volume, clone, spec, container)
+2. Track in `active_nodes`
 
 ```
-for node, decision in session_nodes:
+for node, decision in container_nodes:
+  ac_node_update(action="progress", tree_id=$TREE_ID, node_id="$NODE_ID", message="Dispatching")
+
+  # dispatch-node calls ac_node_update action=dispatch
+  dispatch_result = dispatch_node(node, decision)
+
+  active_nodes[node.id] = {
+    node: node,
+    dispatch_method: "container",
+    container_id: dispatch_result.container_id,
+    volume_name: dispatch_result.volume_name,
+    dispatch_time: now(),
+    monitoring_cycles: 0
+  }
+
+total_dispatches += len(container_nodes)
+```
+
+All container dispatches happen in parallel — AC handles each independently.
+
+#### 3b-alt. Dispatch Tmux Nodes (Escape Hatch)
+
+For each tmux node:
+
+1. Create host workspace (if not already created)
+2. Write DESIGN.md with spec
+3. Send startup command to tmux session
+4. Track in `active_nodes`
+
+```
+for node, decision in tmux_nodes:
   ac_node_update(action="progress", tree_id=$TREE_ID, node_id="$NODE_ID", message="Dispatching")
 
   # dispatch-node handles workspace creation + DESIGN.md + tmux send-keys
   dispatch_result = dispatch_node(node, decision)
 
-  active_sessions[dispatch_result.session_name] = {
+  active_nodes[node.id] = {
     node: node,
+    dispatch_method: "tmux",
+    session_name: dispatch_result.session_name,
     workspace_path: dispatch_result.workspace_path,
     dispatch_time: now(),
     monitoring_cycles: 0
   }
 
-total_dispatches += len(session_nodes)
+total_dispatches += len(tmux_nodes)
 ```
-
-All workspace sessions start in parallel — each gets a `tmux send-keys` command in rapid succession. The sessions run autonomously from that point.
 
 #### 3c. Handle Discuss-Dispatch Nodes
 
@@ -181,57 +212,116 @@ for node, decision in discuss_nodes:
   # Follow the discuss-dispatch lifecycle
 ```
 
-### 4. Monitor Active Sessions
+### 4. Monitor Active Nodes
 
-Poll active sessions until at least one completes or needs intervention. This is the core difference from the old synchronous model — the control session checks on child sessions rather than waiting for Agent tool returns.
+Poll active nodes until at least one completes or needs intervention. Monitoring branches on `dispatch_method` — container nodes use AC MCP, tmux nodes use tmux IPC.
 
 #### Monitoring Loop
 
 ```
-while active_sessions is not empty:
-  for session_name, session_info in active_sessions:
+while active_nodes is not empty:
+  for node_id, node_info in active_nodes:
 
-    # 1. Check if session is alive
-    tmux has-session -t "$SESSION_NAME" 2>/dev/null
-    if not alive:
-      handle_session_death(session_name, session_info)
-      continue
-
-    # 2. Read recent output
-    output = tmux capture-pane -t "$SESSION_NAME" -p -S -50
-
-    # 3. Check coordinator for status updates
-    node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
-
-    # 4. Detect completion
-    if node_status == "completed":
-      collect_result(session_name, session_info)
-      active_sessions.remove(session_name)
-      continue
-
-    # 5. Detect need for intervention
-    if output contains "Assumption Check" or "Escalation Required" or "blocked":
-      intervene(session_name, session_info, output)
-
-    # 6. Detect stall
-    session_info.monitoring_cycles += 1
-    if session_info.monitoring_cycles > STALL_THRESHOLD:
-      handle_stall(session_name, session_info)
+    # Branch on dispatch method
+    if node_info.dispatch_method == "container":
+      monitor_container_node(node_id, node_info)
+    elif node_info.dispatch_method == "tmux":
+      monitor_tmux_node(node_id, node_info)
 
   # Wait before next poll cycle
   sleep 30  # adjust based on expected task duration
 ```
 
+#### Container Monitoring
+
+```
+function monitor_container_node(node_id, node_info):
+  # 1. Query AC for active containers
+  active = ac_node_query(action="active", tree_id=TREE_ID)
+
+  container_alive = node_info.container_id in active.containers
+
+  if not container_alive:
+    handle_container_exit(node_id, node_info)
+    return
+
+  # 2. Check coordinator for status updates
+  node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
+
+  # 3. Detect completion
+  if node_status == "completed":
+    collect_result(node_id, node_info)
+    active_nodes.remove(node_id)
+    return
+
+  # 4. Detect stall
+  node_info.monitoring_cycles += 1
+  if node_info.monitoring_cycles > STALL_THRESHOLD:
+    handle_stall(node_id, node_info)
+```
+
+**MCP notifications**: When available, the `node_updated` SSE stream from AC supplements polling. The control session holds the stream open and receives push notifications when node status changes. This reduces polling latency for container nodes but does not replace the polling loop (SSE connections can drop).
+
+```
+# SSE notification handler (supplements polling, does not replace it)
+on node_updated(event):
+  if event.node_id in active_nodes:
+    if event.status == "completed":
+      collect_result(event.node_id, active_nodes[event.node_id])
+      active_nodes.remove(event.node_id)
+```
+
+#### Tmux Monitoring
+
+```
+function monitor_tmux_node(node_id, node_info):
+  session_name = node_info.session_name
+
+  # 1. Check if session is alive
+  tmux has-session -t "$SESSION_NAME" 2>/dev/null
+  if not alive:
+    handle_session_death(node_id, node_info)
+    return
+
+  # 2. Read recent output
+  output = tmux capture-pane -t "$SESSION_NAME" -p -S -50
+
+  # 3. Check coordinator for status updates
+  node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
+
+  # 4. Detect completion
+  if node_status == "completed":
+    collect_result(node_id, node_info)
+    active_nodes.remove(node_id)
+    return
+
+  # 5. Detect need for intervention
+  if output contains "Assumption Check" or "Escalation Required" or "blocked":
+    intervene(node_id, node_info, output)
+
+  # 6. Detect stall
+  node_info.monitoring_cycles += 1
+  if node_info.monitoring_cycles > STALL_THRESHOLD:
+    handle_stall(node_id, node_info)
+```
+
 #### Completion Detection
 
-A session is complete when:
+A node is complete when:
+
+**Container nodes**:
+- The coordinator node status is `completed` (child agent updated it via AC MCP)
+- The `node_updated` SSE event arrives with status `completed`
+- The container has exited and coordinator shows `completed`
+
+**Tmux nodes**:
 - The coordinator node status is `completed` (child session updated it)
 - The tmux session has exited cleanly (check `tmux has-session`)
 - The child session's inbox notification arrived
 
 #### Intervention
 
-The control session can send commands to child sessions when needed. Use `send-keys -l` (literal mode) for all content derived from external data to prevent injection:
+**Tmux nodes**: The control session can send commands to child sessions. Use `send-keys -l` (literal mode) for all content derived from external data to prevent injection:
 
 ```bash
 # Course correction (literal mode — content may contain special characters)
@@ -247,29 +337,52 @@ tmux send-keys -l -t "$SESSION_NAME" "Use Redis, not Memcached."
 tmux send-keys -t "$SESSION_NAME" Enter
 ```
 
+**Container nodes**: Direct intervention is not available. Container agents are autonomous. If a container node needs course correction, the control session updates the coordinator node with feedback — the child agent reads it on its next AC query. For critical issues, the container can be killed and re-dispatched with an adjusted spec.
+
 Intervention triggers:
-- Child session output contains "Assumption Check" or "Escalation Required"
-- Child session output contains repeated error patterns across monitoring cycles
+- Child session output contains "Assumption Check" or "Escalation Required" (tmux only)
+- Child session output contains repeated error patterns across monitoring cycles (tmux only)
+- Coordinator node status changes to `blocked` (both container and tmux)
 - Control session has new context relevant to the child's work
 
-#### Session Death Handling
+#### Container Exit Handling
 
-When a session dies unexpectedly:
+When a container exits:
 
 ```
-function handle_session_death(session_name, session_info):
-  node = session_info.node
+function handle_container_exit(node_id, node_info):
+  node = node_info.node
+
+  # Check if the node actually completed before the container exited
+  node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
+
+  if node_status == "completed":
+    collect_result(node_id, node_info)
+    return
+
+  # Container exited without completing — treat as failure
+  record_failure(node, "container_exit", "Container exited unexpectedly")
+  active_nodes.remove(node_id)
+```
+
+#### Session Death Handling (Tmux)
+
+When a tmux session dies unexpectedly:
+
+```
+function handle_session_death(node_id, node_info):
+  node = node_info.node
 
   # Check if the node actually completed before the session died
   node_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
 
   if node_status == "completed":
-    collect_result(session_name, session_info)
+    collect_result(node_id, node_info)
     return
 
   # Session died without completing — treat as failure
   record_failure(node, "session_death", "tmux session exited unexpectedly")
-  active_sessions.remove(session_name)
+  active_nodes.remove(node_id)
 ```
 
 ### 5. Process Results
@@ -351,7 +464,7 @@ function retry_dispatch(node, attempts):
       additional_prompt: "The previous approach failed: ${last.failure_reason}. Try an alternative strategy."
     })
 
-  # dispatch_node creates a new workspace session — monitoring loop picks it up
+  # dispatch_node creates a new container or tmux session — monitoring loop picks it up
 ```
 
 #### Failure Telemetry Record
@@ -603,7 +716,7 @@ ${END_IF}
 Please address the failed criteria and rule violations. The passing items should not regress.
 ```
 
-2. **Send feedback to child session** (if still alive) or create a new workspace session with the augmented spec
+2. **Send feedback to child** (if still alive) or re-dispatch with the augmented spec
 3. **Increment retry counter** for this node
 
 #### Re-Dispatch Limits
@@ -821,16 +934,16 @@ Query the coordinator for fresh state (may have been updated by child sessions):
 ac_node_query(action="get", tree_id=$TREE_ID)
 ```
 
-Check for newly completed sessions in `active_sessions`:
+Check for newly completed nodes in `active_nodes`:
 
 ```
-for session_name, session_info in active_sessions:
-  if session completed since last check:
+for node_id, node_info in active_nodes:
+  if node completed since last check:
     collect results
-    active_sessions.remove(session_name)
+    active_nodes.remove(node_id)
 ```
 
-Go to step 1 (select next ready batch). If `active_sessions` is non-empty but no new ready nodes are available, continue the monitoring loop (step 4) instead of selecting new nodes.
+Go to step 1 (select next ready batch). If `active_nodes` is non-empty but no new ready nodes are available, continue the monitoring loop (step 4) instead of selecting new nodes.
 
 ## Termination
 
@@ -843,7 +956,7 @@ When the loop terminates:
 
 **Nodes completed**: <N>
 <for each completed node>
-  - <node.id>. <node.title> [workspace-session] (<commit>)
+  - <node.id>. <node.title> [container|tmux] (<commit>)
 
 **Nodes skipped**: <N>
 <for each skipped node>
@@ -857,8 +970,8 @@ When the loop terminates:
 <for each node with failure telemetry>
   - <node.id>. <node.title>: <attempts> attempts, final outcome: <completed|escalated>
 
-**Dispatch summary**: workspace-session: N, escalated: N
-**Active sessions at termination**: <N>
+**Dispatch summary**: container: N, tmux: N, escalated: N
+**Active nodes at termination**: <N>
 **Commits**: <N total>
 
 **Termination reason**: all_complete | blocked | all_skipped | escalated
@@ -880,21 +993,33 @@ In open-ended mode, "all nodes complete" means "this batch is done" — not "the
 
 ### Stall Detection (Monitoring Loop)
 
-During the monitoring loop, detect stalled sessions:
+During the monitoring loop, detect stalled nodes:
 
 ```
 STALL_THRESHOLD = 10  # monitoring cycles with no progress
 
-for session_name, session_info in active_sessions:
-  current_output = tmux capture-pane -t "$SESSION_NAME" -p
-  if current_output == session_info.last_output:
-    session_info.stall_count += 1
-  else:
-    session_info.stall_count = 0
-    session_info.last_output = current_output
+for node_id, node_info in active_nodes:
 
-  if session_info.stall_count >= STALL_THRESHOLD:
-    handle_stuck(session_info.node, "stall", "No output change for ${STALL_THRESHOLD} monitoring cycles")
+  if node_info.dispatch_method == "container":
+    # Container stall: check coordinator for status changes
+    current_status = ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
+    if current_status == node_info.last_status:
+      node_info.stall_count += 1
+    else:
+      node_info.stall_count = 0
+      node_info.last_status = current_status
+
+  elif node_info.dispatch_method == "tmux":
+    # Tmux stall: check output changes
+    current_output = tmux capture-pane -t "$SESSION_NAME" -p
+    if current_output == node_info.last_output:
+      node_info.stall_count += 1
+    else:
+      node_info.stall_count = 0
+      node_info.last_output = current_output
+
+  if node_info.stall_count >= STALL_THRESHOLD:
+    handle_stuck(node_info.node, "stall", "No progress for ${STALL_THRESHOLD} monitoring cycles")
 ```
 
 ### Repeated Failure Detection
@@ -921,15 +1046,23 @@ function handle_stuck(node, reason, detail):
 
   skipped_set.add(node.id)
 
-  # Kill the stalled session if still alive
-  tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+  node_info = active_nodes[node.id]
 
-  # Remove from active sessions
-  active_sessions.remove(session_name)
+  # Kill the stalled node
+  if node_info.dispatch_method == "container":
+    # AC manages container lifecycle — update coordinator status
+    # Container will be cleaned up by AC
+    pass
+  elif node_info.dispatch_method == "tmux":
+    tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+
+  # Remove from active nodes
+  active_nodes.remove(node.id)
 
   # Log
   -- Stuck detected --------------------------------
   Node: <node.id>. <node.title>
+  Dispatch: <node_info.dispatch_method>
   Detector: <reason>
   Action: skip and continue
   --------------------------------------------------
@@ -945,7 +1078,7 @@ When dispatching nodes in parallel:
 - Results are collected as each session completes
 
 ```
-# Fan-out: 3 workspace sessions started in parallel
+# Fan-out: 3 containers dispatched in parallel
 # Session 1: completes successfully → collect result
 # Session 2: fails → retry with error context → new session
 # Session 3: completes successfully → collect result
@@ -962,7 +1095,8 @@ When dispatching nodes in parallel:
 | Transient error (API, network) | Classify via error-classification, retry with backoff |
 | Merge conflict on sub-branch | Escalate to user |
 | Context approaching limit | Output summary, suggest /resume-project in new session |
-| tmux unavailable | Stop with error — tmux is required for workspace sessions |
+| AC unreachable | Fall back to tmux dispatch for new nodes; continue monitoring existing container nodes via coordinator |
+| tmux unavailable | Only affects tmux-dispatched nodes; container dispatch continues normally |
 
 ## Example
 
@@ -975,14 +1109,14 @@ When dispatching nodes in parallel:
 
 | Node | Strategy | Reason |
 |------|----------|--------|
-| A.1. Add OAuth config | workspace-session | Clear spec, dependencies met |
-| B.1. Add login UI | workspace-session | Clear spec, dependencies met |
-| C.1. Update API docs | workspace-session | Clear spec, dependencies met |
+| A.1. Add OAuth config | container | Clear spec, dependencies met |
+| B.1. Add login UI | container | Clear spec, dependencies met |
+| C.1. Update API docs | container | Clear spec, dependencies met |
 
-Creating 3 workspace sessions...
-  → A.1 session started: tmux send-keys -t "A.1" "claude /init-workspace" Enter
-  → B.1 session started: tmux send-keys -t "B.1" "claude /init-workspace" Enter
-  → C.1 session started: tmux send-keys -t "C.1" "claude /init-workspace" Enter
+Dispatching 3 containers via AC...
+  → A.1 dispatched: ac_node_update action=dispatch (container: abc123)
+  → B.1 dispatched: ac_node_update action=dispatch (container: def456)
+  → C.1 dispatched: ac_node_update action=dispatch (container: ghi789)
 
 ── Monitoring ─────────────────────────────
 
@@ -1005,10 +1139,10 @@ Creating 3 workspace sessions...
 
 | Node | Strategy | Reason |
 |------|----------|--------|
-| A.2. Implement OAuth flow | workspace-session | Depends met, clear spec |
-| B.2. Add token refresh | workspace-session | Depends met, clear spec |
+| A.2. Implement OAuth flow | container | Depends met, clear spec |
+| B.2. Add token refresh | container | Depends met, clear spec |
 
-Creating 2 workspace sessions...
+Dispatching 2 containers via AC...
 
 ── Monitoring ─────────────────────────────
 
@@ -1018,14 +1152,14 @@ Creating 2 workspace sessions...
 ## Goal Tree Execution Summary
 
 **Nodes completed**: 5
-  - A.1. Add OAuth config [workspace-session] (abc1234)
-  - A.2. Implement OAuth flow [workspace-session] (jkl3456)
-  - B.1. Add login UI [workspace-session] (def5678)
-  - B.2. Add token refresh [workspace-session] (mno7890)
-  - C.1. Update API docs [workspace-session] (ghi9012)
+  - A.1. Add OAuth config [container] (abc1234)
+  - A.2. Implement OAuth flow [container] (jkl3456)
+  - B.1. Add login UI [container] (def5678)
+  - B.2. Add token refresh [container] (mno7890)
+  - C.1. Update API docs [container] (ghi9012)
 
-**Dispatch summary**: workspace-session: 5
-**Active sessions at termination**: 0
+**Dispatch summary**: container: 5
+**Active nodes at termination**: 0
 **Commits**: 5 total
 **Termination reason**: all_complete
 ```

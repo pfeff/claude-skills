@@ -1,6 +1,6 @@
 # Dispatch Node Operation
 
-Executes the chosen dispatch strategy for a node. Handles workspace session creation and startup via tmux, or escalation to the user.
+Executes the chosen dispatch strategy for a node. Handles container dispatch via AC (default), tmux workspace sessions (escape hatch), or escalation to the user.
 
 ## Inputs
 
@@ -17,17 +17,27 @@ Executes the chosen dispatch strategy for a node. Handles workspace session crea
 
 ## Output
 
-Dispatch-node returns immediately after sending the startup command. The output is a `dispatch_initiated` record, not a result:
+Dispatch-node returns immediately after initiating dispatch. The output is a `dispatch_initiated` record, not a result:
 
+**Container dispatch** (default):
+```
+dispatch_initiated:
+  node_id: "<node ID>"
+  container_id: "<Docker container ID>"
+  volume_name: "<Docker volume name>"
+  dispatch_method: "container"
+```
+
+**Tmux dispatch** (escape hatch):
 ```
 dispatch_initiated:
   node_id: "<node ID>"
   session_name: "<tmux session name>"
   workspace_path: "<path to node workspace>"
-  dispatch_method: "workspace-session"
+  dispatch_method: "tmux"
 ```
 
-The full `dispatch_result` (status, files_modified, commits, etc.) is populated later by execute-tree's monitoring loop when it detects session completion. See execute-tree step 5 for the result schema.
+The full `dispatch_result` (status, files_modified, commits, etc.) is populated later by execute-tree's monitoring loop when it detects completion. See execute-tree step 5 for the result schema.
 
 For escalations, the output is immediate:
 
@@ -43,16 +53,9 @@ dispatch_result:
 
 Dispatch-node only operates on **L0 leaf nodes**. If the node has children in the tree, it is L1 structure and should not be dispatched — return an error. See `references/layer-model.md`.
 
-## Node Workspace Setup
+## Spec Content
 
-**Before any dispatch strategy**, create a node workspace with repo worktrees. This applies to all strategies.
-
-```bash
-skills/goal-tree/scripts/create-node-workspace.sh \
-  "$PROJECT_DIR" "$NODE_ID" "$PROJECT_BRANCH" "$OWNER" <repo1> [repo2 ...]
-```
-
-The script creates both CLAUDE.md (operational context) and DESIGN.md (placeholder). After workspace creation, populate DESIGN.md with actual node content using the Edit tool:
+Both container and tmux strategies need a DESIGN.md spec for the node. Build the spec content as:
 
 ```markdown
 # ${NODE_ID}: ${NODE_TITLE}
@@ -89,6 +92,19 @@ ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
 [To be documented during implementation]
 ```
+
+If `prior_failures` is provided (retry dispatch), append the failure history — see Prior Failure History section below.
+
+## Node Workspace Setup (Tmux Only)
+
+Host workspace creation applies **only to tmux dispatch**. Container dispatch does not create host workspaces — AC manages volumes.
+
+```bash
+skills/goal-tree/scripts/create-node-workspace.sh \
+  "$PROJECT_DIR" "$NODE_ID" "$PROJECT_BRANCH" "$OWNER" <repo1> [repo2 ...]
+```
+
+The script creates both CLAUDE.md (operational context) and DESIGN.md (placeholder). After workspace creation, populate DESIGN.md with the spec content above.
 
 The workspace creation script automatically configures **GitHub App authentication** for child sessions:
 - Worktree remotes are switched from SSH to HTTPS
@@ -136,9 +152,58 @@ Proceed with this assumption, or redirect?
 
 ## Strategy Execution
 
-### Workspace Session
+### Container (Default)
 
-The default execution strategy. Creates a workspace, writes the spec, and starts a tmux session that runs autonomously.
+The default execution strategy. Dispatches the node to AC, which manages the entire container lifecycle — volume creation, repo cloning, spec injection, CLAUDE.md injection, and editor container launch. No host workspace is created.
+
+#### 1. Call `ac_node_update` action=dispatch
+
+Use the AC MCP tool to dispatch the node:
+
+```
+ac_node_update:
+  action: dispatch
+  tree_id: ${TREE_ID}
+  node_id: ${NODE_DB_ID}
+  params:
+    repos: [list of repo URLs]
+    branch: "${PROJECT_BRANCH}/${NODE_ID}"
+    spec_content: <DESIGN.md content built from Spec Content section above>
+```
+
+AC handles:
+- **Volume creation**: Docker volume with `ac.*` labels for identity
+- **Repo cloning**: Fresh clone of each repo into the volume
+- **Spec injection**: DESIGN.md written into workspace root
+- **CLAUDE.md injection**: Operational context for the child agent
+- **Container launch**: Editor container started with volume mounted
+
+#### 2. Capture dispatch response
+
+AC returns immediately with container metadata:
+
+```
+dispatch_response:
+  container_id: "<Docker container ID>"
+  volume_name: "<Docker volume name>"
+  status: "dispatched"
+```
+
+#### 3. Return
+
+Dispatch-node returns immediately. The control session does not wait for the container to complete — monitoring happens in execute-tree's polling loop via `ac_node_query`.
+
+```
+dispatch_initiated:
+  node_id: "<node ID>"
+  container_id: "<Docker container ID>"
+  volume_name: "<Docker volume name>"
+  dispatch_method: "container"
+```
+
+### Tmux (Escape Hatch)
+
+Used only when interactive human collaboration is required, operator explicitly requests tmux, or container dispatch is unavailable. Creates a host workspace, writes the spec, and starts a tmux session.
 
 #### 1. Create Workspace (if not already done)
 
@@ -149,21 +214,7 @@ skills/goal-tree/scripts/create-node-workspace.sh \
 
 #### 2. Write DESIGN.md with Spec
 
-Populate the node workspace's DESIGN.md with the full task spec (see Node Workspace Setup above).
-
-If `prior_failures` is provided (retry dispatch), append the failure history to DESIGN.md:
-
-```markdown
-## Prior Failure History
-
-This task has been attempted ${len(prior_failures)} time(s) previously.
-
-### Attempt ${attempt.attempt_number}
-- **Failure reason**: ${attempt.failure_reason}
-- **Parameter change applied**: ${attempt.parameter_change_applied}
-
-${additional_prompt}
-```
+Populate the node workspace's DESIGN.md with the spec content (see Spec Content section above).
 
 #### 3. Configure Inbox Session ID
 
@@ -194,7 +245,23 @@ dispatch_initiated:
   node_id: "<node ID>"
   session_name: "<tmux session name>"
   workspace_path: "<path to node workspace>"
-  dispatch_method: "workspace-session"
+  dispatch_method: "tmux"
+```
+
+### Prior Failure History
+
+If `prior_failures` is provided (retry dispatch), append the failure history to the spec content (DESIGN.md for tmux, spec_content for container):
+
+```markdown
+## Prior Failure History
+
+This task has been attempted ${len(prior_failures)} time(s) previously.
+
+### Attempt ${attempt.attempt_number}
+- **Failure reason**: ${attempt.failure_reason}
+- **Parameter change applied**: ${attempt.parameter_change_applied}
+
+${additional_prompt}
 ```
 
 ### Escalate
@@ -248,11 +315,18 @@ tmux has-session -t "$SESSION_NAME" 2>/dev/null
 
 ## Failure Handling
 
-Dispatch-node returns failures to execute-tree, which owns the retry loop (step 4). Since workspace sessions run asynchronously, failures are detected during execute-tree's monitoring loop, not at dispatch time.
+Dispatch-node returns failures to execute-tree, which owns the retry loop (step 4). Since dispatched nodes run asynchronously, failures are detected during execute-tree's monitoring loop, not at dispatch time.
 
 ### Failure Detection
 
 Failures are detected by execute-tree monitoring via:
+
+**Container nodes**:
+1. **Container exit**: `ac_node_query` action=active no longer lists the container — exited or crashed
+2. **Coordinator status**: Node status updated to `blocked` or `failed` by the child agent
+3. **Stall detection**: No progress observed across multiple monitoring cycles (via `ac_node_query`)
+
+**Tmux nodes**:
 1. **Session death**: `tmux has-session` returns non-zero — session crashed or exited
 2. **Coordinator status**: Node status updated to `blocked` or `failed` by the child session
 3. **Stall detection**: No progress observed across multiple monitoring cycles
@@ -353,7 +427,7 @@ After the operator approves and merges:
 ## Integration Points
 
 - **Called by**: execute-tree (step 3)
-- **Depends on**: dispatch-decision output, `ac_node_update` MCP tool (agent-coordinator MCP server), tmux
+- **Depends on**: dispatch-decision output, `ac_node_update` MCP tool (agent-coordinator MCP server), tmux (escape hatch only)
 - **References**:
   - `task-workflow/references/error-classification.md` — error taxonomy
   - `task-workflow/references/retry-with-backoff.md` — backoff algorithm
