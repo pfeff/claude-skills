@@ -2,8 +2,8 @@
 # Run Ralph Wiggum loop inside devcontainer
 # Usage: ./run-container.sh [workspace-folder] [--network] [-- loop-args...]
 #
-# Merges Ralph's requirements (Claude Code, security constraints) with
-# the project's devcontainer.json if present.
+# Uses Ralph's generic devcontainer image. Project devcontainers define
+# test images only and are not merged into the editor container.
 
 set -euo pipefail
 
@@ -92,7 +92,7 @@ else
   fi
 fi
 
-# Create temp directory for merged config
+# Create temp directory for devcontainer config
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 mkdir -p "$TEMP_DIR/.devcontainer"
@@ -155,81 +155,9 @@ else
   fi
 fi
 
-# Generate merged devcontainer.json
-generate_merged_config() {
-  local project_config="$WORKSPACE/.devcontainer/devcontainer.json"
-  local ralph_config="$SCRIPT_DIR/.devcontainer/devcontainer.json"
-  local output="$TEMP_DIR/.devcontainer/devcontainer.json"
-
-  if [[ -f "$project_config" ]]; then
-    echo "  Config: merging project + ralph requirements"
-
-    # Warn if the project's devcontainer.json overrides any ralph feature key.
-    # The merge below keeps project values winning (so legitimate options like
-    # `node.version` still work), but security-relevant features could be
-    # silently swapped out — surface that here so operators see it.
-    OVERRIDDEN_FEATURES=$(jq -r --slurpfile ralph "$ralph_config" '
-      ((.features // {}) | keys) as $project
-      | (($ralph[0].features // {}) | keys) as $ralph_keys
-      | ($project - ($project - $ralph_keys))
-      | .[]
-    ' "$project_config" 2>/dev/null || true)
-    if [[ -n "$OVERRIDDEN_FEATURES" ]]; then
-      echo "  Warning: project devcontainer.json overrides ralph feature(s):" >&2
-      while IFS= read -r feat; do
-        echo "    - $feat" >&2
-      done <<< "$OVERRIDDEN_FEATURES"
-      echo "  Project values win on key collision. Verify this is intentional." >&2
-    fi
-
-    # Merge project config with Ralph's requirements
-    jq --slurpfile ralph "$ralph_config" '
-      # Inject all of the Ralph required features (node, github-cli, go-task, ...)
-      # Project values win on key collision; otherwise the ralph default is used.
-      # If a project sets a feature key to a non-object (e.g., null to "disable"),
-      # coerce it to {} so jq recursive merge does not error.
-      .features = (
-        ($ralph[0].features // {}) * (
-          (.features // {}) | with_entries(
-            if (.value | type) == "object" then . else .value = {} end
-          )
-        )
-      ) |
-
-      # Append Claude Code install and SSH setup to postCreateCommand
-      .postCreateCommand = (
-        "mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null" as $ssh_setup |
-        "sudo env \"PATH=$PATH\" npm install -g @anthropic-ai/claude-code" as $claude_install |
-        if .postCreateCommand == null then
-          "\($ssh_setup) && \($claude_install)"
-        elif (.postCreateCommand | type) == "string" then
-          "\($ssh_setup) && " + .postCreateCommand + " && \($claude_install)"
-        elif (.postCreateCommand | type) == "array" then
-          [$ssh_setup] + .postCreateCommand + [$claude_install]
-        else
-          .postCreateCommand
-        end
-      ) |
-
-      # Add postStartCommand for SSH socket permissions (required for vscode user)
-      .postStartCommand = "sudo chmod 777 /run/host-services/ssh-auth.sock 2>/dev/null || true" |
-
-      # Use vscode user (Claude blocks --dangerously-skip-permissions as root)
-      .remoteUser = "vscode" |
-
-      # Merge security runArgs
-      .runArgs = ((.runArgs // []) + $ralph[0].runArgs | unique) |
-
-      # Add containerEnv for credentials (localEnv references)
-      .containerEnv = ((.containerEnv // {}) * $ralph[0].containerEnv)
-    ' "$project_config" > "$output"
-  else
-    echo "  Config: using ralph defaults"
-    cp "$ralph_config" "$output"
-  fi
-}
-
-generate_merged_config
+# Copy Ralph devcontainer.json (editor container always uses Ralph generic image)
+echo "  Config: using ralph defaults"
+cp "$SCRIPT_DIR/.devcontainer/devcontainer.json" "$TEMP_DIR/.devcontainer/devcontainer.json"
 
 # If services are configured, add --network=host so the container can reach
 # host-side Docker Compose services via localhost
