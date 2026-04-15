@@ -22,60 +22,59 @@ Updates node state via the coordinator API. Handles status transitions, result r
 
 ## Execution Steps
 
-### 1. Build Update Command
+### 1. Build Update Call
 
-Construct the `coord node update` command with the fields to change:
+Construct the `ac_node_update` MCP tool call with the fields to change:
 
-```bash
-coord node update $TREE_ID $NODE_DB_ID \
-  --status <status> \
-  --result "<result summary>"
+```
+ac_node_update(
+  action=<"complete"|"blocked"|"failed"|"progress">,
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="<result summary>",
+  artifacts=[<optional artifact list>]
+)
 ```
 
 ### 2. Update Node Status
 
-If `updates.status` is provided:
+If `updates.status` is provided, use the corresponding action:
 
-```bash
-coord node update $TREE_ID $NODE_DB_ID --status <new_status>
+```
+ac_node_update(action="complete", tree_id=$TREE_ID, node_id="$NODE_ID")
 ```
 
 ### 3. Record Result
 
-If `updates.result` is provided (typically on completion):
+If `updates.result` is provided (typically on completion), include it as `message`:
 
-```bash
-coord node update $TREE_ID $NODE_DB_ID --result "<outcome summary>"
+```
+ac_node_update(
+  action="complete",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Added JWTAuthMiddleware with full validation."
+)
 ```
 
-Status and result can be combined in a single call:
-
-```bash
-coord node update $TREE_ID $NODE_DB_ID \
-  --status completed \
-  --result "Added JWTAuthMiddleware with full validation."
-```
+Status and result are combined in the same call — the `action` sets the status and `message` records the result.
 
 ### 4. Update Acceptance Criteria
 
-If `updates.criteria` is provided:
-
-```bash
-coord node update $TREE_ID $NODE_DB_ID \
-  --criteria '[\"criterion 1\", \"criterion 2\"]'
-```
+Acceptance criteria updates are not directly supported by `ac_node_update`. Use the coordinator REST API or update criteria through the node description if needed.
 
 ### 5. Add Detailed Result Record
 
-For structured result recording (dispatch method, files, commit):
+For structured result recording (dispatch method, files, commit), use `action="progress"` with artifacts:
 
-```bash
-coord node add-result $TREE_ID $NODE_DB_ID \
-  --status completed \
-  --dispatch subagent \
-  --files "path/to/file1.md,path/to/file2.md" \
-  --summary "Added JWT validation middleware with signature and expiry checks." \
-  --commit "abc1234"
+```
+ac_node_update(
+  action="progress",
+  tree_id=$TREE_ID,
+  node_id="$NODE_ID",
+  message="Added JWT validation middleware with signature and expiry checks.",
+  artifacts=["path/to/file1.md", "path/to/file2.md", "abc1234"]
+)
 ```
 
 ### 6. Parent Status Propagation
@@ -88,8 +87,8 @@ No manual parent checking is needed — this was previously done by walking GOAL
 
 After the update, optionally verify by querying the node state:
 
-```bash
-coord tree show $TREE_ID | jq ".data.nodes[] | select(.node_id == \"$NODE_ID\")"
+```
+ac_node_query(action="get", tree_id=$TREE_ID, node_id="$NODE_ID")
 ```
 
 ## Batch Update
@@ -97,11 +96,11 @@ coord tree show $TREE_ID | jq ".data.nodes[] | select(.node_id == \"$NODE_ID\")"
 For updating multiple nodes at once (e.g., after parallel dispatch completes):
 
 ```
-for each (node_db_id, updates) in batch:
-  coord node update $TREE_ID $node_db_id --status <status> --result "<result>"
+for each (node_id, updates) in batch:
+  ac_node_update(action=<status_action>, tree_id=$TREE_ID, node_id=node_id, message="<result>")
 ```
 
-Each `coord node update` call is independent — no file-level concurrency concerns.
+Each `ac_node_update` call is independent — no concurrency concerns.
 
 ## Error Handling
 
@@ -126,19 +125,25 @@ updates:
   result: "Added JWTAuthMiddleware with full validation."
 ```
 
-**Commands executed**:
+**Calls executed**:
 
-```bash
+```
 # Update status and result
-coord node update 1 42 --status completed --result "Added JWTAuthMiddleware with full validation."
+ac_node_update(
+  action="complete",
+  tree_id=1,
+  node_id="A.1",
+  message="Added JWTAuthMiddleware with full validation."
+)
 
-# Record detailed result
-coord node add-result 1 42 \
-  --status completed \
-  --dispatch subagent \
-  --files "middleware/auth.go,middleware/auth_test.go" \
-  --summary "Added JWT validation middleware with signature and expiry checks." \
-  --commit "abc1234"
+# Record detailed result with artifacts
+ac_node_update(
+  action="progress",
+  tree_id=1,
+  node_id="A.1",
+  message="Added JWT validation middleware with signature and expiry checks.",
+  artifacts=["middleware/auth.go", "middleware/auth_test.go", "abc1234"]
+)
 ```
 
 The coordinator automatically propagates parent status — if A's other children are all done, A is marked completed.
@@ -146,5 +151,5 @@ The coordinator automatically propagates parent status — if A's other children
 ## Integration Points
 
 - **Called by**: execute-tree (after dispatch), resume-project (reset in_progress)
-- **Depends on**: `coord` CLI, COORDINATOR_URL, COORDINATOR_TOKEN
+- **Depends on**: `ac_node_query` and `ac_node_update` MCP tools (agent-coordinator MCP server), COORDINATOR_TOKEN
 - **Reference**: `references/node-lifecycle.md` for transition rules

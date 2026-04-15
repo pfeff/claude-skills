@@ -23,11 +23,11 @@ Nodes in the same `independent_group` have no dependencies between them and can 
 
 ### 1. Query Ready Nodes
 
-```bash
-coord tree ready $TREE_ID
+```
+ac_node_query(action="ready", tree_id=$TREE_ID)
 ```
 
-The coordinator's `/ready` endpoint returns all nodes that are pending with their dependencies met. This replaces the manual tree-walking and dependency-checking logic.
+The coordinator returns all nodes that are pending with their dependencies met. This replaces the manual tree-walking and dependency-checking logic.
 
 ### 2. Parse Response
 
@@ -106,8 +106,8 @@ Return the grouped ready nodes. The caller (execute-tree) decides how many to di
 
 To determine the reason when the ready list is empty, query the full tree:
 
-```bash
-coord tree show $TREE_ID
+```
+ac_node_query(action="get", tree_id=$TREE_ID)
 ```
 
 Check node statuses to determine if all are complete, all blocked, or all skipped.
@@ -116,8 +116,8 @@ Check node statuses to determine if all are complete, all blocked, or all skippe
 
 ### Query
 
-```bash
-coord tree ready 1
+```
+ac_node_query(action="ready", tree_id=1)
 ```
 
 ### Response
@@ -144,5 +144,5 @@ A.2 and B.1 are in the same group — they can run in parallel (different repos,
 ## Integration Points
 
 - **Called by**: execute-tree (step 1 of each loop iteration)
-- **Depends on**: `coord` CLI, COORDINATOR_URL, COORDINATOR_TOKEN
+- **Depends on**: `ac_node_query` MCP tool (agent-coordinator MCP server), COORDINATOR_TOKEN
 - **Reference**: `references/node-lifecycle.md` for ready check rules
