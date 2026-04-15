@@ -14,6 +14,10 @@ Main orchestration loop for goal tree execution. Iterates: select ready nodes �
 
 Drives the goal tree from pending to complete. Handles parallel dispatch of independent nodes via workspace sessions, asynchronous monitoring via tmux, result collection, failure recovery, and stuck detection. Stops when all nodes are complete, all remaining are blocked/skipped, or an unrecoverable error occurs.
 
+## Layer Context
+
+Execute-tree operates as the **L1 control loop**. It dispatches **L0 leaf nodes** to workspace sessions and evaluates their outputs. Non-leaf nodes (L1 structure) are never dispatched — their status is derived from children. See `references/layer-model.md` for the full layer model.
+
 ## Protocol Requirements
 
 These are mandatory — do not shortcut the pipeline.

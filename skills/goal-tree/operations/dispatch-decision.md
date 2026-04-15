@@ -54,6 +54,10 @@ Before presenting Tier 2 results to human, the agent MUST:
 
 Human reviews **indicators of correctness**: spec traces to tests, tests trace to code, code does what the spec says.
 
+## Layer Gate
+
+Only **leaf nodes** (L0 tasks) are dispatched. Non-leaf nodes (L1 structure) are decomposition — their status derives from children. If `dispatch-decision` receives a non-leaf node, return an error: "Non-leaf node cannot be dispatched — decompose first or check tree structure." See `references/layer-model.md`.
+
 ## Decision Flow
 
 ```

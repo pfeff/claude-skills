@@ -119,6 +119,7 @@ Analyze the confirmed project spec and decompose into a hierarchical goal tree.
 5. **Dependency-aware**: Identify natural ordering (data model before API, API before UI)
 6. **Right-sized**: Leaf tasks should be 1-3 files of changes. If larger, decompose further.
 7. **What, not how**: Nodes describe *what* to achieve, not *how* to implement. "Add OAuth token validation" is good. "Create a middleware function that calls the OAuth library" is too detailed. Implementation design happens during task dispatch.
+8. **Layer-aware structure**: The tree encodes layer ownership. The tree root is the L2 objective. Non-leaf nodes are L1 decomposition (cycles, phases, sub-goals). Leaf nodes are L0 tasks dispatched to workspace sessions. Depth-0 non-leaf nodes are the primary L1 cycle boundary. See `references/layer-model.md`.
 
 **Decomposition checklist**:
 
