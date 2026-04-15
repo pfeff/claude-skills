@@ -1,6 +1,6 @@
 # Dispatch Decision Operation
 
-Evaluates a ready node and selects the appropriate execution strategy: workspace session, discuss-dispatch, or escalate.
+Evaluates a ready node and selects the appropriate execution strategy: container (default), tmux (escape hatch), discuss-dispatch, or escalate.
 
 ## Inputs
 
@@ -14,7 +14,7 @@ Evaluates a ready node and selects the appropriate execution strategy: workspace
 
 ```
 decision:
-  strategy: "workspace-session" | "discuss-dispatch" | "escalate"
+  strategy: "container" | "tmux" | "discuss-dispatch" | "escalate"
   tier: 1 | 2 | 3
   reason: "<why this strategy was chosen>"
   context: { ... }  # strategy-specific context
@@ -26,9 +26,9 @@ Every dispatch decision includes a tier that controls checkpoint behavior:
 
 | Tier | Category | Dispatch | Post-Completion | Examples |
 |------|----------|----------|-----------------|----------|
-| 1 | Safe / read-only | Auto | Auto | Research, audits, scans, analysis |
-| 2 | Code with solid spec | Auto | Validate → agent review → human review | Features, fixes, refactoring |
-| 3 | Strategic / ambiguous | Escalate or discuss-dispatch | Human review | Architecture decisions, scope changes |
+| 1 | Safe / read-only | Auto (container) | Auto | Research, audits, scans, analysis |
+| 2 | Code with solid spec | Auto (container) | Validate → agent review → human review | Features, fixes, refactoring |
+| 3 | Strategic / ambiguous | Escalate, discuss-dispatch, or tmux | Human review | Architecture decisions, scope changes, interactive collaboration |
 
 ### Tier Classification
 
@@ -65,25 +65,50 @@ Does the node need human judgment?
 ├── Yes → ESCALATE
 └── No
     ├── Is the spec clear and self-contained?
-    │   ├── Yes → WORKSPACE SESSION
+    │   ├── Yes
+    │   │   ├── Does node require interactive human collaboration? → TMUX (escape hatch)
+    │   │   ├── Did operator explicitly request tmux? → TMUX (escape hatch)
+    │   │   ├── Is AC unavailable (container dispatch not possible)? → TMUX (fallback)
+    │   │   └── Otherwise → CONTAINER (default)
     │   └── No (ambiguous, underspecified)
     │       ├── Ambiguity is resolvable via conversation → DISCUSS-DISPATCH
     │       └── Ambiguity requires human decision → ESCALATE
-    └── Is it a fallback from a failed workspace session? → WORKSPACE SESSION (with adjusted spec)
+    └── Is it a fallback from a failed dispatch? → CONTAINER (with adjusted spec)
 ```
 
 ## Strategy Criteria
 
-### Workspace Session
+### Container (Default)
 
-Choose workspace session when:
+Choose container when:
 
 - Spec has clear acceptance criteria
 - No "clarify", "discuss", "decide" in description
 - No unresolved spec gaps
 - Dependencies are all completed (results available for context)
+- Node does not require interactive human collaboration
 
-This is the default strategy. Everything dispatches to a workspace session — the decision is about spec completeness, not task complexity. A leaf task with 2 files and a deep subtree with 20 files both go to workspace sessions. The spec scales; the substrate doesn't change.
+This is the default strategy. Everything dispatches to a container via `ac_node_update` action=dispatch — the decision is about spec completeness, not task complexity. A leaf task with 2 files and a deep subtree with 20 files both go to containers. The spec scales; the substrate doesn't change.
+
+Container dispatch eliminates the permission-servicing bottleneck that makes L1 a gatekeeper. AC manages volumes, repo cloning, spec injection, and container lifecycle — no host workspace is created.
+
+**Context provided**:
+```
+context:
+  repos: [list of repos]
+  tree_id: "<coordinator tree ID>"
+  node_db_id: "<coordinator node DB ID>"
+```
+
+### Tmux (Escape Hatch)
+
+Choose tmux when:
+
+- Node spec explicitly requires interactive human collaboration
+- Operator overrides with explicit tmux request
+- Container dispatch is unavailable (AC not deployed or unreachable)
+
+Tmux is **not** the default. It exists for the narrow case where human-in-the-loop interaction is required during execution (not just at review time). Permission servicing in tmux is the anti-pattern that container dispatch eliminates.
 
 **Context provided**:
 ```
@@ -159,7 +184,7 @@ for dep_id in node.depends_on:
 
 ## Examples
 
-### Clear spec → Workspace Session
+### Clear spec → Container
 
 ```
 Node: A.2 "Implement user CRUD endpoints"
@@ -169,12 +194,26 @@ Node: A.2 "Implement user CRUD endpoints"
   - description: clear, no ambiguity keywords
 
 Decision:
-  strategy: "workspace-session"
+  strategy: "container"
   tier: 2
-  reason: "Clear spec, dependencies met — dispatch to workspace session"
+  reason: "Clear spec, dependencies met — dispatch to container"
 ```
 
-### Complex subtree → Workspace Session
+### Interactive collaboration required → Tmux
+
+```
+Node: D.1 "Pair on auth architecture with security team"
+  - repos: [api-service]
+  - criteria: 3 items
+  - description: "requires interactive discussion with operator during implementation"
+
+Decision:
+  strategy: "tmux"
+  tier: 3
+  reason: "Node requires interactive human collaboration — tmux escape hatch"
+```
+
+### Complex subtree → Container
 
 ```
 Node: C "Frontend redesign" (goal with 6 descendants)
@@ -183,9 +222,9 @@ Node: C "Frontend redesign" (goal with 6 descendants)
   - spec: clear acceptance criteria for each level
 
 Decision:
-  strategy: "workspace-session"
+  strategy: "container"
   tier: 2
-  reason: "Deep subtree but spec is clear — workspace session handles complexity via its own decomposition"
+  reason: "Deep subtree but spec is clear — container handles complexity via its own decomposition"
 ```
 
 ### Vague spec → Discuss-Dispatch
