@@ -267,6 +267,27 @@ for prompt_file in PROMPT_plan.md PROMPT_build.md; do
   fi
 done
 
+# --- Generate .mcp.json for AC MCP client ---
+
+if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" ]]; then
+  cat > "$NODE_WORKSPACE/.mcp.json" <<'MCPJSON'
+{
+  "mcpServers": {
+    "agent-coordinator": {
+      "type": "url",
+      "url": "${COORDINATOR_URL}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${COORDINATOR_TOKEN}"
+      }
+    }
+  }
+}
+MCPJSON
+  echo "  Created: .mcp.json (AC MCP client)" >&2
+else
+  echo "  Skipped: .mcp.json (COORDINATOR_URL/COORDINATOR_TOKEN not set)" >&2
+fi
+
 # --- Generate gates.md from Taskfile ---
 
 generate_gates() {
@@ -601,6 +622,12 @@ fi
 STATUS="failure"
 SUMMARY="Build phase did not complete all tasks"
 CRITERIA_MET="[]"
+PR_URL=""
+
+# Read PR URL from exit-summary if available
+if [[ -f "$NODE_WORKSPACE/.ralph/exit-summary.json" ]]; then
+  PR_URL=$(jq -r '.pr_url // empty' "$NODE_WORKSPACE/.ralph/exit-summary.json" 2>/dev/null || true)
+fi
 
 if [[ -f "$NODE_WORKSPACE/PLAN.md" ]]; then
   UNCHECKED=$(grep -c '^\- \[ \]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || true)
@@ -647,6 +674,7 @@ cat <<RESULT
   "issues": "none",
   "dispatch_method": "container",
   "duration_seconds": $(elapsed_seconds),
-  "timeout_seconds": ${TIMEOUT_SEC}
+  "timeout_seconds": ${TIMEOUT_SEC},
+  "pr_url": $(if [[ -n "$PR_URL" ]]; then printf '"%s"' "$PR_URL"; else echo 'null'; fi)
 }
 RESULT

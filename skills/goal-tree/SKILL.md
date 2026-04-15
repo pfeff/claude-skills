@@ -68,7 +68,7 @@ version: 1.0.0
 
 # Goal Tree Workflow
 
-Orchestrates multi-task projects as hierarchical goal trees. Decomposes a user's objective into goals and tasks, dispatches work via subagents or sub-sessions, and synthesizes results into PRs.
+Orchestrates multi-task projects as hierarchical goal trees. Decomposes a user's objective into goals and tasks, dispatches work via workspace sessions, and synthesizes results into PRs.
 
 ## Hard Rules
 
@@ -97,7 +97,7 @@ Think → confirm → act. Each phase has appropriate tools. Do not bleed across
 
 Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive during execution.
 
-- Independent nodes dispatch as parallel subagents. Sequential inline execution of independent nodes is a protocol violation.
+- Independent nodes dispatch as parallel workspace sessions. Sequential dispatch of independent nodes is a protocol violation.
 - Dispatch ready nodes immediately. Conversation about node B does NOT block dispatching node A if A's spec is clear and dependencies are met.
 - During execution, propose and act — checkpoints belong at phase boundaries (spec confirmation, tree approval, dispatch rounds), not after every thought. State assumptions and proceed; the user will redirect if needed.
 - Auto-continue the OODA loop. When ready nodes are exhausted in an open-ended project, immediately run `operations/next-cycle.md`. Do not stop and ask "what next?"
@@ -108,7 +108,7 @@ Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive d
 
 **Coordinator as backend**: The `coord` CLI (`scripts/coord`) is the interface. Reads and writes go through it. Env: `COORDINATOR_URL` (default `http://localhost:4000`), `COORDINATOR_TOKEN` (required).
 
-**Bootstrap mode**: When the coordinator is unavailable OR a TCETRA hostname is detected, use GOAL.md + TodoWrite for task tracking. All other conventions still apply — worktrees, scripted sessions, parallel dispatch via subagents. Once the coordinator is running (non-TCETRA only), register the remaining tree and switch to the normal loop.
+**Bootstrap mode**: When the coordinator is unavailable OR a TCETRA hostname is detected, use GOAL.md + TodoWrite for task tracking. All other conventions still apply — worktrees, scripted sessions, parallel dispatch via workspace sessions. Once the coordinator is running (non-TCETRA only), register the remaining tree and switch to the normal loop.
 
 **Environment detection**: Operations should check the environment before selecting a backend. Use `scripts/detect-env.sh` which outputs "work" (TCETRA → GOAL.md) or "personal" (coordinator). See `lib/env-detection.md` for details.
 
@@ -138,21 +138,20 @@ Legacy aliases: `/start-project`, `/resume-project`, `/finish-project`, `/close-
 
 **Resume**: Load `operations/resume-project.md` — OODA preamble (observe state, orient to strategy) → conversation → execute-tree loop.
 
-**Execute** (coordinator mode): Load `operations/execute-tree.md` — loop: select ready nodes → dispatch decisions → parallel fan-out → collect results → update coordinator → repeat.
+**Execute** (coordinator mode): Load `operations/execute-tree.md` — loop: select ready nodes → dispatch decisions → create workspace sessions → monitor via tmux → collect results → update coordinator → repeat.
 
 **Execute** (bootstrap mode): TodoWrite tracks tasks. The dispatch pipeline still applies:
 1. Identify independent tasks (no unmet dependencies)
 2. Create node workspaces via `scripts/create-node-workspace.sh`
-3. Dispatch independent tasks as parallel subagents (use `operations/dispatch-node.md` for prompt assembly)
-4. Commit results, advance to next batch
+3. Dispatch independent tasks as parallel workspace sessions (use `operations/dispatch-node.md` for workspace creation and tmux startup)
+4. Monitor sessions, commit results, advance to next batch
 5. Once coordinator is available, register tree and switch modes
 
-Bootstrap mode is NOT an excuse for serial inline execution. Use subagents for parallelism even without the coordinator.
+Bootstrap mode is NOT an excuse for serial dispatch. Use parallel workspace sessions even without the coordinator.
 
 **Dispatch strategy** (per-node):
-- Leaf task, single repo, clear spec → **Subagent**
-- Deep subtree or complex leaf → **Sub-session**
-- Ambiguous or fallback → **Inline**
+- Clear spec (any complexity) → **Workspace session**
+- Needs conversation first → **Discuss-dispatch** (conversation → workspace session)
 - Needs human judgment → **Escalate**
 
 ## Operations Reference
@@ -164,7 +163,7 @@ Load on-demand as needed:
 | `start-project.md` | Entry: conversation → guardian issue → tree registration |
 | `execute-tree.md` | Main orchestration loop with fan-out |
 | `dispatch-decision.md` | Per-node strategy selection |
-| `dispatch-node.md` | Execute chosen strategy (subagent/session/inline) |
+| `dispatch-node.md` | Execute chosen strategy (workspace session/escalate) |
 | `dispatch-task-cmd.md` | User-facing node dispatch (GOAL.md → workspace) |
 | `select-ready.md` | Query coordinator for ready nodes |
 | `parse-goal.md` | Query coordinator → structured tree |
@@ -196,5 +195,6 @@ Called by operations — use these instead of raw commands:
 | `scripts/cleanup-sessions.sh` | Kill project tmux sessions |
 | `scripts/close-project.sh` | Close and archive a project |
 | `scripts/discuss-dispatch.sh` | Atomic setup: coord node + workspace + DESIGN.md + .active-nodes |
+| `scripts/patch-finish-metrics.sh` | Patch finish.jsonl with evaluation.json metrics after L1 evaluation |
 
 **Prefer scripts over pipelines**: Before composing `jq`/`python` pipelines, check if a script above already provides the data. See `docs/reference/command-simplification.md` for common patterns and alternatives.
