@@ -2,6 +2,13 @@
 
 All notable changes to the **ralph-wiggum** skill will be documented in this file.
 
+## [1.5.0] - 2026-04-14
+
+### Removed
+- `generate_merged_config` function from `run-container.sh`. With Docker MCP, the editor container always uses the Ralph generic image — project devcontainers define test images only. The merge logic (feature injection, postCreateCommand append, remoteUser override, runArgs merge) was dead code.
+
+**Reasoning**: D.3.4 (autoresearch). Project devcontainer merging was designed for a world where Ralph ran inside project-specific containers. Docker MCP changed the architecture: editor containers are always Ralph's generic image. Source: autoresearch tree #5, node D.3.4.
+
 ## [1.4.0] - 2026-04-10
 
 ### Added
