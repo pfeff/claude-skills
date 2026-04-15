@@ -161,7 +161,17 @@ This task has been attempted ${len(prior_failures)} time(s) previously.
 ${additional_prompt}
 ```
 
-#### 3. Send Startup Command
+#### 3. Configure Inbox Session ID
+
+Append `CLAUDE_INBOX_SESSION_ID` to the workspace `.envrc` so the blocked-signal hook can identify this session:
+
+```bash
+echo "export CLAUDE_INBOX_SESSION_ID=\"$NODE_ID\"" >> "$WORKSPACE_PATH/.envrc"
+```
+
+This enables `permission-blocked-signal.sh` (wired via settings.json.tmpl) to fire inbox notifications when the session hits a permission prompt.
+
+#### 4. Send Startup Command
 
 Start the child session working on the task:
 
@@ -171,7 +181,7 @@ tmux send-keys -t "$SESSION_NAME" "claude /init-workspace" Enter
 
 The child session picks up CLAUDE.md and DESIGN.md from the workspace, runs `/init-workspace` to decompose into tasks, and autonomously implements them.
 
-#### 4. Return
+#### 5. Return
 
 Dispatch-node returns immediately after sending the startup command. The control session does not wait for the child to complete — monitoring happens in execute-tree's polling loop.
 

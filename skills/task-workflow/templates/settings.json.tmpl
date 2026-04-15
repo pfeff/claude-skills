@@ -36,5 +36,18 @@
       "Bash(rm -rf /:*)",
       "Bash(sudo:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/skills/goal-tree/hooks/permission-blocked-signal.sh"
+          }
+        ]
+      }
+    ]
   }
 }
