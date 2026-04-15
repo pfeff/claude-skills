@@ -269,12 +269,41 @@ done
 
 # --- Generate gates.md from Taskfile ---
 
+discover_container_image() {
+  # Discover the test container image from a repo's devcontainer.json.
+  # Sets CONTAINER_IMAGE and IMAGE_SOURCE variables in the caller's scope.
+  local repo_path="$1"
+  CONTAINER_IMAGE=""
+  IMAGE_SOURCE="ralph-default"
+
+  # Check standard devcontainer.json locations
+  local dc_file=""
+  if [[ -f "$repo_path/.devcontainer/devcontainer.json" ]]; then
+    dc_file="$repo_path/.devcontainer/devcontainer.json"
+  elif [[ -f "$repo_path/devcontainer.json" ]]; then
+    dc_file="$repo_path/devcontainer.json"
+  fi
+
+  if [[ -n "$dc_file" ]]; then
+    local img
+    img=$(jq -r '.image // empty' "$dc_file" 2>/dev/null || true)
+    if [[ -n "$img" ]]; then
+      CONTAINER_IMAGE="$img"
+      IMAGE_SOURCE="devcontainer"
+    fi
+  fi
+}
+
 generate_gates() {
   local repo_path="$1"
   local repo_name
   repo_name=$(basename "$repo_path")
   local gates_dir="$repo_path/.ralph"
   mkdir -p "$gates_dir"
+
+  # Discover container image
+  discover_container_image "$repo_path"
+  local image_display="${CONTAINER_IMAGE:-ralph base image}"
 
   if [[ -f "$repo_path/Taskfile.yml" ]] || [[ -f "$repo_path/Taskfile.yaml" ]]; then
     # Read targets from Taskfile
@@ -299,6 +328,13 @@ generate_gates() {
 
 Project-specific commands for the Ralph Wiggum autonomous build loop.
 
+## Container
+
+| Setting | Value |
+|---------|-------|
+| image | \`${image_display}\` |
+| source | \`${IMAGE_SOURCE}\` |
+
 ## Commands
 
 | Gate | Command |
@@ -310,7 +346,7 @@ Project-specific commands for the Ralph Wiggum autonomous build loop.
 
 Run gates in order: lint → typecheck → test → build. Skip gates with empty commands.
 GATES
-    echo "  Generated gates.md for $repo_name (from Taskfile)" >&2
+    echo "  Generated gates.md for $repo_name (from Taskfile, image: ${IMAGE_SOURCE})" >&2
   else
     # No Taskfile — generate empty gates
     echo "  Warning: No Taskfile.yml in $repo_name — gates will be empty" >&2
@@ -318,6 +354,13 @@ GATES
 # Gates
 
 Project-specific commands for the Ralph Wiggum autonomous build loop.
+
+## Container
+
+| Setting | Value |
+|---------|-------|
+| image | \`${image_display}\` |
+| source | \`${IMAGE_SOURCE}\` |
 
 ## Commands
 
@@ -342,11 +385,13 @@ done
 if [[ "$MULTI_REPO" == true ]]; then
   mkdir -p "$NODE_WORKSPACE/.ralph"
 
-  # Build repo table rows
+  # Build repo table rows (extract image from each repo's generated gates.md)
   REPO_ROWS=""
   for repo in "${REPOS[@]}"; do
     repo_name=$(basename "$repo")
-    REPO_ROWS+="| ${repo_name} | \`${repo_name}\` | \`${repo_name}/.ralph/gates.md\` |
+    # Extract image from the gates.md we just generated
+    repo_image=$(sed -n 's/^| image | `\(.*\)` |$/\1/p' "$repo/.ralph/gates.md" 2>/dev/null || echo "ralph base image")
+    REPO_ROWS+="| ${repo_name} | \`${repo_name}\` | \`${repo_name}/.ralph/gates.md\` | \`${repo_image}\` |
 "
   done
 
@@ -357,8 +402,8 @@ Multi-repo workspace configuration for the Ralph Wiggum autonomous build loop.
 
 ## Repos
 
-| Repo | Path | Gates |
-|------|------|-------|
+| Repo | Path | Gates | Image |
+|------|------|-------|-------|
 ${REPO_ROWS}
 ## Branch
 
