@@ -888,10 +888,14 @@ create_node_workspace() {
   fi
 
   # Step 4: Create .envrc that sources parent
+  # Generate unique task list ID so child doesn't clobber parent's task list
+  CHILD_TASK_LIST_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
   cat > "$WORKSPACE_PATH/.envrc" << EOF
 # Node workspace - inherits from project
 source_up
 
+# Override parent task list — each workspace gets its own
+export CLAUDE_CODE_TASK_LIST_ID="$CHILD_TASK_LIST_ID"
 export NODE_ID="$NODE_ID"
 export NODE_BRANCH="$NODE_BRANCH"
 EOF
