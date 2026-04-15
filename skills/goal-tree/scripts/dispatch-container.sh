@@ -601,6 +601,12 @@ fi
 STATUS="failure"
 SUMMARY="Build phase did not complete all tasks"
 CRITERIA_MET="[]"
+PR_URL=""
+
+# Read PR URL from exit-summary if available
+if [[ -f "$NODE_WORKSPACE/.ralph/exit-summary.json" ]]; then
+  PR_URL=$(jq -r '.pr_url // empty' "$NODE_WORKSPACE/.ralph/exit-summary.json" 2>/dev/null || true)
+fi
 
 if [[ -f "$NODE_WORKSPACE/PLAN.md" ]]; then
   UNCHECKED=$(grep -c '^\- \[ \]' "$NODE_WORKSPACE/PLAN.md" 2>/dev/null || true)
@@ -647,6 +653,7 @@ cat <<RESULT
   "issues": "none",
   "dispatch_method": "container",
   "duration_seconds": $(elapsed_seconds),
-  "timeout_seconds": ${TIMEOUT_SEC}
+  "timeout_seconds": ${TIMEOUT_SEC},
+  "pr_url": $(if [[ -n "$PR_URL" ]]; then printf '"%s"' "$PR_URL"; else echo 'null'; fi)
 }
 RESULT
