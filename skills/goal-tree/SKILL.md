@@ -195,10 +195,6 @@ Load on-demand as needed:
 | `close-project.md` | Tear down and archive |
 | `discuss-dispatch.md` | Interactive dispatch: conversation → workspace → incremental DESIGN.md → handoff |
 
-## Scripts
-
-Called by operations — use these instead of raw commands:
-
 ## References
 
 | Reference | Purpose |
@@ -209,6 +205,8 @@ Called by operations — use these instead of raw commands:
 | `references/goal-md-format.md` | GOAL.md parsing specification |
 
 ## Scripts
+
+Called by operations — use these instead of raw commands:
 
 | Script | Purpose |
 |--------|---------|
