@@ -97,9 +97,12 @@ A node is **ready** for dispatch when:
 
 ```python
 node.status == "pending"
+AND is_leaf(node, tree)          # only L0 tasks are dispatched
 AND all(dep.status == "completed" for dep in node.depends_on)
-AND node.id not in skipped_set  # from stuck detection in current session
+AND node.id not in skipped_set   # from stuck detection in current session
 ```
+
+Non-leaf nodes (L1 structure) are never dispatched — their status is derived from children. See `references/layer-model.md` for the layer model.
 
 ### Dependency Checking Algorithm
 

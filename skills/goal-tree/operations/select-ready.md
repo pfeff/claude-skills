@@ -31,6 +31,8 @@ The coordinator's `/ready` endpoint returns all nodes that are pending with thei
 
 ### 2. Parse Response
 
+**Layer filter**: Only leaf nodes (L0 tasks) should appear in the ready batch. The coordinator's `/ready` endpoint returns pending nodes with dependencies met — filter out any non-leaf nodes (nodes that have children in the tree). Non-leaf nodes are L1 decomposition structure; their readiness is derived from children, not dispatched directly. See `references/layer-model.md`.
+
 The response contains nodes ready for dispatch:
 
 ```json

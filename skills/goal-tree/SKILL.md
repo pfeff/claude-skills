@@ -102,6 +102,24 @@ Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive d
 - During execution, propose and act — checkpoints belong at phase boundaries (spec confirmation, tree approval, dispatch rounds), not after every thought. State assumptions and proceed; the user will redirect if needed.
 - Auto-continue the OODA loop. When ready nodes are exhausted in an open-ended project, immediately run `operations/next-cycle.md`. Do not stop and ask "what next?"
 
+## Layer Model
+
+The goal tree encodes layer ownership via structure. See `references/layer-model.md` for the full reference.
+
+| Structure | Layer | Role |
+|-----------|-------|------|
+| Tree root | L2 | Objective — what the project delivers |
+| Non-leaf node (any depth) | L1 | Decomposition — cycles, phases, sub-goals that organize L0 work |
+| Leaf node (any depth) | L0 | Task — dispatched to a workspace session, produces a PR |
+
+**Key rule**: leaf-vs-non-leaf determines the layer, not absolute depth. Depth encodes L1 decomposition granularity.
+
+- L2 owns the objective, evaluates L1 cycle outcomes
+- L1 owns decomposition and dispatch, evaluates L0 task outputs (spec-driven evaluation)
+- L0 owns implementation within a workspace session, follows task-workflow
+
+No coordinator schema change is needed — layer is derived from parent_id chain and children presence.
+
 ## Core Concepts
 
 **Goal Tree**: Hierarchical decomposition of an objective into goals (decomposable) and tasks (implementable leaves). Persisted via the coordinator API.
@@ -176,6 +194,15 @@ Load on-demand as needed:
 | `synthesize.md` | Merge, PR, report |
 | `close-project.md` | Tear down and archive |
 | `discuss-dispatch.md` | Interactive dispatch: conversation → workspace → incremental DESIGN.md → handoff |
+
+## References
+
+| Reference | Purpose |
+|-----------|---------|
+| `references/layer-model.md` | Depth-to-layer mapping, layer responsibilities, derivation from coordinator data |
+| `references/node-lifecycle.md` | State machine, completion rules, dependency resolution |
+| `references/goal-document.md` | GOAL.md format (bootstrap mode) |
+| `references/goal-md-format.md` | GOAL.md parsing specification |
 
 ## Scripts
 

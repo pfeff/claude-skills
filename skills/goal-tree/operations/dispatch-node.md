@@ -39,6 +39,10 @@ dispatch_result:
   dispatch_method: "escalated"
 ```
 
+## Layer Precondition
+
+Dispatch-node only operates on **L0 leaf nodes**. If the node has children in the tree, it is L1 structure and should not be dispatched — return an error. See `references/layer-model.md`.
+
 ## Node Workspace Setup
 
 **Before any dispatch strategy**, create a node workspace with repo worktrees. This applies to all strategies.

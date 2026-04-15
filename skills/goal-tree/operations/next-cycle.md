@@ -12,6 +12,10 @@ Lightweight OODA iteration for open-ended projects. Observes what changed, orien
 
 Restarts the OODA loop after a batch of work completes. Unlike `/project:resume` (which recovers from session interruption), this is an in-session continuation — the agent already has context and just needs to cycle.
 
+## Layer Context
+
+Next-cycle operates at the **L1 cycle boundary** — the point where L1 observes completed L0 work, orients to the L2 objective, and proposes new L0 tasks. Depth-0 non-leaf nodes are the primary cycle boundary that L2 evaluates. See `references/layer-model.md`.
+
 Use when:
 - A dispatch round completed and no ready nodes remain
 - The operator says "next", "continue", or "keep going"
