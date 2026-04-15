@@ -390,6 +390,7 @@ if [[ "$MULTI_REPO" == true ]]; then
   for repo in "${REPOS[@]}"; do
     repo_name=$(basename "$repo")
     # Extract image from the gates.md we just generated
+    # shellcheck disable=SC2016
     repo_image=$(sed -n 's/^| image | `\(.*\)` |$/\1/p' "$repo/.ralph/gates.md" 2>/dev/null || echo "ralph base image")
     REPO_ROWS+="| ${repo_name} | \`${repo_name}\` | \`${repo_name}/.ralph/gates.md\` | \`${repo_image}\` |
 "
