@@ -40,12 +40,13 @@ Always pass `--caller-cwd` so the script can warn if the shell is inside the pro
 3. **Inventories components** — counts node workspaces, worktrees, tmux sessions
 4. **Confirms** — shows what will be removed (unless `--force`)
 5. **Project Scorecard** — summarizes finish metrics before teardown (see below)
-6. **Removes worktrees** — via `cleanup-worktrees.sh`
-7. **Kills sessions** — via `cleanup-sessions.sh`
-8. **Archives** — tarballs project to `~/src/work/.archive/<parent>/<project>.tar.gz`
-9. **Updates guardian issue** — adds closure comment (does NOT close the issue)
-10. **Removes directory** — `rm -rf` the project path
-11. **Verifies** — checks directory gone, sessions gone, archive exists
+6. **Deploy Agent Coordinator** — builds and deploys AC release (see below)
+7. **Removes worktrees** — via `cleanup-worktrees.sh`
+8. **Kills sessions** — via `cleanup-sessions.sh`
+9. **Archives** — tarballs project to `~/src/work/.archive/<parent>/<project>.tar.gz`
+10. **Updates guardian issue** — adds closure comment (does NOT close the issue)
+11. **Removes directory** — `rm -rf` the project path
+12. **Verifies** — checks directory gone, sessions gone, archive exists
 
 ### Step 5: Project Scorecard
 
@@ -92,6 +93,37 @@ fi
 ```
 
 The scorecard is displayed as part of the confirmation output. If the file is missing or no entries match the epic, a message is shown and the close proceeds normally — the scorecard is informational, not blocking.
+
+### Step 6: Deploy Agent Coordinator
+
+If the cycle included changes to `agent-coordinator`, build and deploy a fresh release before tearing down the project. See [docs/how-to/deploy-local-prod.md](https://github.com/pfeff/agent-coordinator/blob/main/docs/how-to/deploy-local-prod.md) for full details.
+
+1. **Build release**
+   ```bash
+   cd ~/src/github/pfeff/agent-coordinator
+   MIX_ENV=prod mix deps.get
+   MIX_ENV=prod mix compile
+   MIX_ENV=prod mix assets.deploy
+   MIX_ENV=prod mix release --overwrite
+   ```
+
+2. **Install release**
+   ```bash
+   cp -r _build/prod/rel/agent_coordinator/ ~/.local/opt/agent-coordinator/
+   ```
+
+3. **Run migrations**
+   ```bash
+   set -a && source /usr/local/var/agent-coordinator/env && set +a
+   ~/.local/opt/agent-coordinator/bin/migrate
+   ```
+
+4. **Restart launchd service**
+   ```bash
+   launchctl kickstart -k gui/$(id -u)/com.pfeff.agent-coordinator
+   ```
+
+This step is informational, not blocking — if the cycle has no AC changes, skip it. The operator decides whether a deploy is warranted.
 
 ### Exit Codes
 
