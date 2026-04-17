@@ -175,14 +175,17 @@ After agreeing on recommendations, check whether any findings should be persiste
 **What qualifies as a CLAUDE.md finding**:
 - Dev environment quirks (required env vars, setup gotchas)
 - Non-obvious patterns or conventions discovered during implementation
-- Architectural decisions made but not yet documented
-- Common errors and their resolutions
 - Workflow requirements that Claude can't infer from code
 
 **What does NOT belong in CLAUDE.md**:
 - Task-specific notes or implementation plans (use PLAN.md)
 - Information already evident from reading the code
 - Temporary workarounds that will be removed
+- Session history or progress notes (use PROGRESS.md)
+- Design decisions or architectural decisions (use DECISIONS.md)
+- Cycle retrospectives (use memory/lessons_cycle_<N>.md)
+
+**Size discipline**: CLAUDE.md loads into every message in every conversation. Target <5 KB for project CLAUDE.md files. If a finding would push CLAUDE.md over budget, route it to the appropriate sibling file instead.
 
 **Discovery process**:
 
