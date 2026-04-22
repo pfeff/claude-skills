@@ -254,6 +254,22 @@ skills/goal-tree/scripts/dispatch-container.sh <node-workspace-path> [--image <i
 
 The script reads DESIGN.md from the workspace, extracts repo remote URLs, and calls `ac_node_update(action="dispatch")` via the MCP endpoint.
 
+#### Output Streaming
+
+Container dispatch automatically sets up incremental output streaming. During execution, `stream-output.sh` (started by `loop.sh`) tails the agent's iteration logs (`.ralph/iteration-*.jsonl`) and POSTs extracted assistant text to AC as heartbeat progress updates every 30 seconds.
+
+This enables the LiveView dashboard to show real-time output for active container nodes without requiring `tmux attach` or manual monitoring. The streaming is best-effort — failures are silently ignored and don't affect the agent's execution.
+
+Env vars required (injected by `dispatch.ex`):
+- `AC_TREE_ID` — goal tree ID
+- `AC_NODE_ID` — node ID string
+- `COORDINATOR_URL` — AC base URL
+- `COORDINATOR_TOKEN` — bearer token
+
+Optional tuning:
+- `STREAM_INTERVAL` — seconds between posts (default: 30)
+- `STREAM_MAX_CHARS` — max characters per chunk (default: 4000)
+
 #### 2. Capture dispatch response
 
 AC returns immediately with container metadata:
