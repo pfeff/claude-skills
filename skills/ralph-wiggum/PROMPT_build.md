@@ -14,6 +14,10 @@ This workspace uses the `task-workflow` skill. You **must** follow this workflow
 
 Do not freelance the workflow. Do not commit and push without `/finish`. Do not skip `/review`.
 
+## Continuous Execution
+
+Complete all tasks end-to-end without stopping between phases. Do not return to the prompt between steps. If a test fails, fix it and continue. If a command fails, diagnose and retry. Only stop if you encounter an unrecoverable error or need to write to BLOCKERS.md.
+
 ## Your Task
 
 1. Run `/init-workspace` if this is the first build iteration (PLAN.md has no checked tasks)
