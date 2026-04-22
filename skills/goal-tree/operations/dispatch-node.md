@@ -150,6 +150,68 @@ Proceed with this assumption, or redirect?
 
 **When to skip**: If the assumption is low-risk (cosmetic, easily reversible, local to one file) and doesn't constrain other nodes, proceed without surfacing. The heuristic is: **would the human want to know this before I build on top of it?**
 
+## Permission Pre-Configuration (Tmux Only)
+
+After workspace creation (tmux dispatch), generate `.claude/settings.json` with repo-appropriate permissions. This eliminates >90% of permission prompts that break child session flow.
+
+Key insight: permission patterns must match actual command strings children use, including `cd /path &&` prefixes and `MIX_ENV=test` prefixes.
+
+```bash
+SETTINGS_DIR="$WORKSPACE_PATH/.claude"
+mkdir -p "$SETTINGS_DIR"
+
+cat > "$SETTINGS_DIR/settings.json" <<'SETTINGS'
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(mix test:*)",
+      "Bash(mix compile:*)",
+      "Bash(mix deps*:*)",
+      "Bash(mix format:*)",
+      "Bash(mix ecto*:*)",
+      "Bash(MIX_ENV=* mix:*)",
+      "Bash(cd * && mix:*)",
+      "Bash(cd * && MIX_ENV=* mix:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(mkdir:*)",
+      "Bash(coord:*)",
+      "Bash(gh pr:*)",
+      "Bash(docker:*)"
+    ]
+  }
+}
+SETTINGS
+```
+
+The `create-workspace.sh` script (task-workflow) handles this via `settings.json.tmpl` — the template already includes base permissions. For tmux dispatch, the permissions above supplement the template defaults to cover Elixir-specific patterns.
+
+If the workspace was created by `create-node-workspace.sh`, settings.json is already copied from the template. Merge the Elixir-specific patterns into the existing file rather than overwriting:
+
+```bash
+# If settings.json already exists (from create-workspace.sh), merge permissions
+if [[ -f "$SETTINGS_DIR/settings.json" ]]; then
+  # Add Elixir patterns to existing allow list
+  jq '.permissions.allow += [
+    "Bash(mix test:*)",
+    "Bash(mix compile:*)",
+    "Bash(mix deps*:*)",
+    "Bash(mix format:*)",
+    "Bash(mix ecto*:*)",
+    "Bash(MIX_ENV=* mix:*)",
+    "Bash(cd * && mix:*)",
+    "Bash(cd * && MIX_ENV=* mix:*)"
+  ] | .permissions.allow |= unique' "$SETTINGS_DIR/settings.json" > "$SETTINGS_DIR/settings.json.tmp" \
+    && mv "$SETTINGS_DIR/settings.json.tmp" "$SETTINGS_DIR/settings.json"
+fi
+```
+
 ## Strategy Execution
 
 ### Container (Default)
