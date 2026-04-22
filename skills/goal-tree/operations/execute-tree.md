@@ -1032,6 +1032,49 @@ After processing results, evaluate whether results change the strategic picture:
 
 When pausing, present the strategic observation and let the operator steer. Do not present a list of everything that happened — focus on the one thing that matters.
 
+### 5f. Gap Processing
+
+After a node completes and passes evaluation, check its dispatch result for structured gaps. Each gap becomes a new pending node in the goal tree, closing the loop between "noticed during execution" and "tracked for future work."
+
+**Input**: The completed node's dispatch result (from `dispatch_result.json` in the node workspace, or from the coordinator node's result field).
+
+**Reference**: See `references/dispatch-result-schema.md` for the gap object schema.
+
+```
+function process_gaps(node, dispatch_result):
+  gaps = dispatch_result.get("gaps", [])
+  if not gaps:
+    return  # no gaps to process
+
+  parent_id = node.parent_id  # default parent for new nodes
+
+  for gap in gaps:
+    target_parent = gap.get("suggested_parent", parent_id)
+
+    # Register as a new pending node in the goal tree
+    ac_node_update(
+      action="create",
+      tree_id=$TREE_ID,
+      parent_id=target_parent,
+      title=gap["title"],
+      description=gap["description"],
+      metadata={
+        "source": "gap",
+        "source_node": node.id,
+        "severity": gap["severity"]
+      }
+    )
+
+    log("Gap registered: '${gap.title}' under ${target_parent} (severity: ${gap.severity}, source: ${node.id})")
+
+  # Log summary in completion output
+  log("${len(gaps)} gap(s) captured from ${node.id} and registered as pending nodes")
+```
+
+**When to run**: After step 5a (evaluation passes) and before step 5c (commit). Gap processing is non-blocking — failures warn but do not prevent node advancement.
+
+**Error handling**: If coordinator is unreachable or node creation fails, warn and continue. The gap information is still preserved in `dispatch_result.json` in the workspace for manual recovery.
+
 ### 6. Re-Query and Continue
 
 Query the coordinator for fresh state (may have been updated by child sessions):
@@ -1279,3 +1322,4 @@ Dispatching 2 containers via AC...
   - `task-workflow/references/error-classification.md`
   - `task-workflow/references/retry-with-backoff.md`
   - `references/node-lifecycle.md`
+  - `references/dispatch-result-schema.md`
