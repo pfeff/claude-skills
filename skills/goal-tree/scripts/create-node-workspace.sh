@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Wrapper for backwards compatibility - delegates to unified script
 #
+# NOTE: This script creates HOST-DIRECTORY workspaces and is for TMUX DISPATCH ONLY.
+# Container dispatch uses AC's volume-based workspaces via ac_node_update(action="dispatch").
+# See dispatch-container.sh and dispatch-node.md for the volume-based flow.
+#
 # Usage: create-node-workspace.sh <project_dir> <node_id> <project_branch> <owner> <repo1> [repo2 ...]
 #
 # This script maintains backwards compatibility with the original positional argument interface

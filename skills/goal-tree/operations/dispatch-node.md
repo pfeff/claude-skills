@@ -97,7 +97,7 @@ If `prior_failures` is provided (retry dispatch), append the failure history —
 
 ## Node Workspace Setup (Tmux Only)
 
-Host workspace creation applies **only to tmux dispatch**. Container dispatch does not create host workspaces — AC manages volumes.
+Host workspace creation applies **only to tmux dispatch**. Container dispatch does not create host workspaces — AC manages Docker volumes (see Volume Lifecycle above).
 
 ```bash
 skills/goal-tree/scripts/create-node-workspace.sh \
@@ -216,7 +216,21 @@ fi
 
 ### Container (Default)
 
-The default execution strategy. Dispatches the node to AC, which manages the entire container lifecycle — volume creation, repo cloning, spec injection, CLAUDE.md injection, and editor container launch. No host workspace is created.
+The default execution strategy. Dispatches the node to AC, which manages the entire container lifecycle via Docker volumes. No host-directory workspace is created — all workspace state lives in a Docker volume.
+
+#### Volume Lifecycle
+
+The container dispatch uses a volume-based workspace model:
+
+1. **Volume creation**: AC creates a Docker volume with `ac.*` labels (`ac.managed`, `ac.tree_id`, `ac.node_id`, `ac.role=workspace`) for identity and lifecycle tracking.
+2. **Setup container**: A transient `alpine/git` container mounts the volume and performs:
+   - Fresh `git clone` of each repo into `/workspace/<repo-name>`
+   - Branch checkout (creates branch if it doesn't exist on remote)
+   - DESIGN.md (spec content) written to `/workspace/DESIGN.md`
+   - CLAUDE.md (operational context) written to `/workspace/CLAUDE.md`
+3. **Editor container**: The main execution container (default: `ghcr.io/pfeff/ralph:latest`) mounts the volume at `/workspace` and runs the agent loop.
+4. **Result extraction**: When the editor container exits, AC's `ResultExtractor` reads results from the volume — commits, PR URLs, plan completion state — and records them on the node.
+5. **Volume cleanup**: After result extraction, the volume is removed. Failed dispatches retain volumes for debugging until explicitly cleaned up.
 
 #### 1. Call `ac_node_update` action=dispatch
 
@@ -227,18 +241,18 @@ ac_node_update:
   action: dispatch
   tree_id: ${TREE_ID}
   node_id: ${NODE_DB_ID}
-  params:
-    repos: [list of repo URLs]
-    branch: "${PROJECT_BRANCH}/${NODE_ID}"
-    spec_content: <DESIGN.md content built from Spec Content section above>
+  repos: [list of repo URLs]
+  branch: "${PROJECT_BRANCH}/${NODE_ID}"
+  spec_content: <DESIGN.md content built from Spec Content section above>
 ```
 
-AC handles:
-- **Volume creation**: Docker volume with `ac.*` labels for identity
-- **Repo cloning**: Fresh clone of each repo into the volume
-- **Spec injection**: DESIGN.md written into workspace root
-- **CLAUDE.md injection**: Operational context for the child agent
-- **Container launch**: Editor container started with volume mounted
+Alternatively, from a bash script, call `dispatch-container.sh` which sends the equivalent JSON-RPC request to `${COORDINATOR_URL}/mcp`:
+
+```bash
+skills/goal-tree/scripts/dispatch-container.sh <node-workspace-path> [--image <image>] [--dry-run]
+```
+
+The script reads DESIGN.md from the workspace, extracts repo remote URLs, and calls `ac_node_update(action="dispatch")` via the MCP endpoint.
 
 #### 2. Capture dispatch response
 
