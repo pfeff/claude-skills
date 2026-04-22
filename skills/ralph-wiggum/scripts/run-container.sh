@@ -262,8 +262,8 @@ echo "Starting devcontainer..."
 echo "  Workspace: $WORKSPACE"
 echo "  Auth: oauth (from Keychain)"
 
-# Start container with merged config and mount loop.sh + lib.sh
-LOOP_MOUNT_ARGS=(--mount "type=bind,source=$SCRIPT_DIR/loop.sh,target=/opt/ralph/loop.sh" --mount "type=bind,source=$SCRIPT_DIR/lib.sh,target=/opt/ralph/lib.sh")
+# Start container with merged config and mount loop.sh + lib.sh + stream-output.sh
+LOOP_MOUNT_ARGS=(--mount "type=bind,source=$SCRIPT_DIR/loop.sh,target=/opt/ralph/loop.sh" --mount "type=bind,source=$SCRIPT_DIR/lib.sh,target=/opt/ralph/lib.sh" --mount "type=bind,source=$SCRIPT_DIR/stream-output.sh,target=/opt/ralph/stream-output.sh")
 devcontainer up --workspace-folder "$WORKSPACE" --config "$TEMP_DIR/.devcontainer/devcontainer.json" ${WORKTREE_MOUNT_ARGS[@]+"${WORKTREE_MOUNT_ARGS[@]}"} ${SSH_MOUNT_ARGS[@]+"${SSH_MOUNT_ARGS[@]}"} ${LOOP_MOUNT_ARGS[@]+"${LOOP_MOUNT_ARGS[@]}"}
 
 # Execute loop inside container
