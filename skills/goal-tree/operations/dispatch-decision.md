@@ -16,6 +16,7 @@ Evaluates a ready node and selects the appropriate execution strategy: container
 decision:
   strategy: "container" | "tmux" | "discuss-dispatch" | "escalate"
   tier: 1 | 2 | 3
+  context_depth: "lean" | "standard" | "full"
   reason: "<why this strategy was chosen>"
   context: { ... }  # strategy-specific context
 ```
@@ -24,11 +25,11 @@ decision:
 
 Every dispatch decision includes a tier that controls checkpoint behavior:
 
-| Tier | Category | Dispatch | Post-Completion | Examples |
-|------|----------|----------|-----------------|----------|
-| 1 | Safe / read-only | Auto (container) | Auto | Research, audits, scans, analysis |
-| 2 | Code with solid spec | Auto (container) | Validate → agent review → human review | Features, fixes, refactoring |
-| 3 | Strategic / ambiguous | Escalate, discuss-dispatch, or tmux | Human review | Architecture decisions, scope changes, interactive collaboration |
+| Tier | Category | Dispatch | Post-Completion | Context Depth | Examples |
+|------|----------|----------|-----------------|---------------|----------|
+| 1 | Safe / read-only | Auto (container) | Auto | lean | Research, audits, scans, analysis |
+| 2 | Code with solid spec | Auto (container) | Validate → agent review → human review | standard | Features, fixes, refactoring |
+| 3 | Strategic / ambiguous | Escalate, discuss-dispatch, or tmux | Human review | full | Architecture decisions, scope changes, interactive collaboration |
 
 ### Tier Classification
 
@@ -43,6 +44,16 @@ Is the node read-only? (research, audit, scan, analysis, documentation)
 ```
 
 Read-only signals: "research", "audit", "scan", "analyze", "survey", "investigate", "document", "baseline", "inventory"
+
+### Context Depth
+
+`context_depth` is derived from the tier and controls how much project context is included in the spec passed to `dispatch-container.sh`:
+
+| Tier | Context Depth | Rationale |
+|------|---------------|-----------|
+| 1 | lean | Read-only tasks need only task description and acceptance criteria |
+| 2 | standard | Code tasks need standing rules and repo structure for implementation context |
+| 3 | full | Strategic tasks need full project context including GOAL.md, node history, and project CLAUDE.md |
 
 ### Tier 2 Validation Gate
 
@@ -196,6 +207,7 @@ Node: A.2 "Implement user CRUD endpoints"
 Decision:
   strategy: "container"
   tier: 2
+  context_depth: "standard"
   reason: "Clear spec, dependencies met — dispatch to container"
 ```
 
@@ -210,6 +222,7 @@ Node: D.1 "Pair on auth architecture with security team"
 Decision:
   strategy: "tmux"
   tier: 3
+  context_depth: "full"
   reason: "Node requires interactive human collaboration — tmux escape hatch"
 ```
 
@@ -224,6 +237,7 @@ Node: C "Frontend redesign" (goal with 6 descendants)
 Decision:
   strategy: "container"
   tier: 2
+  context_depth: "standard"
   reason: "Deep subtree but spec is clear — container handles complexity via its own decomposition"
 ```
 
@@ -238,6 +252,7 @@ Node: B.2 "Improve caching layer"
 Decision:
   strategy: "discuss-dispatch"
   tier: 3
+  context_depth: "full"
   reason: "Spec has gaps — needs conversation to refine acceptance criteria"
 ```
 
@@ -251,6 +266,7 @@ Node: B.3 "Choose caching strategy and implement"
 Decision:
   strategy: "escalate"
   tier: 3
+  context_depth: "full"
   reason: "Contains 'decide' — needs human judgment"
 ```
 
