@@ -12,6 +12,7 @@ Executes the chosen dispatch strategy for a node. Handles container dispatch via
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
+| `context_depth` | No | Context depth from dispatch-decision: `lean`, `standard` (default), or `full`. Controls how much project context is included in the spec. Passed to `dispatch-container.sh --context-depth`. |
 | `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to DESIGN.md on retry (error details, approach hints). |
 
@@ -249,10 +250,10 @@ ac_node_update:
 Alternatively, from a bash script, call `dispatch-container.sh` which sends the equivalent JSON-RPC request to `${COORDINATOR_URL}/mcp`:
 
 ```bash
-skills/goal-tree/scripts/dispatch-container.sh <node-workspace-path> [--image <image>] [--dry-run]
+skills/goal-tree/scripts/dispatch-container.sh <node-workspace-path> [--context-depth lean|standard|full] [--image <image>] [--dry-run]
 ```
 
-The script reads DESIGN.md from the workspace, extracts repo remote URLs, and calls `ac_node_update(action="dispatch")` via the MCP endpoint.
+The script reads DESIGN.md from the workspace, extracts repo remote URLs, and calls `ac_node_update(action="dispatch")` via the MCP endpoint. The `--context-depth` flag (from dispatch-decision's `context_depth` output) controls how much of DESIGN.md is passed as `spec_content`.
 
 #### Output Streaming
 

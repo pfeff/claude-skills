@@ -5,7 +5,7 @@
 # lifecycle to the Agent Coordinator via ac_node_update(action="dispatch").
 # No host-directory workspace is created — AC manages Docker volumes.
 #
-# Usage: dispatch-container.sh <node-workspace-path> [--image <docker-image>] [--dry-run]
+# Usage: dispatch-container.sh <node-workspace-path> [--context-depth lean|standard|full] [--image <docker-image>] [--dry-run]
 #
 # Prerequisites:
 #   - Node workspace exists with DESIGN.md populated
@@ -20,10 +20,11 @@ set -euo pipefail
 DRY_RUN=false
 NODE_WORKSPACE=""
 IMAGE_OVERRIDE=""
+CONTEXT_DEPTH="standard"
 
 usage() {
   cat <<EOF
-Usage: dispatch-container.sh <node-workspace-path> [--image <docker-image>] [--dry-run]
+Usage: dispatch-container.sh <node-workspace-path> [--context-depth lean|standard|full] [--image <docker-image>] [--dry-run]
 
 Dispatch a goal-tree node to AC's volume-based container execution.
 
@@ -36,9 +37,13 @@ AC handles the full lifecycle:
   - Volume cleanup after extraction
 
 Options:
-  --image <image>   Docker image override (default: AC's ghcr.io/pfeff/ralph:latest)
-  --dry-run         Show what would be sent to AC without dispatching.
-  -h, --help        Show this help and exit.
+  --context-depth <depth>  Context depth: lean, standard (default), or full.
+                           lean: task description + acceptance criteria only.
+                           standard: + standing rules + repo structure summary.
+                           full: + GOAL.md context + node history + project CLAUDE.md.
+  --image <image>          Docker image override (default: AC's ghcr.io/pfeff/ralph:latest)
+  --dry-run                Show what would be sent to AC without dispatching.
+  -h, --help               Show this help and exit.
 
 Environment:
   COORDINATOR_URL     AC API base URL (required)
@@ -51,6 +56,14 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
+    --context-depth)
+      [[ $# -ge 2 ]] || { echo "Error: --context-depth requires a value (lean|standard|full)" >&2; exit 2; }
+      case "$2" in
+        lean|standard|full) CONTEXT_DEPTH="$2" ;;
+        *) echo "Error: --context-depth must be lean, standard, or full" >&2; exit 2 ;;
+      esac
+      shift 2
+      ;;
     --image)
       [[ $# -ge 2 ]] || { echo "Error: --image requires a value" >&2; exit 2; }
       IMAGE_OVERRIDE="$2"
@@ -170,9 +183,29 @@ fi
 
 echo "  Repos: ${REPO_NAMES[*]}" >&2
 
-# --- Read spec content (entire DESIGN.md) ---
+# --- Read spec content (filtered by context depth) ---
 
-SPEC_CONTENT=$(cat "$DESIGN")
+echo "  Context depth: $CONTEXT_DEPTH" >&2
+
+if [[ "$CONTEXT_DEPTH" == "full" ]]; then
+  # Full: entire DESIGN.md as-is
+  SPEC_CONTENT=$(cat "$DESIGN")
+elif [[ "$CONTEXT_DEPTH" == "lean" ]]; then
+  # Lean: extract only task description and acceptance criteria sections
+  SPEC_CONTENT=$(awk '
+    /^# / { title = $0; printed_title = 0 }
+    /^## (Task Information|Requirements|Acceptance Criteria)/ { section = 1 }
+    /^## / && !/^## (Task Information|Requirements|Acceptance Criteria)/ { section = 0 }
+    section == 1 || /^# / { if (!printed_title) { print title; printed_title = 1 }; print }
+  ' "$DESIGN")
+  # If awk produced nothing, fall back to full content
+  if [[ -z "$SPEC_CONTENT" ]]; then
+    SPEC_CONTENT=$(cat "$DESIGN")
+  fi
+else
+  # Standard (default): full DESIGN.md content
+  SPEC_CONTENT=$(cat "$DESIGN")
+fi
 
 # --- Build MCP JSON-RPC request ---
 
@@ -221,6 +254,7 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "" >&2
   echo "Repos: ${REPO_NAMES[*]}" >&2
   echo "Branch: $BRANCH" >&2
+  echo "Context depth: $CONTEXT_DEPTH" >&2
   echo "Spec content: $(echo "$SPEC_CONTENT" | wc -l | tr -d ' ') lines" >&2
   exit 0
 fi
