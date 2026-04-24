@@ -196,47 +196,39 @@ For each repo worktree in the workspace:
   git rebase origin/main (or the worktree's upstream branch)
 ```
 
-Also update the primary repo main clones (under `~/src/github/`) so the solutions search fallback has current data:
-
-```
-For each repo with a main clone:
-  git -C <main-clone> fetch origin
-  git -C <main-clone> pull --rebase origin main
-```
-
 **Error handling**: If rebase fails due to conflicts, warn the user and continue with the remaining repos. Stale data is better than blocking initialization entirely.
 
 <!-- IMPLEMENTED: REC-001 - Add repo sync step to init-workspace -->
 
 ### 9. Search Existing Solutions
 
-Search `docs/solutions/` across all repo worktrees in the workspace for relevant past solutions before creating the task list. This surfaces institutional knowledge that may inform implementation.
+Run a QMD query against the configured vault collection for relevant prior notes before creating the task list. Per DD4, the Obsidian vault is the single retrieval source; `docs/solutions/` is no longer consulted. See `references/solution-search.md` for the full QMD protocol.
 
-**Identify search paths**:
-```
-For each subdirectory in the workspace that contains docs/solutions/:
-  Add to search paths
-Also check the primary repo's main clone for docs/solutions/ (in case the
-worktree was freshly created and has no solutions yet)
+**Invocation**:
+```bash
+timeout 60 qmd query "<issue-title>. <issue-description>" -c "$QMD_COLLECTION"
 ```
 
-**Extract keywords** from the issue title and body:
-- Module/system names (e.g., "PolicyEngine", "Orchestrator")
-- Technical terms (e.g., "N+1", "timeout", "authentication")
-- Error indicators (e.g., "crash", "slow", "failing")
-- Component names (e.g., "supervisor", "adapter", "webhook")
+- Query: the issue/ticket title followed by a period and the description body (truncate to ~2000 chars if longer).
+- `QMD_COLLECTION`: sourced from the active host file (DD6). Example: `tcetra`.
+- Plain `qmd query <text>` form runs hybrid BM25 + vector retrieval with auto-expansion and HyDE — no extra flags required.
+- 60-second hard timeout (CPU-only reranking is slow pending Phase 14 GPU work).
 
-**Search strategy**: Follow the grep-first protocol in `references/solution-search.md`:
-1. Stage 1: Grep frontmatter fields (title, tags, symptoms, module, problem_type, component) in parallel
-2. Stage 2: Read full content of matched files
-3. Always check `critical-patterns.md` regardless of keyword matches
+**Parse output**: extract the first 3 `qmd://…` result URIs in order; for each, read the title line and relevance score immediately below the URI.
 
-**Report findings**:
-- If relevant solutions found: summarize key insights and note which solutions apply
-- If no solutions found: state "No existing solutions found" (this is valuable info)
-- Include findings in the step 11 summary output
+**Report findings**: include top-3 URIs, titles, and scores in the step 11 summary. If fewer than 3 results come back, report what was returned. If none, state "No existing notes surfaced" (this is valuable info).
 
-**Idempotency**: This step is read-only and safe to re-run.
+**Fail-open behaviour** (per DD4, do NOT fall back to grep):
+| Failure | Response |
+|---|---|
+| `qmd` binary not on PATH | Log `QMD not installed — skipping retrieval` and continue to step 10. |
+| `QMD_COLLECTION` unset | Log `QMD collection not configured for this host — skipping retrieval` and continue. |
+| Non-zero exit / timeout | Log the stderr tail and continue. |
+| Empty result set | Treat as a successful "no matches" — not a failure. |
+
+Never block workspace setup on QMD.
+
+**Idempotency**: read-only against the vault index; safe to re-run.
 
 ### 10. Create Task List
 
@@ -378,10 +370,8 @@ Enriching DESIGN.md...
   Architecture: populated from issue technical context
   Design Decisions: 2 decisions from issue comments
 
-Searching existing solutions...
-  Searched: cursor-rules/docs/solutions/ (0 files)
-  Critical patterns: checked (no matches)
-  No existing solutions found.
+Searching existing solutions (qmd query, collection=tcetra)...
+  No existing notes surfaced.
 
 Creating task list...
   Task 1: Add Jira Ticket field to DESIGN.md template
@@ -417,13 +407,15 @@ Enriching DESIGN.md...
   Requirements: 3 requirements extracted
   Architecture: placeholder (insufficient context)
 
-Searching existing solutions...
-  Searched: api-gateway/docs/solutions/ (12 files)
-  Keywords: authentication, timeout, API, gateway
-  Found 2 relevant solutions:
-    - runtime-errors/2026-01-15-auth-token-expiry-race.md (high severity)
-    - performance-issues/2026-02-01-gateway-connection-pool.md (medium)
-  Critical patterns: checked (1 match: CP-3 timeout handling)
+Searching existing solutions (qmd query, collection=tcetra)...
+  Query: "Fix authentication timeout in API gateway. <description>"
+  Top 3:
+    1. qmd://tcetra/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
+       Title: Auth token expiry race in API gateway
+    2. qmd://tcetra/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
+       Title: Gateway connection-pool saturation under retry storms
+    3. qmd://tcetra/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
+       Title: JWT exp clock-skew 401s on pipeline agents
 
 Interviewing for gaps...
   Q: "What components does this change affect? Any architectural constraints?"
