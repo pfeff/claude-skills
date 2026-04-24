@@ -599,39 +599,10 @@ if [[ -n "$REPOS" ]]; then
 fi
 
 #------------------------------------------------------------------------------
-# Step 6: Create docs/solutions/ directories in repo worktrees
+# Step 6: (removed) docs/solutions/ scaffold — retrieval now lives in QMD over
+# the Obsidian vault (DD4). Repo-local solution trees are no longer a retrieval
+# surface and scaffolding empty subdirectories just attracts drift.
 #------------------------------------------------------------------------------
-
-SOLUTION_CATEGORIES="build-errors test-failures performance-issues runtime-errors integration-issues workflow-issues best-practices patterns"
-
-if [[ -n "$REPOS" ]]; then
-  echo "Creating docs/solutions/ directories..."
-
-  IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
-  for repo in "${REPO_ARRAY[@]}"; do
-    repo=$(echo "$repo" | xargs)
-    repo_path=$(resolve_repo_path "$repo")
-    repo_basename=$(basename "$repo_path")
-    worktree_path="$WORKSPACE_PATH/$repo_basename"
-
-    if [[ -d "$worktree_path" ]]; then
-      for category in $SOLUTION_CATEGORIES; do
-        mkdir -p "$worktree_path/docs/solutions/$category"
-      done
-
-      # Add .gitkeep to empty directories so git tracks them
-      for category in $SOLUTION_CATEGORIES; do
-        if [[ ! "$(ls -A "$worktree_path/docs/solutions/$category" 2>/dev/null)" ]]; then
-          touch "$worktree_path/docs/solutions/$category/.gitkeep"
-        fi
-      done
-
-      echo "  $repo_basename: docs/solutions/ created"
-    fi
-  done
-else
-  echo "Skipping docs/solutions/ (no repos specified)"
-fi
 
 #------------------------------------------------------------------------------
 # Step 7: Run direnv allow

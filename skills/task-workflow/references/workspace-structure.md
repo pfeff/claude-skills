@@ -7,12 +7,10 @@ Standard layout for task workspaces.
 ```
 ~/src/work/<project-slug>/<issue-slug>/
 ├── .envrc              # direnv config with Azure PAT and task list ID
-├── DESIGN.md           # Task requirements and architecture
+├── DESIGN.md           # Task requirements, architecture, and QMD prior-context block
 ├── .tmuxp.yaml         # Tmux session configuration
 ├── <repo-1>/           # Git worktree for repository 1
-│   └── docs/solutions/ # Solution documentation (see below)
 ├── <repo-2>/           # Git worktree for repository 2
-│   └── docs/solutions/
 └── ...
 ```
 
@@ -101,21 +99,9 @@ Obsidian -> /path/to/obsidian/vault
 
 ## Solution Documentation
 
-Each repo worktree includes a `docs/solutions/` directory for documenting solved problems. Created automatically by `create-workspace.sh`.
+Solution retrieval now runs through QMD over the Obsidian vault (see the `## Prior Context (QMD)` block that `create-workspace.sh` injects into `DESIGN.md`). Capture new solution knowledge as regular Obsidian notes via `/finish`'s session-journal step or a direct note.
 
-```
-docs/solutions/
-├── build-errors/
-├── test-failures/
-├── performance-issues/
-├── runtime-errors/
-├── integration-issues/
-├── workflow-issues/
-├── best-practices/
-└── patterns/
-```
-
-See [SCHEMA.md](https://github.com/pfeff/guardian/blob/main/docs/solutions/SCHEMA.md) for the frontmatter schema and file format.
+`docs/solutions/` in existing repos is treated as read-only historical material — no new writes. Legacy repos that still carry the tree are left alone per `MIGRATION.md`. `/compound` is deprecated and slated for removal after the Phase 5 observation window.
 
 ## Git Worktrees
 

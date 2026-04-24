@@ -1,6 +1,6 @@
 ---
 name: compound
-description: Document a solved problem as a searchable solution with YAML frontmatter. Use when the user solves a problem and wants to capture it for future agent discovery, or invokes /claude-skills:compound.
+description: "[DEPRECATED — will be removed after Phase 5 observation window] Document a solved problem as a searchable solution with YAML frontmatter. Retained as a transitional tool; retrieval has moved to QMD-over-Obsidian, so new solution knowledge should go into the vault directly instead of docs/solutions."
 argument-hint: "[short problem description or blank for interactive]"
 allowed-tools:
   - Read
