@@ -23,7 +23,7 @@ The planning workflow runs these phases in order:
 
 1. **Problem validation** — validate who, what pain, current workflow, and success criteria; for document tasks, gate on content correctness before proceeding
 2. **DESIGN.md reconciliation** — compare workspace DESIGN.md against problem validation, repo docs, and strategic docs
-3. **Solution search** — search `docs/solutions/` for relevant prior solutions
+3. **Solution search** — QMD hybrid search over the Obsidian vault for relevant prior notes (DD4)
 4. **Research gating** — decide if external research is needed based on risk
 5. **SpecFlow analysis** — walk user flows to find edge cases
 6. **Detail level selection** — choose plan depth based on complexity
@@ -62,7 +62,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/solution-search.md`
 
-**Quick summary**: Grep-searches `docs/solutions/` frontmatter (tags, symptoms, module, component) for relevant prior solutions. Always loads `critical-patterns.md`. Surfaces findings as "Prior Solutions" context for downstream phases.
+**Quick summary**: Runs a QMD query (hybrid BM25 + vector + reranker + HyDE) against the configured vault collection, delegating to `task-workflow/references/solution-search.md` for the canonical invocation and fail-open protocol. Surfaces the top-3 notes as "Prior Solutions" context for downstream phases. Per DD4, no longer reads `docs/solutions/`.
 
 ### 4. Research Gating
 
@@ -225,7 +225,7 @@ Full path remains the default. The fast path gate evaluates criteria and routes 
 
 **Query term extraction**: Derive search terms from the issue title, description, error messages, and component names. Use 3-5 specific terms rather than broad keywords.
 
-**Graceful degradation**: Every phase handles missing files/directories without failing. A repo with no `docs/solutions/` simply skips the search and proceeds.
+**Graceful degradation**: Every phase handles missing inputs without failing. If QMD is not installed or `$QMD_COLLECTION` is unset, solution-search logs and continues — planning never blocks on retrieval (see `task-workflow/references/solution-search.md`).
 
 ## Progressive Disclosure
 

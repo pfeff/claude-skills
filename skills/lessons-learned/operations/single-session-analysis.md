@@ -276,11 +276,11 @@ Want me to include these as action items?
 
 **If no candidates found**: Skip this phase silently.
 
-### Phase 3d: Solution Doc Bridge
+### Phase 3d: Solution Capture Bridge
 
-After agreeing on recommendations, check whether any discussed problems have a clear root cause AND a concrete fix that would help future agents. These are candidates for solution documentation via `/claude-skills:compound`.
+After agreeing on recommendations, check whether any discussed problems have a clear root cause AND a concrete fix that would help future agents. These are candidates for capture in the Obsidian vault — retrieval now runs through QMD-over-Obsidian (DD4), so new solution knowledge lives as regular vault notes.
 
-**What qualifies as a solution doc candidate**:
+**What qualifies as a solution-capture candidate**:
 - Problem has an identified root cause (from Five Whys)
 - A concrete fix was applied or agreed upon (not just a process recommendation)
 - The fix is reusable — another agent hitting the same problem would benefit from finding it
@@ -293,7 +293,7 @@ After agreeing on recommendations, check whether any discussed problems have a c
 
 **Discovery process**:
 
-1. **Review Phase 2 problems** for solution-doc candidates
+1. **Review Phase 2 problems** for capture candidates
 2. **For each candidate**, summarize:
    - Problem + root cause (from Five Whys)
    - The fix that was applied
@@ -302,29 +302,23 @@ After agreeing on recommendations, check whether any discussed problems have a c
 3. **Present to user**:
 
 ```
-These problems have concrete fixes that could help future agents:
+These problems have concrete fixes worth capturing in the vault:
 
 1. [Problem title] — [root cause] → [fix applied]
-   Would file in: <repo>/docs/solutions/<category>/
 
 2. [Problem title] — ...
 
-Want me to capture any of these as solution docs?
+Want me to capture any of these as Obsidian notes?
 ```
 
 4. **Wait for user response**. The user may:
    - Select which problems to capture
-   - Skip all (no solution docs needed)
+   - Skip all
    - Adjust the framing
 
-5. **For each selected problem**, invoke the compound skill's document-solution operation:
-   - Load `${CLAUDE_PLUGIN_ROOT}/skills/compound/operations/document-solution.md`
-   - Use the Five Whys analysis from Phase 2 as input context (problem, root cause, fix)
-   - Skip the gathering step (context already available from the retrospective)
-   - Write the solution doc to `docs/solutions/<category>/`
-   - Note the created file path for inclusion in Phase 4 output
+5. **For each selected problem**, write an Obsidian note via `obsidian-notes` (preferred: `/finish`'s session-journal picks these up) or a direct note in the vault. Include the problem, root cause, fix, and affected repo in the body so QMD's hybrid retrieval can surface it. Do not route through `/compound` — `/compound` is deprecated (DD5) and its `docs/solutions/` output is no longer a retrieval surface (DD4).
 
-6. **Record created solution docs** for the Phase 4 output note (see Solution Docs section in template below)
+6. **Record captured notes** for the Phase 4 output note (see the Captured Solution Notes section in the template below)
 
 **If no candidates found**: Skip this phase silently.
 
@@ -430,13 +424,13 @@ Tools/commands approved repeatedly that should be added to `.claude/settings.jso
 
 **Status**: [ ] Proposed / [ ] Applied
 
-## Solution Docs Created
+## Captured Solution Notes
 
-Problems captured as searchable solution documents for future agent discovery.
+Problems captured as Obsidian notes in the vault for QMD retrieval.
 
-- [ ] `<repo>/docs/solutions/<category>/<filename>` — [problem title]
+- [ ] `<vault-path>/<filename>.md` — [problem title]
 
-**Status**: [ ] Created / [ ] Committed
+**Status**: [ ] Written / [ ] Indexed (run `qmd update` to refresh the index)
 
 ## Action Items
 

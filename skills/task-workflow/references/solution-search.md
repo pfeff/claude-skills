@@ -1,94 +1,70 @@
 # Solution Search Reference
 
-Grep-first search protocol for discovering relevant solution docs from `docs/solutions/` directories. Used by `init-workspace` (step 8) and available to any skill needing to surface past solutions.
+QMD-based hybrid search over the Obsidian vault. Used by `init-workspace` (step 9) and available to any skill needing to surface prior notes.
 
-## Search Paths
+Per DD4 (`DESIGN.md` in the qmd-retrieval workspace), the Obsidian vault is the single retrieval source. Per-repo `docs/solutions/` trees are no longer searched — they remain in place as read-only historical artifacts.
 
-Collect all `docs/solutions/` directories:
+## Invocation
 
-```
-1. Each subdirectory in the current workspace that contains docs/solutions/
-2. Primary repo main clone's docs/solutions/ (worktree may be freshly created)
-```
+Always build the query text in a shell variable first, then pass it as a double-quoted argument. **Never** inline issue/ticket content directly into the command — issue bodies are attacker-controlled and embedded quotes or backticks would break out of the command string.
 
-## Grep-First Protocol
-
-Two-stage filtering: scan frontmatter fields first, read full content only for matches.
-
-### Stage 1: Frontmatter Grep
-
-Extract keywords from the task context (issue title, error messages, module names, component names). Run these Grep calls **in parallel** across all search paths:
-
-```
-# Search by title
-Grep: pattern="title:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
-
-# Search by tags
-Grep: pattern="tags:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
-
-# Search by symptoms
-Grep: pattern="symptoms:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
-
-# Search by module
-Grep: pattern="module:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
-
-# Search by problem_type
-Grep: pattern="problem_type:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
-
-# Search by component
-Grep: pattern="component:.*<keyword>" path=<search-path> -i=true output_mode=files_with_matches
+```bash
+# Safe: variable expansion is one argument, regardless of contents.
+query_text="<title>. <first paragraph of DESIGN.md>"   # built + sanitized by the caller
+timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION"
 ```
 
-**Keyword extraction heuristics**:
-- Module/system names (e.g., "PolicyEngine", "Orchestrator")
-- Technical terms (e.g., "N+1", "timeout", "authentication")
-- Error indicators (e.g., "crash", "slow", "failing")
-- Component names (e.g., "supervisor", "adapter", "webhook")
-- Problem types (e.g., "runtime_error", "build_error")
+Sanitization (caller responsibility): strip control characters (`\n \r \t`) and QMD-grammar-hostile characters (backtick, `$`, backslash) before passing the text through. Truncate to ~2000 chars.
 
-### Stage 2: Read Matched Files
+`$QMD_COLLECTION` is per-host config, set in the DD6 host file (e.g. `tcetra` on the TCETRA-* WSL host).
 
-For each unique file path returned by Stage 1:
-1. Read the full file content
-2. Summarize the problem and solution
-3. Note relevance to the current task
+No other flags. The plain `qmd query <text>` form runs hybrid BM25 + vector with auto-expansion and HyDE by default. A 60-second hard timeout is mandatory — reranking can run long on CPU-only hosts; CUDA-offloaded hosts still benefit from the bound.
 
-**Ranking**: Files matching more frontmatter fields rank higher.
+## Output Shape
 
-### Always Check Critical Patterns
-
-Regardless of keyword matches, always read:
-```
-Read: <repo>/docs/solutions/patterns/critical-patterns.md
-```
-
-This file contains must-know patterns (critical severity, recurring, or cross-cutting).
-
-## Report Format
+QMD writes a stream to stdout. Each result is a block:
 
 ```
-**Existing solutions**: <N relevant | none found>
+qmd://<collection>/<path>:<line> #<hash>
+Title: <human-readable title>
+Score:  <pct>%
 
-Found N relevant solutions:
-  - <category>/<filename> — <title> (severity: <level>)
-    Relevance: matched on <fields>
-  - ...
-
-Critical patterns: checked (<N matches | no matches>)
+@@ -<start>,4 @@ (<before> before, <after> after)
+<excerpted context>
 ```
 
-## Frontmatter Fields Reference
+Extract the **first 3** `qmd://` URIs in document order. For each, capture the title line and score on the two following lines. That's "top-3".
 
-See [guardian/docs/solutions/SCHEMA.md](https://github.com/pfeff/guardian/blob/main/docs/solutions/SCHEMA.md) for the complete field schema.
+Parameters are fixed: top-3, HyDE on, hybrid retrieval. No tunable knobs at this layer; tune via query text composition, not CLI flags.
 
-| Field | Type | Searchable | Description |
-|-------|------|-----------|-------------|
-| `title` | string | Yes | Problem + solution summary |
-| `problem_type` | enum | Yes | Category (maps to directory) |
-| `severity` | enum | No | critical/high/medium/low |
-| `symptoms` | array | Yes | Observable behaviors |
-| `tags` | array | Yes | Searchable keywords |
-| `root_cause` | string | No | What caused the issue |
-| `module` | string | Yes | Module or system name |
-| `component` | string | Yes | Technical component type |
-| `repo` | string | No | Repository of the fix |
+## Fail-Open Behaviour
+
+Per DD4, solution search never blocks workspace setup and never falls back to grep over `docs/solutions/`.
+
+| Failure | Response |
+|---|---|
+| `qmd` binary not on PATH | Log `QMD not installed — skipping retrieval`; continue. |
+| `QMD_COLLECTION` unset | Log `QMD collection not configured for this host — skipping retrieval`; continue. |
+| Non-zero exit / timeout | Log a truncated, control-char-stripped stderr tail (≤512 chars); continue. |
+| Empty result set | Not a failure — treat as "no matches". |
+
+## Reporting
+
+In the caller's summary output, include:
+
+- Query string actually sent (quoted, truncated to ~120 chars).
+- Collection queried.
+- Top-3 URIs, titles, and scores. If fewer than 3, report what was returned.
+- `No existing notes surfaced.` if zero results.
+- `QMD skipped: <reason>` on fail-open.
+
+Output-parsing grep pattern (collection-neutral):
+
+```bash
+grep -oE 'qmd://[^/]+/[^: ]+' /tmp/qmd-prior.out | awk '!seen[$0]++' | head -3
+```
+
+## See Also
+
+- `operations/init-workspace.md` step 9 — the canonical caller (builds query, persists top-3 into DESIGN.md `## Prior Context (QMD)`).
+- DD1 / DD4 in the qmd-retrieval DESIGN.md — rationale for local hybrid retrieval and vault-only retrieval.

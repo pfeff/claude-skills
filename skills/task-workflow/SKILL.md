@@ -404,7 +404,7 @@ Load only what you need:
 - `reference.md` - Complete technical reference (all operations)
 - `examples.md` - Concrete usage scenarios
 - `references/workspace-structure.md` - Workspace layout, .envrc, submodule management
-- `references/solution-search.md` - Grep-first search protocol for solution docs
+- `references/solution-search.md` - QMD hybrid-search protocol over the Obsidian vault (replaces grep over `docs/solutions/`)
 - `references/error-classification.md` - Transient vs permanent error taxonomy for retry decisions
 - `references/retry-with-backoff.md` - Exponential backoff algorithm with jitter and escalation format
 
