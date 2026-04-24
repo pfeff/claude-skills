@@ -99,9 +99,9 @@ Obsidian -> /path/to/obsidian/vault
 
 ## Solution Documentation
 
-Solution retrieval now runs through QMD over the Obsidian vault (see the `## Prior Context (QMD)` block that `create-workspace.sh` injects into `DESIGN.md`). Capture new solution knowledge as regular Obsidian notes via `/finish`'s session-journal step or a direct note.
+Solution retrieval runs through QMD over the Obsidian vault. `init-workspace` step 9 writes (and overwrites on re-run) a `## Prior Context (QMD)` section into `DESIGN.md` containing the top-3 matches for the task's title + first paragraph — see `operations/init-workspace.md` and `references/solution-search.md` for the protocol.
 
-`docs/solutions/` in existing repos is treated as read-only historical material — no new writes. Legacy repos that still carry the tree are left alone per `MIGRATION.md`. `/compound` is deprecated and slated for removal after the Phase 5 observation window.
+Capture new solution knowledge as regular Obsidian notes via `/finish`'s session-journal step or a direct note. `docs/solutions/` in existing repos is treated as read-only historical material — no new writes. `/compound` is deprecated and slated for removal after the Phase 5 observation window.
 
 ## Git Worktrees
 

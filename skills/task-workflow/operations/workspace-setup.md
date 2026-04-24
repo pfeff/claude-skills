@@ -59,7 +59,7 @@ Secrets are optional - the script continues without them if unavailable.
 
 ```
 ~/src/work/<epic>/<task-id>-<slug>/
-├── DESIGN.md           # Task design document (includes QMD prior-context block)
+├── DESIGN.md           # Task design document (init-workspace adds a QMD prior-context block)
 ├── CLAUDE.md           # Workspace instructions for Claude
 ├── .envrc              # direnv configuration
 ├── .tmuxp.yaml         # Tmux session config
