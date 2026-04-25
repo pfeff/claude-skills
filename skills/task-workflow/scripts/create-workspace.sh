@@ -575,8 +575,11 @@ if [[ -n "$REPOS" ]]; then
     if ! git worktree add "$worktree_path" -b "$branch_name" "origin/$default_branch" 2>/dev/null; then
       # Branch might already exist, try without -b
       if ! git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
-        echo "Error: Failed to create worktree for $repo" >&2
-        exit 4
+        # Local-only repo (no origin): create new branch from current HEAD
+        if ! git worktree add "$worktree_path" -b "$branch_name" 2>/dev/null; then
+          echo "Error: Failed to create worktree for $repo" >&2
+          exit 4
+        fi
       fi
     fi
 
@@ -894,9 +897,13 @@ EOF
     git fetch origin "$default_branch" --quiet 2>/dev/null || true
 
     if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" "origin/$default_branch" 2>/dev/null; then
+      # Branch might already exist
       if ! git worktree add "$worktree_path" "$NODE_BRANCH" 2>/dev/null; then
-        echo "Error: Failed to create worktree for $repo_basename" >&2
-        exit 4
+        # Local-only repo (no origin): create new branch from current HEAD
+        if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" 2>/dev/null; then
+          echo "Error: Failed to create worktree for $repo_basename" >&2
+          exit 4
+        fi
       fi
     fi
     echo "    Created worktree"
