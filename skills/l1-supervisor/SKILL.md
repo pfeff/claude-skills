@@ -72,45 +72,16 @@ The operator can stand you down at any time. Two recognition modes — they are 
 
 On a recognized stop: cancel any active CronCreate / scheduled task immediately, report cancellation with the job ID, and await further instruction. Do not re-arm any loop until explicitly told.
 
-## Tick Hygiene — Self-Terminate When Done
+## Supervision Discipline
 
-Every tick costs: system prompt re-injected, full session context replayed, your reasoning. If a tick produces no work, that cost is wasted. Cached context is not free — it grows linearly with session length, so a long-idle loop on Opus can burn $700+/day in cache reads alone. Treat ticks as expensive; self-stop is cheaper than self-continue.
+Tick hygiene, cron hygiene, polling limits, and runaway-child detection are layer-agnostic — they bind every supervisor in the tree. The contract lives in `goal-tree/references/supervision-discipline.md`. **Read and apply it on every tick.**
 
-**At the start of every tick, ask in order:**
+L1-specific bindings for that contract:
 
-1. **Is the original goal already met?** Tree complete per AC, originating PR merged, no operator follow-on assigned → self-terminate. You do not stay running "just in case."
-2. **Is there a child to supervise?** No dispatched child + no PR awaiting review + no ready leaf in AC → idle. Idle means stop, not poll.
-3. **Has anything changed?** The last N ticks all returned no actionable signal (no permission prompt approved/rejected, no AC state change, no PR review, no operator input) → self-terminate and ping operator. Default N = 10.
-
-Self-terminate = call `CronDelete` on your own job, confirm with `CronList` that no L1 cron remains, report to the operator with the cancelled job ID, and stop.
-
-**Cron hygiene:**
-
-- **Run `CronList` before any `CronCreate`.** If an L1 cron already exists, replace it — never stack.
-- **One scheduler, never two.** `/loop` and `CronCreate` both fire ticks. Pick one. Stacking doubles tick rate and cost.
-- **`CronDelete` is part of "done".** Completing the goal without deleting your cron leaves a leak that ticks until the Claude session exits.
-
-**Polling discipline:**
-
-- 5+ consecutive empty polls of the same tmux target → switch to AC (`ac_node_query`) for ground truth; tmux is reporting noise.
-- 10+ same-command, same-empty-result polls in a session → you are spinning; self-terminate.
-- A `tmux capture-pane | grep "Do you want"` is a *liveness probe*, not work. Probes alone do not justify another tick.
-
-## Detect Runaway Children
-
-The same idle-burn pathology can hit any loop you supervise. An L0 that has finished its goal, or an L0 that has fallen into a polling spiral, will keep burning tokens until something kills it. **You are that something.** Apply Tick Hygiene checks against each active child — not just yourself — every tick.
-
-For each L0 you supervise, look for:
-
-1. **Goal-vs-state mismatch.** Child's spec is satisfied (AC node `done`, PR merged, deliverable on disk) but its session is still running → leak. AC `done` + live pane = kill.
-2. **Pane stagnation.** Capture the child's tmux pane twice, separated by ≥30s. Byte-identical output → child is idle. Cross-check AC: if AC also shows no recent activity, kill.
-3. **Repeated probes.** Child's recent shell history is dominated by a single repeated bash invocation (esp. `tmux capture-pane | grep ...`) → child is spinning. Kill.
-4. **Stacked schedulers.** Child has both `/loop` and a cron firing into its session → same bug doubled. Kill the child; redispatch with one scheduler if work remains.
-5. **Token-burn signature.** Child's cache-read tokens per turn are growing into the hundreds of thousands while output tokens stay near zero (use `ccusage session --json` if available) → stuck in idle replay. Kill.
-
-**Kill action:** `tmux send-keys -t <child-pane> C-c C-c` to interrupt, then close the pane after confirming exit. The child's session-scoped crons auto-cancel on session exit; you do not need (and cannot do) `CronDelete` against another session.
-
-**Don't escalate detection.** Killing a runaway child is L1's job — never punt "is the child stuck" to the operator unless you've already killed it and re-dispatch fails.
+- **Source of truth** = AC (`ac_node_query`).
+- **"Goal met"** = your subtree has no open nodes per AC and the originating PR(s) have merged.
+- **Children** = your dispatched L0 workspace sessions.
+- **Operator** = L2 (or human, when no L2 exists).
 
 ## Orient Triggers — Anti-Local-Optimum
 
