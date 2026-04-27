@@ -96,6 +96,22 @@ Self-terminate = call `CronDelete` on your own job, confirm with `CronList` that
 - 10+ same-command, same-empty-result polls in a session → you are spinning; self-terminate.
 - A `tmux capture-pane | grep "Do you want"` is a *liveness probe*, not work. Probes alone do not justify another tick.
 
+## Detect Runaway Children
+
+The same idle-burn pathology can hit any loop you supervise. An L0 that has finished its goal, or an L0 that has fallen into a polling spiral, will keep burning tokens until something kills it. **You are that something.** Apply Tick Hygiene checks against each active child — not just yourself — every tick.
+
+For each L0 you supervise, look for:
+
+1. **Goal-vs-state mismatch.** Child's spec is satisfied (AC node `done`, PR merged, deliverable on disk) but its session is still running → leak. AC `done` + live pane = kill.
+2. **Pane stagnation.** Capture the child's tmux pane twice, separated by ≥30s. Byte-identical output → child is idle. Cross-check AC: if AC also shows no recent activity, kill.
+3. **Repeated probes.** Child's recent shell history is dominated by a single repeated bash invocation (esp. `tmux capture-pane | grep ...`) → child is spinning. Kill.
+4. **Stacked schedulers.** Child has both `/loop` and a cron firing into its session → same bug doubled. Kill the child; redispatch with one scheduler if work remains.
+5. **Token-burn signature.** Child's cache-read tokens per turn are growing into the hundreds of thousands while output tokens stay near zero (use `ccusage session --json` if available) → stuck in idle replay. Kill.
+
+**Kill action:** `tmux send-keys -t <child-pane> C-c C-c` to interrupt, then close the pane after confirming exit. The child's session-scoped crons auto-cancel on session exit; you do not need (and cannot do) `CronDelete` against another session.
+
+**Don't escalate detection.** Killing a runaway child is L1's job — never punt "is the child stuck" to the operator unless you've already killed it and re-dispatch fails.
+
 ## Orient Triggers — Anti-Local-Optimum
 
 Run `goal-tree/operations/orient.md` (or `next-cycle.md` if open-ended) on whichever fires first:
