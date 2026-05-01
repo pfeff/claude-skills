@@ -7,11 +7,15 @@
 #
 # Usage:
 #   create-workspace.sh --task-id ID --epic EPIC --headline "HEADLINE" \
-#     [--repos REPOS] [--issue ISSUE] [--description DESC]
+#     [--repos REPOS] [--model ALIAS] [--issue ISSUE] [--description DESC]
 #
 # When --issue is provided, --task-id and --headline can be omitted and will
 # be derived from the GitHub issue metadata via `gh issue view`.
 # Explicit flags always override derived values.
+#
+# --model ALIAS   Claude model alias for the workspace session (e.g. opus,
+#                 sonnet, haiku, or full model IDs). Defaults to "sonnet" when
+#                 omitted.
 #
 # Exit codes:
 #   0 - Success
@@ -41,6 +45,7 @@ TASK_ID=""
 EPIC=""
 HEADLINE=""
 REPOS=""
+MODEL=""
 ISSUE_REF=""
 DESCRIPTION=""
 
@@ -67,6 +72,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --repos)
       REPOS="$2"
+      shift 2
+      ;;
+    --model)
+      MODEL="$2"
       shift 2
       ;;
     --issue)
@@ -490,12 +499,12 @@ else
   exit 3
 fi
 
-# Copy settings.json (static template, no envsubst needed)
+# Render settings.json (envsubst for MODEL variable)
 mkdir -p "$WORKSPACE_PATH/.claude"
-if cp "$TEMPLATE_DIR/settings.json.tmpl" "$WORKSPACE_PATH/.claude/settings.json"; then
+if MODEL="${MODEL:-sonnet}" envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
   echo "  .claude/settings.json: created"
 else
-  echo "Error: Failed to copy settings.json" >&2
+  echo "Error: Failed to render settings.json" >&2
   exit 3
 fi
 
@@ -909,10 +918,10 @@ EOF
     echo "    Created worktree"
   done
 
-  # Step 6: Copy .claude/settings.json
-  echo "Copying settings..."
+  # Step 6: Render .claude/settings.json (envsubst for MODEL variable)
+  echo "Rendering settings..."
   mkdir -p "$WORKSPACE_PATH/.claude"
-  if cp "$TEMPLATE_DIR/settings.json.tmpl" "$WORKSPACE_PATH/.claude/settings.json"; then
+  if MODEL="${MODEL:-sonnet}" envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
     echo "  .claude/settings.json: created"
   else
     echo "  .claude/settings.json: failed (non-fatal)" >&2
