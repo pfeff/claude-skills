@@ -500,8 +500,9 @@ else
 fi
 
 # Render settings.json (envsubst for MODEL variable)
+MODEL="${MODEL:-sonnet}"
 mkdir -p "$WORKSPACE_PATH/.claude"
-if MODEL="${MODEL:-sonnet}" envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
+if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
   echo "  .claude/settings.json: created"
 else
   echo "Error: Failed to render settings.json" >&2
@@ -704,11 +705,11 @@ else
   verify_check ".envrc contains CLAUDE_CODE_TASK_LIST_ID" "fail"
 fi
 
-# Check 5: .claude/settings.json exists with permissions
-if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json"; then
-  verify_check ".claude/settings.json contains permissions" "pass"
+# Check 5: .claude/settings.json exists with permissions and model
+if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json" && grep -q '"model"' "$WORKSPACE_PATH/.claude/settings.json"; then
+  verify_check ".claude/settings.json contains permissions and model" "pass"
 else
-  verify_check ".claude/settings.json contains permissions" "fail"
+  verify_check ".claude/settings.json contains permissions and model" "fail"
 fi
 
 # Check 6: .tmuxp.yaml exists with correct session name
@@ -920,8 +921,9 @@ EOF
 
   # Step 6: Render .claude/settings.json (envsubst for MODEL variable)
   echo "Rendering settings..."
+  MODEL="${MODEL:-sonnet}"
   mkdir -p "$WORKSPACE_PATH/.claude"
-  if MODEL="${MODEL:-sonnet}" envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
+  if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
     echo "  .claude/settings.json: created"
   else
     echo "  .claude/settings.json: failed (non-fatal)" >&2

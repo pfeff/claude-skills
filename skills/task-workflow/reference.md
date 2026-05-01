@@ -251,7 +251,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-tmuxp-session.sh \
 
 **Optional**:
 - `--repos`: Comma-separated repository list
-- `--model`: Claude model alias for the workspace session (e.g. `opus`, `sonnet`, `haiku`, or a full model ID). Defaults to `sonnet` when omitted. New task workspaces default to Sonnet; pass `--model opus` for investigation or security-sensitive tasks.
+- `--model`: Claude model alias for the workspace session (e.g. `opus`, `sonnet`, `haiku`, or a full model ID). Defaults to `sonnet` when omitted.
 - `--issue`: GitHub issue reference for sync
 
 ### Error Handling
