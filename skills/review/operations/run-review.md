@@ -21,7 +21,37 @@ Parse `$ARGUMENTS` to determine the review target:
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
-## Step 2: Load Agent Prompts
+## Step 2: Check Diff Size
+
+Count the number of lines in the diff. Store as `$DIFF_LINES`.
+
+**If `$DIFF_LINES` > 1000**: perform a degraded-mode inline review instead of the multi-agent pass. Skip Steps 3–6 and go directly to the degraded review below, then continue at Step 8.
+
+### Degraded-mode inline review
+
+When the diff exceeds 1000 lines, review the diff yourself (without spawning agents) using this condensed checklist:
+
+- **Security**: hardcoded secrets, missing auth, injection via string interpolation, XSS, PII in logs
+- **Correctness**: logic errors, missing error handling at system boundaries, unhandled edge cases
+- **Data loss**: destructive operations without guards (drops, deletes, overwrites)
+- **Architecture**: new circular dependencies, schema/interface mismatches
+- **Simplicity**: dead code, obvious YAGNI violations
+
+Report findings using the same format as the full review (Critical/Warning/Info per agent area). Set `$AGENT_COUNT` to 1.
+
+Add a prominent notice at the top of the review output:
+
+```
+> **Degraded-mode review** — diff is {$DIFF_LINES} lines (threshold: 1000). Multi-agent pass skipped. Coverage may be incomplete.
+```
+
+After producing the degraded findings, skip to Step 8 (Persist Review Output).
+
+---
+
+**If `$DIFF_LINES` ≤ 1000**: continue with the full multi-agent review below. Set `$AGENT_COUNT` to 4.
+
+## Step 3: Load Agent Prompts
 
 Read the four agent prompt files:
 - `operations/agents/security.md`
@@ -29,7 +59,7 @@ Read the four agent prompt files:
 - `operations/agents/architecture.md`
 - `operations/agents/correctness.md`
 
-## Step 3: Detect Platform Context
+## Step 4: Detect Platform Context
 
 Check for language-specific marker files in the working directory to load platform context:
 
@@ -39,7 +69,7 @@ Check for language-specific marker files in the working directory to load platfo
 
 Use the first match. If no marker file is found or the corresponding context file does not exist, skip this step (no context will be injected).
 
-## Step 4: Load Project Context
+## Step 5: Load Project Context
 
 Search for project documentation to give agents design awareness:
 
@@ -50,12 +80,12 @@ For each file: if it exists, read its contents. If it does not exist, skip it si
 
 After loading, note which documents were found. If none were found, continue without project context (agents will still review using their own checklists).
 
-## Step 5: Spawn Review Agents in Parallel
+## Step 6: Spawn Review Agents in Parallel
 
 Launch 4 Task tool agents in parallel, each with `subagent_type: general-purpose`. Each agent receives:
-1. The agent prompt (from Step 2)
-2. The platform context (from Step 3, if detected)
-3. The project context (from Step 4, if any documents were found)
+1. The agent prompt (from Step 3)
+2. The platform context (from Step 4, if detected)
+3. The project context (from Step 5, if any documents were found)
 4. The full diff (from Step 1)
 
 Format each Task prompt as:
@@ -88,22 +118,34 @@ Found: {comma-separated list of documents loaded, e.g. "DESIGN.md, ARCHITECTURE.
 
 Omit the `<platform-context>` block if no platform context was detected. Omit the `<project-context>` block if no project documents were found. Within `<project-context>`, only include sections for documents that exist.
 
-## Step 6: Synthesize and Classify Findings
+### Timeout
+
+Wait for all agents to return. If any agents have not returned after **10 minutes of wall-clock time**, do not continue waiting. Emit a structured timeout failure instead of hanging:
+
+```
+> **Review timed out** — agents did not complete within 10 minutes.
+> Diff size: {$DIFF_LINES} lines. Elapsed: ~10 min.
+> Partial results (if any) are not persisted. Re-run on a smaller diff or try again.
+```
+
+Stop after emitting this message. Do not persist partial output to `latest.md`.
+
+## Step 7: Synthesize and Classify Findings
 
 After all agents return, synthesize their reports into a single consolidated summary:
 
 1. Collect all findings from the four agents
 2. If multiple agents flagged the same file and line, combine into a single entry
 3. Classify each finding:
-   - **Blocking**: All critical-severity findings. These indicate issues that must be addressed before merge.
-   - **Advisory**: Warning and info-severity findings. Evaluate each in context based on potential impact and cost of fix. Advisory findings are not automatically dismissed — they represent genuine observations that may warrant action.
+   - **Blocking**: Findings that are **correctness failures, security vulnerabilities, or data-loss risks** — regardless of agent or severity label. These must be addressed before merge. Style preferences, naming choices, ergonomic suggestions, and structural opinions are **never** BLOCKING, even if an agent labels them Critical.
+   - **Advisory**: Everything else — including style, naming, architecture preferences, and ergonomics, even at Critical severity from the agent. Evaluate each in context based on potential impact and cost of fix. Advisory findings are not automatically dismissed — they represent genuine observations that may warrant action.
 4. Group findings by classification (blocking first, then advisory)
 5. Within each classification group, order by severity (critical, warning, info)
 6. Omit empty sections
 
 Each synthesized finding must include: file, line, agent, category, classification (blocking/advisory), and description.
 
-## Step 7: Persist Review Output
+## Step 8: Persist Review Output
 
 Save the synthesized review to `.claude/reviews/latest.md` (relative to the working directory). Create the `.claude/reviews/` directory if it does not exist. Overwrite any existing `latest.md`.
 
@@ -113,7 +155,8 @@ Write the file using this exact structure:
 ---
 target: {branch name, PR #N, or "current branch"}
 timestamp: {ISO 8601 UTC, e.g. 2026-02-23T14:30:00Z}
-agents: {N}
+agents: {$AGENT_COUNT}
+degraded: {true if degraded-mode, false otherwise}
 blocking: {count}
 advisory: {count}
 verdict: {BLOCKING | CLEAN}
@@ -122,8 +165,10 @@ verdict: {BLOCKING | CLEAN}
 ## Review Summary
 
 **Target**: {target}
-**Agents**: {N}
+**Agents**: {$AGENT_COUNT}
 **Verdict**: {BLOCKING — N issue(s) must be resolved | CLEAN — advisory findings only | CLEAN — no issues found}
+
+{If degraded-mode, include the degraded-mode notice here}
 
 ### Blocking
 
@@ -137,16 +182,17 @@ verdict: {BLOCKING | CLEAN}
 Rules:
 - The YAML frontmatter must be machine-parseable. Use exact field names shown above.
 - `verdict` in frontmatter is `BLOCKING` if any blocking findings exist, otherwise `CLEAN`.
+- `degraded` in frontmatter is `true` if the diff-size threshold was exceeded; `false` otherwise.
 - Omit the `### Blocking` section if there are no blocking findings.
 - Omit the `### Advisory` section if there are no advisory findings.
-- If no findings at all, write only the frontmatter and a single line: `No issues found across {N} agents.`
+- If no findings at all, write only the frontmatter and a single line: `No issues found across {$AGENT_COUNT} agents.`
 - Each finding line must preserve the `**file:line**` format exactly — downstream PR annotation depends on parsing this.
 
-## Step 8: Display Results
+## Step 9: Display Results
 
 Present the contents of `.claude/reviews/latest.md` to the user (without the YAML frontmatter).
 
-## Step 9: Post Inline PR Comments
+## Step 10: Post Inline PR Comments
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 

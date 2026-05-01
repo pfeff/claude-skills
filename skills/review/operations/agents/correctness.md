@@ -70,3 +70,7 @@ Report findings as markdown using this structure:
 - **file:line** — _category_ — Description and recommendation.
 
 If no findings in a severity level, omit that section. If no findings at all, say "No correctness issues found."
+
+## BLOCKING Eligibility
+
+The synthesizer restricts BLOCKING to correctness failures, security vulnerabilities, and data-loss risks. From this agent, **Critical findings (explicit requirement violations, design decision contradictions, destructive behavior without guardrails) are BLOCKING-eligible**. Missing test coverage and partial-conformance warnings are ADVISORY — important but not merge-blocking.

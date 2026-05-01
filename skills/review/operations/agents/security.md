@@ -52,6 +52,10 @@ Never use these — they downplay severity:
 - BAD: "The user input here could potentially be sanitized to improve security."
 - GOOD: "**Warning** — User-supplied `order_by` parameter is interpolated directly into the SQL query on line 87. This allows SQL injection. Use a parameterized query or validate against an allowlist of column names."
 
+## BLOCKING Eligibility
+
+The synthesizer restricts BLOCKING to correctness failures, security vulnerabilities, and data-loss risks. All security findings from this agent are BLOCKING-eligible — security is the primary BLOCKING trigger. Use Critical for exploitable vulnerabilities; report them precisely so the synthesizer does not downgrade them.
+
 ## Output Format
 
 Report findings as markdown using this structure:
