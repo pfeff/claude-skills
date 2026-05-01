@@ -5,10 +5,14 @@
 # Container dispatch uses AC's volume-based workspaces via ac_node_update(action="dispatch").
 # See dispatch-container.sh and dispatch-node.md for the volume-based flow.
 #
-# Usage: create-node-workspace.sh <project_dir> <node_id> <project_branch> <owner> <repo1> [repo2 ...]
+# Usage: create-node-workspace.sh [--node-db-id <id>] <project_dir> <node_id> <project_branch> <owner> <repo1> [repo2 ...]
 #
 # This script maintains backwards compatibility with the original positional argument interface
 # while delegating to the unified create-workspace.sh script.
+#
+# Optional flags (must appear before positional args):
+#   --node-db-id <id>   Coordinator node DB id; written to workspace .envrc as
+#                       COORDINATOR_TASK_ID so /finish can update coord status.
 
 set -euo pipefail
 
@@ -20,6 +24,16 @@ while [[ -L "$SOURCE" ]]; do
   [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
+NODE_DB_ID=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --node-db-id) NODE_DB_ID="$2"; shift 2 ;;
+    --) shift; break ;;
+    -*) echo "error: unknown flag '$1'" >&2; exit 1 ;;
+    *) break ;;
+  esac
+done
 
 PROJECT_DIR="$1"
 NODE_ID="$2"
@@ -33,10 +47,14 @@ REPOS=$(IFS=,; echo "$*")
 # Find create-workspace.sh relative to this script's real location
 CREATE_WORKSPACE="$SCRIPT_DIR/../../task-workflow/scripts/create-workspace.sh"
 
-exec "$CREATE_WORKSPACE" \
-  --node \
-  --node-id "$NODE_ID" \
-  --headline "Node $NODE_ID" \
-  --project-dir "$PROJECT_DIR" \
-  --project-branch "$PROJECT_BRANCH" \
+CWS_ARGS=(
+  --node
+  --node-id "$NODE_ID"
+  --headline "Node $NODE_ID"
+  --project-dir "$PROJECT_DIR"
+  --project-branch "$PROJECT_BRANCH"
   --repos "$REPOS"
+)
+[[ -n "$NODE_DB_ID" ]] && CWS_ARGS+=(--node-db-id "$NODE_DB_ID")
+
+exec "$CREATE_WORKSPACE" "${CWS_ARGS[@]}"

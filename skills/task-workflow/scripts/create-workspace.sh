@@ -47,6 +47,7 @@ DESCRIPTION=""
 # Node mode values
 MODE=""
 NODE_ID=""
+NODE_DB_ID=""
 PROJECT_DIR=""
 PROJECT_BRANCH=""
 
@@ -83,6 +84,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --node-id)
       NODE_ID="$2"
+      shift 2
+      ;;
+    --node-db-id)
+      NODE_DB_ID="$2"
       shift 2
       ;;
     --project-dir)
@@ -877,6 +882,9 @@ export CLAUDE_CODE_TASK_LIST_ID="$CHILD_TASK_LIST_ID"
 export NODE_ID="$NODE_ID"
 export NODE_BRANCH="$NODE_BRANCH"
 EOF
+  if [[ -n "$NODE_DB_ID" ]]; then
+    echo "export COORDINATOR_TASK_ID=\"$NODE_DB_ID\"" >> "$WORKSPACE_PATH/.envrc"
+  fi
   echo "  .envrc: created"
 
   # Step 5: Create git worktrees
