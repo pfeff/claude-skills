@@ -873,6 +873,8 @@ create_node_workspace() {
   # Step 4: Create .envrc that sources parent
   # Generate unique task list ID so child doesn't clobber parent's task list
   CHILD_TASK_LIST_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  COORD_LINE=""
+  [[ -n "$NODE_DB_ID" ]] && COORD_LINE="export COORDINATOR_TASK_ID=\"$NODE_DB_ID\""
   cat > "$WORKSPACE_PATH/.envrc" << EOF
 # Node workspace - inherits from project
 source_up
@@ -881,10 +883,8 @@ source_up
 export CLAUDE_CODE_TASK_LIST_ID="$CHILD_TASK_LIST_ID"
 export NODE_ID="$NODE_ID"
 export NODE_BRANCH="$NODE_BRANCH"
+$COORD_LINE
 EOF
-  if [[ -n "$NODE_DB_ID" ]]; then
-    echo "export COORDINATOR_TASK_ID=\"$NODE_DB_ID\"" >> "$WORKSPACE_PATH/.envrc"
-  fi
   echo "  .envrc: created"
 
   # Step 5: Create git worktrees
