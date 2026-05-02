@@ -31,12 +31,11 @@
       "Bash(sort:*)",
       "Bash(command -v:*)",
       "Bash(ccusage:*)",
-      "Bash(qmd:*)",
+      "Bash(qmd collection:*)",
       "Bash(pytest:*)",
       "Bash(go test:*)",
       "Bash(python -m pytest:*)",
       "Bash(bats:*)",
-      "Bash(cd * && bats:*)",
       "Bash(mix test:*)",
       "Bash(mix compile:*)",
       "Bash(mix deps*:*)",
@@ -50,7 +49,14 @@
     ],
     "deny": [
       "Bash(rm -rf /:*)",
-      "Bash(sudo:*)"
+      "Bash(sudo:*)",
+      "Bash(find * -exec:*)",
+      "Bash(find * -execdir:*)",
+      "Bash(find * -delete:*)",
+      "Bash(find * -fprint:*)",
+      "Bash(find * -fprintf:*)",
+      "Bash(find * -ok:*)",
+      "Bash(find * -okdir:*)"
     ]
   },
   "hooks": {
