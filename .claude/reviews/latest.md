@@ -1,35 +1,24 @@
 ---
-target: PR #30 (pfeff/claude-skills)
-timestamp: 2026-04-10T17:15:00Z
+target: PR #77
+timestamp: 2026-05-02T03:30:00Z
 agents: 4
 blocking: 0
-advisory: 5
+advisory: 7
 verdict: CLEAN
 ---
 
 ## Review Summary
 
-**Target**: PR #30 — feat(ralph-wiggum): install task in container, generalize feature merge
+**Target**: PR #77 (loop-optimizer/I.2 → main)
 **Agents**: 4 (security, simplicity, architecture, correctness)
 **Verdict**: CLEAN — advisory findings only
 
 ### Advisory
 
-- **skills/ralph-wiggum/scripts/.devcontainer/devcontainer.json:6** — [security] _supply chain_ (warning) — New third-party devcontainer feature `ghcr.io/eitsupi/devcontainer-features/go-task:1` is pulled from a personal GHCR namespace (not the official `devcontainers/` org) and uses an unpinned floating tag (`:1`). A compromised or hijacked upstream would execute arbitrary code during container build. Worth pinning to an immutable digest or documenting the trust decision. Note: existing `node:1` and `github-cli:1` features are also unpinned, but those are from the more trusted `devcontainers/` namespace.
-- **skills/ralph-wiggum/scripts/run-container.sh:163** — [security] _override surface_ (warning) — The generalized merge `(($ralph[0].features // {}) * (.features // {}))` expands the project-config override surface to all current and future ralph features (project values win on key collision). Not a regression — the prior `//=` form also let project values fully replace ralph defaults — but the additive merge means any future ralph feature is automatically overridable. Consider whether security-critical features should be locked.
-- **skills/ralph-wiggum/scripts/run-container.sh:163** — [correctness] _merge edge case_ (info) — jq's `*` is a recursive merge. If a project sets a feature key to a non-object (e.g., `null` or `false` to disable), the merge raises a jq type error (`object and null cannot be multiplied`). Not a regression and unlikely in practice, but worth noting if anyone tries to "disable" a ralph feature this way.
-- **skills/ralph-wiggum/scripts/run-container.sh:163** — [security] _nested options_ (info) — Because `*` is recursive, project-supplied nested feature options will deep-merge into ralph's, which could silently enable options ralph did not intend (e.g., `installTools`, `version` overrides). Worth an explicit test case if security-relevant options are ever added.
-- **skills/ralph-wiggum/scripts/run-container.sh:161** — [simplicity] _generalization_ (info) — The refactor from hardcoded `//=` lines to the merge expression is a net win: scales to N features without edits, removes coupling between this script and the specific feature list. Smaller diff long-term than adding a third `//=` line. No action needed.
-
-### Correctness check (DESIGN.md acceptance criteria)
-
-- ✓ Criterion 1 (`task --version` succeeds): satisfied — `eitsupi/go-task` is Debian/Ubuntu-compatible and installs to `/usr/local/bin/task`.
-- ✓ Criterion 2 (`task lint` / `task test` work): satisfied — binary on PATH for all users including `vscode` remoteUser.
-- ✓ Criterion 3 (no manual step): satisfied — declarative feature in devcontainer.json.
-- ✓ Criterion 4 (works on rebuild): satisfied — features re-apply on every `devcontainer up` from clean. Verified end-to-end with `--build-no-cache`.
-
-### Architecture
-
-- ✓ `$CLAUDE_PLUGIN_ROOT` convention in README matches established usage in `skills/goal-tree/operations/*.md` and `skills/goal-tree/scripts/*.sh`.
-- ✓ Progressive disclosure entry for `scripts/` mirrors how `templates/` is listed in SKILL.md.
-- ✓ Version bump aligned across SKILL.md frontmatter and CHANGELOG.
+- **skills/task-workflow/scripts/create-workspace.sh:885-887** — [architecture] _cohesion_ (warning) — `.envrc` is built in two places: variable-expanded heredoc at 876-884, then `echo ... >>` append at 886. Existing pattern keeps all `.envrc` content in the single heredoc (one source of truth). Since the heredoc is unquoted, `$NODE_DB_ID` would expand inside it. Recommendation: compose `COORD_LINE` before the heredoc and emit it inline, or emit unconditionally (empty value is harmless).
+- **DESIGN.md AC3** — [correctness] _test coverage_ (warning) — AC3 ("Validated end-to-end on a fresh node workspace") has no committed evidence. The session validated via stubbed `create-workspace.sh` shim + heredoc smoke test; no real dispatch was run. Acknowledged in the PR body and scheduled follow-up routine (trig_0173asdpXWvtJRF1LGcmHtJU, 2026-05-05) verifies the fix landed but cannot verify a fresh `.envrc` from the cloud.
+- **skills/task-workflow/scripts/create-workspace.sh:886** — [security] _input validation_ (info) — `$NODE_DB_ID` is interpolated unvalidated into the generated `.envrc`. Source is trusted (`jq -r '.data.id'` from local coord API), but no `[[ "$NODE_DB_ID" =~ ^[0-9]+$ ]]` guard. A buggy/compromised coord returning a non-numeric value with `"`, `$`, or backticks would yield arbitrary code execution on every direnv load. Trivial to harden — add the regex guard in `create-workspace.sh` (or in `discuss-dispatch.sh` right after the `jq` extraction).
+- **skills/goal-tree/scripts/create-node-workspace.sh:28-36** — [correctness] _undocumented behavior_ (info) — `--node-db-id` is silently optional. Legacy positional callers (`dispatch-node.md`, `branch-management.md`, `start-project.md`) don't pass it, so workspaces created via those paths still won't have `COORDINATOR_TASK_ID` and `/finish` will silently no-op there — exactly the Round-1 failure mode. Out of scope per DESIGN.md (which scopes the fix to the dispatch flow), but worth a comment in the script.
+- **skills/goal-tree/scripts/create-node-workspace.sh:33** — [architecture] _naming_ (info) — Lowercase `error:` matches sibling `discuss-dispatch.sh:47` but diverges from the delegate `create-workspace.sh:102` ("Error: Unknown argument: …"). Minor.
+- **skills/goal-tree/scripts/create-node-workspace.sh:8** — [architecture] _api design_ (info) — Wrapper rejects unknown `-*` flags (stricter than the delegate). Acceptable for a narrow interface; if a second optional flag is added later, switch to an explicit pass-through array (cf. `COORD_ARGS` pattern in `discuss-dispatch.sh:69-76`).
+- **skills/goal-tree/scripts/discuss-dispatch.sh:107-109** — [architecture] _pattern adherence_ (info) — Mixed flag/positional call to the wrapper. Works correctly but a brief comment ("legacy callers omit `--node-db-id` and accept that `/finish` cannot update coord status") would document the intentional split.
