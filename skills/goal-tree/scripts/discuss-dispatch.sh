@@ -105,6 +105,7 @@ IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
 # Workspace path pattern: $PROJECT_DIR/$NODE_ID-<slug of headline>
 # e.g. NODE_ID=V, headline="Node V" → slug="node-v" → path="$PROJECT_DIR/V-node-v"
 "${SCRIPT_DIR}/create-node-workspace.sh" \
+  --node-db-id "$NODE_DB_ID" \
   "$PROJECT_DIR" "$NODE_ID" "$PROJECT_BRANCH" "$OWNER" "${REPO_ARRAY[@]}" || {
   echo "error: workspace creation failed" >&2
   echo "PARTIAL: coordinator node ${NODE_DB_ID} created, workspace NOT created" >&2

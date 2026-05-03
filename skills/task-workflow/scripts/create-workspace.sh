@@ -52,6 +52,7 @@ DESCRIPTION=""
 # Node mode values
 MODE=""
 NODE_ID=""
+NODE_DB_ID=""
 PROJECT_DIR=""
 PROJECT_BRANCH=""
 
@@ -92,6 +93,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --node-id)
       NODE_ID="$2"
+      shift 2
+      ;;
+    --node-db-id)
+      NODE_DB_ID="$2"
       shift 2
       ;;
     --project-dir)
@@ -878,6 +883,8 @@ create_node_workspace() {
   # Step 4: Create .envrc that sources parent
   # Generate unique task list ID so child doesn't clobber parent's task list
   CHILD_TASK_LIST_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  COORD_LINE=""
+  [[ -n "$NODE_DB_ID" ]] && COORD_LINE="export COORDINATOR_TASK_ID=\"$NODE_DB_ID\""
   cat > "$WORKSPACE_PATH/.envrc" << EOF
 # Node workspace - inherits from project
 source_up
@@ -886,6 +893,7 @@ source_up
 export CLAUDE_CODE_TASK_LIST_ID="$CHILD_TASK_LIST_ID"
 export NODE_ID="$NODE_ID"
 export NODE_BRANCH="$NODE_BRANCH"
+$COORD_LINE
 EOF
   echo "  .envrc: created"
 
