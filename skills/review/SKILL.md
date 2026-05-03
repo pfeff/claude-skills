@@ -17,7 +17,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Review Skill
@@ -35,14 +35,34 @@ Parallel multi-agent code review. Spawns security, simplicity, architecture, and
 ## Execution Flow
 
 1. **Determine diff source** from `$ARGUMENTS`
-2. **Acquire diff** via git or gh
-3. **Spawn 4 review agents** in parallel using Task tool
+2. **Check diff size** — diffs >1000 lines trigger degraded-mode (see Limits)
+3. **Spawn 4 review agents** in parallel using Task tool (skipped in degraded-mode)
 4. **Synthesize and classify findings** (blocking vs advisory)
 5. **Persist results** to `.claude/reviews/latest.md`
 6. **Display results** to user
 7. **Post inline PR comments** — when reviewing a PR, automatically post findings as line-level review comments via the GitHub API
 
 **Implementation**: Load `operations/run-review.md` for full orchestration logic.
+
+## Limits
+
+### Diff-size degradation
+
+Diffs exceeding **1000 lines** skip the multi-agent pass. The orchestrator performs a single inline review using a condensed checklist (security, correctness, data-loss, architecture, simplicity). The output is labeled:
+
+```
+> **Degraded-mode review** — diff is N lines (threshold: 1000). Multi-agent pass skipped. Coverage may be incomplete.
+```
+
+`agents: 1` and `degraded: true` are set in the frontmatter.
+
+### Timeout
+
+The multi-agent pass has a **10-minute wall-clock timeout**. If agents do not return within 10 minutes, the review emits a structured timeout failure and stops — no partial results are persisted.
+
+## BLOCKING Tier
+
+BLOCKING is restricted to **correctness failures, security vulnerabilities, and data-loss risks**. Style, naming, ergonomics, and structural preferences are always ADVISORY regardless of agent severity label.
 
 ## Operations
 

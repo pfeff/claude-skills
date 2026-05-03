@@ -65,3 +65,7 @@ Report findings as markdown using this structure:
 - **file:line** — _category_ — Description and recommendation.
 
 If no findings in a severity level, omit that section. If no findings at all, say "No architecture issues found."
+
+## BLOCKING Eligibility
+
+The synthesizer restricts BLOCKING to correctness failures, security vulnerabilities, and data-loss risks. From this agent, only **circular dependencies** or **interface/schema mismatches that would cause runtime failures or data loss** are BLOCKING-eligible (Critical). Pattern violations, naming divergence, layer preferences, and cohesion concerns are always ADVISORY regardless of severity label.
