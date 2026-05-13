@@ -832,7 +832,12 @@ create_node_workspace() {
     fi
   fi
 
-  NODE_BRANCH="$PROJECT_BRANCH/$NODE_ID"
+  # Strip "-main" integration-branch suffix when composing the node-branch prefix.
+  # Projects whose parent branch ends in "-main" (e.g. loop-optimizer-main) use a "-"
+  # for the integration branch but a "/" namespace for nodes (loop-optimizer/<node>),
+  # because git refuses both a leaf branch <X> and a directory <X>/<Y>. Without the
+  # strip, the node branch (loop-optimizer-main/<node>) collides with the leaf.
+  NODE_BRANCH="${PROJECT_BRANCH%-main}/$NODE_ID"
 
   echo "  Path: $WORKSPACE_PATH"
   echo "  Branch: $NODE_BRANCH"
