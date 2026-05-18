@@ -203,31 +203,80 @@ fi
 # Helper functions
 #------------------------------------------------------------------------------
 
-# Generate 2-3 word slug from headline
+# Generate 2-3 word slug from headline, filtering common stop words.
+# Falls back to the raw first-3 tokens if every token is a stop word, so the
+# slug is never empty for a non-empty headline.
 generate_slug() {
   local headline="$1"
+  local stopwords="update the that to a an and or for of with in on at from"
   echo "$headline" | tr '[:upper:]' '[:lower:]' | \
     sed 's/[^a-z0-9 ]//g' | \
     tr -s ' ' | \
-    awk '{for(i=1;i<=NF && i<=3;i++) printf "%s-", $i}' | \
+    awk -v stop="$stopwords" '
+      BEGIN {
+        n = split(stop, arr, " ")
+        for (i = 1; i <= n; i++) sw[arr[i]] = 1
+      }
+      {
+        picked = 0
+        for (i = 1; i <= NF && picked < 3; i++) {
+          word = $i
+          if (!(word in sw)) {
+            printf "%s-", word
+            picked++
+          }
+        }
+        if (picked == 0) {
+          for (i = 1; i <= NF && i <= 3; i++) printf "%s-", $i
+        }
+      }
+    ' | \
     sed 's/-$//'
 }
 
-# Resolve repository path
-# Tries: ~/src/github/<org>/<repo>, ~/src/azdevops/<org>/<project>/<repo>
+# Resolve repository path.
+#
+# Accepts:
+#   - Absolute path to an existing directory.
+#   - Owner-qualified `owner/repo` form — resolves to ~/src/github/<owner>/<repo>
+#     only; never falls back to the unqualified globs. Callers that know which
+#     owner they want (e.g. derived from an issue reference) should pass this
+#     form to avoid ambiguity when a repo name exists under multiple owners.
+#   - Bare repo name — globs ~/src/github/*/<repo>, then ~/src/azdevops/*/*/<repo>.
+#     Glob ordering is alphabetical; if the same repo name exists under more
+#     than one owner, the result is whichever comes first. Use the qualified
+#     form to disambiguate.
 resolve_repo_path() {
   local repo_name="$1"
 
-  # Reject names with glob or path characters
   if [[ "$repo_name" == /* && -d "$repo_name" ]]; then
     echo "$repo_name"
     return 0
   fi
-  if [[ ! "$repo_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+
+  if [[ "$repo_name" =~ ^([a-zA-Z0-9._-]+)/([a-zA-Z0-9._-]+)$ ]]; then
+    local owner="${BASH_REMATCH[1]}"
+    local repo="${BASH_REMATCH[2]}"
+    # Reject path-traversal segments. The regex above permits `.` because dots
+    # are valid in repo names (e.g. `repo.go`), but `.`, `..`, or any segment
+    # containing `..` would escape `$HOME/src/github` via path traversal.
+    if [[ "$owner" == . || "$owner" == .. || "$owner" == *..* ]]; then return 1; fi
+    if [[ "$repo"  == . || "$repo"  == .. || "$repo"  == *..* ]]; then return 1; fi
+    local qualified="$HOME/src/github/$owner/$repo"
+    if [[ -d "$qualified" ]]; then
+      echo "$qualified"
+      return 0
+    fi
     return 1
   fi
 
-  # Try ~/src/github/<org>/<repo> (known structure, no find)
+  if [[ ! "$repo_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    return 1
+  fi
+  if [[ "$repo_name" == . || "$repo_name" == .. || "$repo_name" == *..* ]]; then
+    return 1
+  fi
+
   local match
   for match in ~/src/github/*/"$repo_name"; do
     if [[ -d "$match" ]]; then
@@ -236,7 +285,6 @@ resolve_repo_path() {
     fi
   done
 
-  # Try ~/src/azdevops/<org>/<project>/<repo> (known structure, no find)
   for match in ~/src/azdevops/*/*/"$repo_name"; do
     if [[ -d "$match" ]]; then
       echo "$match"
@@ -267,7 +315,11 @@ generate_issue_url() {
   fi
 }
 
-# Format repos list as markdown
+# Format repos list as markdown.
+# When given owner-qualified names like `pfeff/claude-skills`, the displayed
+# label keeps the qualifier (informative) but the path uses the basename to
+# match where the worktree actually lands (`create_task_workspace` builds
+# `worktree_path` from `basename "$repo_path"`).
 format_repos_list() {
   local repos="$1"
   local workspace_path="$2"
@@ -1024,7 +1076,11 @@ EOF
 # Mode dispatcher
 #------------------------------------------------------------------------------
 
-case "$MODE" in
-  task) create_task_workspace ;;
-  node) create_node_workspace ;;
-esac
+# Skip the dispatcher when sourced (e.g. by test-create-workspace.sh), so the
+# helper functions above can be exercised without creating a real workspace.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  case "$MODE" in
+    task) create_task_workspace ;;
+    node) create_node_workspace ;;
+  esac
+fi
