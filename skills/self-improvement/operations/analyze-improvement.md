@@ -10,15 +10,17 @@ Deep analysis of a specific recommendation to assess feasibility, identify targe
 
 ### Step 1: Resolve Vault Path and Locate Recommendation
 
-Resolve Obsidian vault constants via the host-config helper:
+Resolve Obsidian vault constants via the host-config helper, then guard the rest of the operation on a usable vault path (the helper already emits its own `[obsidian-notes] <reason>` line on failure, so the guard does not re-warn):
 
 ```bash
-source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || {
-  echo "[obsidian-notes] vault unavailable on this host" >&2
-}
+source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || true
+if [[ -z "${OBSIDIAN_VAULT_PATH:-}" ]]; then
+  echo "[obsidian-notes] cannot resolve vault path; aborting analyze-improvement (no fallback location)" >&2
+  exit 1
+fi
 ```
 
-On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root. If the helper fails, abort this operation — analyze-improvement cannot proceed without locating the source REC.
+On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root. On failure: the operation stops here — unlike scan-recommendations, analyze-improvement has no in-repo fallback (it needs to locate the source REC inside the vault).
 
 Search lessons learned files for the specific REC-ID:
 

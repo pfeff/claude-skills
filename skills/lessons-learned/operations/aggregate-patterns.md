@@ -10,23 +10,22 @@ Scans historical lessons learned documents to extract and aggregate patterns, an
 
 ### Step 1: Resolve Vault Path and Locate Files
 
-Resolve Obsidian vault constants via the host-config helper:
+Resolve Obsidian vault constants via the host-config helper (non-blocking per `obsidian-notes/SKILL.md` § Non-Blocking Failure Contract — the helper already emits a `[obsidian-notes] <reason>` line on failure; do not re-warn or `exit`):
 
 ```bash
-source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || {
-  echo "[obsidian-notes] vault unavailable on this host; aborting aggregation" >&2
-  exit 1
-}
+source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || true
+LESSONS_DIR="${OBSIDIAN_VAULT_PATH:+$OBSIDIAN_VAULT_PATH/Generated}"
+LESSONS_DIR="${LESSONS_DIR:-docs/lessons-learned}"
 ```
 
-On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root (used for read-side globs); `$OBSIDIAN_CLI` / `$OBSIDIAN_VAULT` are the CLI binary and vault name for writes (see Step 6).
+On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root (used for read-side globs); `$OBSIDIAN_CLI` / `$OBSIDIAN_VAULT` are the CLI binary and vault name for writes (see Step 6). On failure: `$OBSIDIAN_VAULT_PATH` is unset, so `LESSONS_DIR` falls back to the in-repo `docs/lessons-learned/` directory. Step 6's write path checks `$OBSIDIAN_CLI` and gates the CLI block on that same signal.
 
 Search for lessons files:
 ```bash
-ls -1t "$OBSIDIAN_VAULT_PATH"/Generated/*Lesson*.md 2>/dev/null | head -20
+ls -1t "$LESSONS_DIR"/*Lesson*.md 2>/dev/null | head -20
 ```
 
-Default location: `Generated/*Lesson*.md` under `$OBSIDIAN_VAULT_PATH`.
+Default location: `*Lesson*.md` under `$LESSONS_DIR` (vault `Generated/` when available, otherwise `docs/lessons-learned/`).
 
 ### Step 1b: Locate Previous Aggregation Report
 
@@ -34,7 +33,7 @@ Search for the most recent aggregation report to use as a baseline for effective
 
 ```bash
 # Find previous aggregation reports
-ls -1 "$OBSIDIAN_VAULT_PATH"/Generated/*Pattern*Aggregation*.md 2>/dev/null | sort -r | head -1
+ls -1 "$LESSONS_DIR"/*Pattern*Aggregation*.md 2>/dev/null | sort -r | head -1
 ```
 
 If found, extract:
