@@ -78,7 +78,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/specflow-analysis.md`
 
-**Quick summary**: Systematically walks all user/operational flows, maps decision points, enumerates error states and edge cases, identifies specification gaps, and generates acceptance criteria from findings.
+**Quick summary**: Systematically walks all user/operational flows, maps decision points, enumerates error states and edge cases, identifies specification gaps, audits where each requirement should run (script / skill operation / agent / hook) to catch layer mismatches before implementation, and generates acceptance criteria from findings.
 
 ### 6. Detail Level Selection
 

@@ -75,6 +75,32 @@ Compare the discovered permutations against the task requirements. Flag anything
 - [ ] **<gap description>** — <which flow/decision point revealed this>
 ```
 
+### 5a. Audit layers
+
+For each requirement (and for each generated acceptance criterion that defines new behavior), audit where the rule belongs by answering three questions:
+
+1. **Inputs** — What information does the rule need to produce the right answer? (e.g., issue owner, hostname, "personal vs work" classification, file contents, user identity, request context.)
+2. **Layer** — Where will the rule run? Pick one:
+   - **Script** (bash/python helper, e.g., `create-workspace.sh`)
+   - **Skill operation** (e.g., `operations/workspace-from-issue.md`)
+   - **Agent reasoning** (the agent decides in conversation)
+   - **Hook** (pre-commit, settings hook, harness lifecycle)
+3. **Match** — Does the chosen layer have access to all the inputs from question 1?
+   - Yes → the layer is correct.
+   - No → push the rule **up** to the layer that does have the inputs. A script cannot apply a rule that depends on inputs only a skill operation has parsed.
+
+Format the audit as a table:
+
+```markdown
+### Layer Audit
+
+| Requirement / Criterion | Inputs needed | Proposed layer | Inputs available at that layer? | Resolution |
+|-------------------------|---------------|----------------|--------------------------------|------------|
+| <id or short title>     | <list>        | script / skill op / agent / hook | yes / no | <"correct" or "move to <higher layer>"> |
+```
+
+A "no" in the "Inputs available?" column is a **design defect**. Either move the rule up to a layer with the inputs, or surface the missing input as a specification gap (step 5) for the user to resolve before plan finalization.
+
 ### 6. Compile findings
 
 Produce a section for the plan:
@@ -96,6 +122,11 @@ Produce a section for the plan:
 ### Specification Gaps
 - [ ] <gap 1>
 - [ ] <gap 2>
+
+### Layer Audit
+| Requirement / Criterion | Inputs needed | Proposed layer | Inputs available at that layer? | Resolution |
+|-------------------------|---------------|----------------|--------------------------------|------------|
+| <id or short title>     | <list>        | script / skill op / agent / hook | yes / no | <"correct" or "move to <higher layer>"> |
 
 ### Generated Acceptance Criteria
 - [ ] <criterion derived from edge case or gap>
