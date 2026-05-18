@@ -25,7 +25,7 @@ The planning workflow runs these phases in order:
 2. **DESIGN.md reconciliation** — compare workspace DESIGN.md against problem validation, repo docs, and strategic docs
 3. **Solution search** — QMD hybrid search over the Obsidian vault for relevant prior notes (DD4)
 4. **Research gating** — decide if external research is needed based on risk
-5. **SpecFlow analysis** — walk user flows to find edge cases and audit which layer (script / skill op / agent / hook) each requirement belongs to
+5. **SpecFlow analysis** — walk user flows to find edge cases and audit the layer each requirement belongs to
 6. **Detail level selection** — choose plan depth based on complexity
 7. **Plan generation** — produce markdown plan with checkable criteria
 8. **ADR propagation** — propagate superseding decisions to strategic docs, issues, and project board
@@ -78,7 +78,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/specflow-analysis.md`
 
-**Quick summary**: Systematically walks all user/operational flows, maps decision points, enumerates error states and edge cases, identifies specification gaps, audits where each requirement should run (script / skill operation / agent / hook) to catch layer mismatches before implementation, and generates acceptance criteria from findings.
+**Quick summary**: Systematically walks all user/operational flows, maps decision points, enumerates error states and edge cases, identifies specification gaps, audits where each requirement should run to catch layer mismatches before implementation, and generates acceptance criteria from findings.
 
 ### 6. Detail Level Selection
 
