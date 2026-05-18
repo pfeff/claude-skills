@@ -316,7 +316,9 @@ Want me to capture any of these as Obsidian notes?
    - Skip all
    - Adjust the framing
 
-5. **For each selected problem**, write an Obsidian note via `obsidian-notes` (preferred: `/finish`'s session-journal picks these up) or a direct note in the vault. Include the problem, root cause, fix, and affected repo in the body so QMD's hybrid retrieval can surface it. Do not route through `/compound` — `/compound` is deprecated (DD5) and its `docs/solutions/` output is no longer a retrieval surface (DD4).
+5. **For each selected problem**:
+   - **With a concrete, reusable fix**: invoke `/claude-skills:compound` to capture it as a `type=solution` note in the vault. `/compound` walks the structured problem → symptoms → root cause → fix → prevention prompts and delegates the write to `obsidian-notes`.
+   - **Looser observations without a discrete fix**: write a direct Obsidian note via the `obsidian-notes` skill (preferred: `/finish`'s session-journal picks these up). Include the problem, root cause, fix, and affected repo in the body so QMD's hybrid retrieval can surface it.
 
 6. **Record captured notes** for the Phase 4 output note (see the Captured Solution Notes section in the template below)
 
