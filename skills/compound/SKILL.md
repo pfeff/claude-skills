@@ -1,6 +1,6 @@
 ---
 name: compound
-description: "[DEPRECATED — will be removed after Phase 5 observation window] Document a solved problem as a searchable solution with YAML frontmatter. Retained as a transitional tool; retrieval has moved to QMD-over-Obsidian, so new solution knowledge should go into the vault directly instead of docs/solutions."
+description: "Document a solved problem as a searchable solution note in the host's Obsidian vault. Captures a single fix with YAML frontmatter for QMD-based agent discovery; delegates the file write to the obsidian-notes skill."
 argument-hint: "[short problem description or blank for interactive]"
 allowed-tools:
   - Read
@@ -10,22 +10,20 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Compound Skill
 
-> **⚠️ DEPRECATED (qmd-retrieval migration, DD4/DD5)** — retrieval has moved to QMD-over-Obsidian. `docs/solutions/` is no longer a retrieval surface. New solution knowledge should be captured as regular Obsidian notes (via `/finish` session-journal or a direct note), not through this skill. `/compound` is retained functionally during the Phase 5 observation window (2–4 weeks post-2026-04-24) and will be removed afterward per DD5. Do not invoke for new captures — prefer the Obsidian path.
+Captures a solved problem as a `type=solution` note in the host's Obsidian vault, using the vault's `Solution` template. Notes are discovered by future agents via QMD hybrid search (BM25 + vector + reranker) over the vault.
 
-Historically: captured a solved problem as a searchable solution document with YAML frontmatter, filed in `docs/solutions/<category>/` within a repository and discovered by agents via grep-first frontmatter search. The grep-first retrieval path has been replaced by QMD hybrid search over the Obsidian vault — the description below applies to the legacy behavior preserved during the transition window.
-
-## Core Concepts (legacy — retained for transition window)
+## Core Concepts
 
 **Single-problem focus**: Unlike `/claude-skills:lessons-learned` (session retrospective), `/claude-skills:compound` documents one solved problem at a time. Lightweight, focused, fast.
 
-**Grep-first discoverability**: YAML frontmatter fields (`problem_type`, `tags`, `symptoms`, `module`) historically enabled agents to filter solutions by scanning metadata. Retrieval now runs through QMD — these fields are not consulted at query time.
+**Vault-resident**: Notes live in the Obsidian vault, not in any repository's `docs/`. The actual file write is delegated to the `obsidian-notes` skill (CLI-first); vault location is resolved per-host from `~/.claude/hosts/<hostname>.md`.
 
-**Schema**: Solution docs follow the schema defined in [guardian/docs/solutions/SCHEMA.md](https://github.com/pfeff/guardian/blob/main/docs/solutions/SCHEMA.md).
+**Schema**: Solution notes use the vault's `Solution` template. Frontmatter fields, body sections, and the `type=solution` vocabulary are defined in `$OBSIDIAN_VAULT_PATH/Templates/Solution.md`.
 
 ## Invocation
 
@@ -46,33 +44,37 @@ Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/compound/operations/document-solut
 
 **Step 2**: Execute the operation interactively
 
-**Step 3**: Report the created file path and suggest committing
+**Step 3**: Report the created note path in the vault
 
 ## Operations
 
 ### Document Solution (Default)
 
 **File**: `operations/document-solution.md`
-**When**: User invokes `/claude-skills:compound` to capture a solved problem
+**When**: User invokes `/claude-skills:compound` to capture a solved problem.
 
-**Quick summary**: Gather problem context, generate frontmatter, write solution doc, suggest git commit.
+**Quick summary**: Gather problem context, generate frontmatter, write a `type=solution` note via the `obsidian-notes` skill using the vault's `Solution` template.
 
 ## Output
 
-Creates a solution document at:
+Creates a solution note at:
+
 ```
-<repo>/docs/solutions/<category>/<YYYY-MM-DD>-<short-description>.md
+<vault>/Notes/<YYYY>/<MM>/<YYYY-MM-DD>-<slug>.md
 ```
+
+`<vault>` is resolved by the `obsidian-notes` skill from the host config.
 
 ## Integration Points
 
-- **Schema**: `guardian/docs/solutions/SCHEMA.md` — frontmatter field definitions (legacy)
-- **Template**: `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/templates/solution.md.tmpl` — base template (legacy)
-- **Search**: _Historical_. `init-workspace` step 9 now retrieves via QMD (`references/solution-search.md`); it does not read `docs/solutions/`.
-- **Lessons-learned**: Phase 3d no longer bridges to `/claude-skills:compound`. Problems worth capturing are written as Obsidian notes directly.
+- **Vault Solution template**: `<vault>/Templates/Solution.md` — frontmatter schema (`type`, `date`, `problem_type`, `severity`, `module`, `repo`, `project`, `tags`, `keywords`, `related`) and body sections (Problem, Symptoms, Root Cause, Solution, Prevention).
+- **Obsidian-notes skill**: `~/.claude/skills/obsidian-notes/SKILL.md` — CLI surface (`create`, `property:set`, `append`) used for the write, plus the non-blocking failure contract.
+- **Host config**: `~/.claude/hosts/<hostname>.md` `## Obsidian` section — vault path, CLI binary.
+- **Retrieval**: QMD hybrid search over the vault — `skills/task-workflow/references/solution-search.md` defines the canonical query protocol used by `init-workspace`, `planning-workflow`, and other read-side callers.
+- **Lessons-learned bridge**: Phase 3d of `/claude-skills:lessons-learned` may invoke `/claude-skills:compound` for problems with concrete, reusable fixes.
 
 ## See Also
 
-- `/claude-skills:lessons-learned` — Session retrospective (may bridge to `/claude-skills:compound`)
-- `/claude-skills:self-improvement` — Apply recommendations to skills
-- `guardian/docs/solutions/SCHEMA.md` — Frontmatter schema reference
+- `/claude-skills:lessons-learned` — Session retrospective; bridges to `/claude-skills:compound` for concrete fixes.
+- `/claude-skills:self-improvement` — Apply recommendations to skills.
+- `obsidian-notes` skill — CLI surface for vault writes.
