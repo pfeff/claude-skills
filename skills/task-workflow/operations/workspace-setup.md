@@ -94,7 +94,6 @@ Templates are in `skills/task-workflow/templates/` and use `${VAR}` syntax for `
 - `DESIGN.md.tmpl` - Task design document
 - `CLAUDE.md.tmpl` - Workspace CLAUDE.md
 - `.envrc.tmpl` - direnv configuration
-- `solution.md.tmpl` - Solution documentation (used manually, not during setup)
 
 ## Verification
 
