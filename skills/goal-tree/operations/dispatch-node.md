@@ -12,6 +12,7 @@ Executes the chosen dispatch strategy for a node. Handles container dispatch via
 | `tree_id` | Yes | Coordinator tree ID |
 | `project_dir` | Yes | Project directory path |
 | `project_branch` | Yes | Project branch name |
+| `context_depth` | No | Context depth from dispatch-decision: `lean`, `standard` (default), or `full`. Controls how much project context is included in the spec. Passed to `dispatch-container.sh --context-depth`. |
 | `prior_failures` | No | List of prior failure telemetry records (populated on retry dispatches). Each entry contains: attempt_number, failure_status, failure_reason, parameter_change_applied. |
 | `additional_prompt` | No | Extra context appended to DESIGN.md on retry (error details, approach hints). |
 
@@ -97,7 +98,7 @@ If `prior_failures` is provided (retry dispatch), append the failure history —
 
 ## Node Workspace Setup (Tmux Only)
 
-Host workspace creation applies **only to tmux dispatch**. Container dispatch does not create host workspaces — AC manages volumes.
+Host workspace creation applies **only to tmux dispatch**. Container dispatch does not create host workspaces — AC manages Docker volumes (see Volume Lifecycle above).
 
 ```bash
 skills/goal-tree/scripts/create-node-workspace.sh \
@@ -150,11 +151,87 @@ Proceed with this assumption, or redirect?
 
 **When to skip**: If the assumption is low-risk (cosmetic, easily reversible, local to one file) and doesn't constrain other nodes, proceed without surfacing. The heuristic is: **would the human want to know this before I build on top of it?**
 
+## Permission Pre-Configuration (Tmux Only)
+
+After workspace creation (tmux dispatch), generate `.claude/settings.json` with repo-appropriate permissions. This eliminates >90% of permission prompts that break child session flow.
+
+Key insight: permission patterns must match actual command strings children use, including `cd /path &&` prefixes and `MIX_ENV=test` prefixes.
+
+```bash
+SETTINGS_DIR="$WORKSPACE_PATH/.claude"
+mkdir -p "$SETTINGS_DIR"
+
+cat > "$SETTINGS_DIR/settings.json" <<'SETTINGS'
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(mix test:*)",
+      "Bash(mix compile:*)",
+      "Bash(mix deps*:*)",
+      "Bash(mix format:*)",
+      "Bash(mix ecto*:*)",
+      "Bash(MIX_ENV=* mix:*)",
+      "Bash(cd * && mix:*)",
+      "Bash(cd * && MIX_ENV=* mix:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(mkdir:*)",
+      "Bash(coord:*)",
+      "Bash(gh pr:*)",
+      "Bash(docker:*)"
+    ]
+  }
+}
+SETTINGS
+```
+
+The `create-workspace.sh` script (task-workflow) handles this via `settings.json.tmpl` — the template already includes base permissions. For tmux dispatch, the permissions above supplement the template defaults to cover Elixir-specific patterns.
+
+If the workspace was created by `create-node-workspace.sh`, settings.json is already copied from the template. Merge the Elixir-specific patterns into the existing file rather than overwriting:
+
+```bash
+# If settings.json already exists (from create-workspace.sh), merge permissions
+if [[ -f "$SETTINGS_DIR/settings.json" ]]; then
+  # Add Elixir patterns to existing allow list
+  jq '.permissions.allow += [
+    "Bash(mix test:*)",
+    "Bash(mix compile:*)",
+    "Bash(mix deps*:*)",
+    "Bash(mix format:*)",
+    "Bash(mix ecto*:*)",
+    "Bash(MIX_ENV=* mix:*)",
+    "Bash(cd * && mix:*)",
+    "Bash(cd * && MIX_ENV=* mix:*)"
+  ] | .permissions.allow |= unique' "$SETTINGS_DIR/settings.json" > "$SETTINGS_DIR/settings.json.tmp" \
+    && mv "$SETTINGS_DIR/settings.json.tmp" "$SETTINGS_DIR/settings.json"
+fi
+```
+
 ## Strategy Execution
 
 ### Container (Default)
 
-The default execution strategy. Dispatches the node to AC, which manages the entire container lifecycle — volume creation, repo cloning, spec injection, CLAUDE.md injection, and editor container launch. No host workspace is created.
+The default execution strategy. Dispatches the node to AC, which manages the entire container lifecycle via Docker volumes. No host-directory workspace is created — all workspace state lives in a Docker volume.
+
+#### Volume Lifecycle
+
+The container dispatch uses a volume-based workspace model:
+
+1. **Volume creation**: AC creates a Docker volume with `ac.*` labels (`ac.managed`, `ac.tree_id`, `ac.node_id`, `ac.role=workspace`) for identity and lifecycle tracking.
+2. **Setup container**: A transient `alpine/git` container mounts the volume and performs:
+   - Fresh `git clone` of each repo into `/workspace/<repo-name>`
+   - Branch checkout (creates branch if it doesn't exist on remote)
+   - DESIGN.md (spec content) written to `/workspace/DESIGN.md`
+   - CLAUDE.md (operational context) written to `/workspace/CLAUDE.md`
+3. **Editor container**: The main execution container (default: `ghcr.io/pfeff/ralph:latest`) mounts the volume at `/workspace` and runs the agent loop.
+4. **Result extraction**: When the editor container exits, AC's `ResultExtractor` reads results from the volume — commits, PR URLs, plan completion state — and records them on the node.
+5. **Volume cleanup**: After result extraction, the volume is removed. Failed dispatches retain volumes for debugging until explicitly cleaned up.
 
 #### 1. Call `ac_node_update` action=dispatch
 
@@ -165,18 +242,34 @@ ac_node_update:
   action: dispatch
   tree_id: ${TREE_ID}
   node_id: ${NODE_DB_ID}
-  params:
-    repos: [list of repo URLs]
-    branch: "${PROJECT_BRANCH}/${NODE_ID}"
-    spec_content: <DESIGN.md content built from Spec Content section above>
+  repos: [list of repo URLs]
+  branch: "${PROJECT_BRANCH}/${NODE_ID}"
+  spec_content: <DESIGN.md content built from Spec Content section above>
 ```
 
-AC handles:
-- **Volume creation**: Docker volume with `ac.*` labels for identity
-- **Repo cloning**: Fresh clone of each repo into the volume
-- **Spec injection**: DESIGN.md written into workspace root
-- **CLAUDE.md injection**: Operational context for the child agent
-- **Container launch**: Editor container started with volume mounted
+Alternatively, from a bash script, call `dispatch-container.sh` which sends the equivalent JSON-RPC request to `${COORDINATOR_URL}/mcp`:
+
+```bash
+skills/goal-tree/scripts/dispatch-container.sh <node-workspace-path> [--context-depth lean|standard|full] [--image <image>] [--dry-run]
+```
+
+The script reads DESIGN.md from the workspace, extracts repo remote URLs, and calls `ac_node_update(action="dispatch")` via the MCP endpoint. The `--context-depth` flag (from dispatch-decision's `context_depth` output) controls how much of DESIGN.md is passed as `spec_content`.
+
+#### Output Streaming
+
+Container dispatch automatically sets up incremental output streaming. During execution, `stream-output.sh` (started by `loop.sh`) tails the agent's iteration logs (`.ralph/iteration-*.jsonl`) and POSTs extracted assistant text to AC as heartbeat progress updates every 30 seconds.
+
+This enables the LiveView dashboard to show real-time output for active container nodes without requiring `tmux attach` or manual monitoring. The streaming is best-effort — failures are silently ignored and don't affect the agent's execution.
+
+Env vars required (injected by `dispatch.ex`):
+- `AC_TREE_ID` — goal tree ID
+- `AC_NODE_ID` — node ID string
+- `COORDINATOR_URL` — AC base URL
+- `COORDINATOR_TOKEN` — bearer token
+
+Optional tuning:
+- `STREAM_INTERVAL` — seconds between posts (default: 30)
+- `STREAM_MAX_CHARS` — max characters per chunk (default: 4000)
 
 #### 2. Capture dispatch response
 

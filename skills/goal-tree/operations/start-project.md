@@ -295,6 +295,17 @@ The project slug is a 2-3 word identifier. Choose it carefully — it's the prim
 
 Write a CLAUDE.md in the project directory. This file is the agent's primary context on session entry — it must contain enough to operate correctly even if the skill isn't explicitly loaded.
 
+**CLAUDE.md is configuration, not a log.** It should contain workflow instructions, standing rules, active phase pointer, and repo paths. It should NOT accumulate session history, progress notes, or design decision lists. Those belong in sibling files:
+
+| Content type | Target file |
+|-------------|-------------|
+| Session history, completed work | `PROGRESS.md` |
+| Design decisions | `DECISIONS.md` |
+| Cycle retrospectives, lessons | `memory/lessons_cycle_<N>.md` |
+| Goal tree state | `GOAL.md` |
+
+CLAUDE.md loads into every message in every conversation in this directory tree. Every byte added to it multiplies across all future interactions. Target: **<5 KB**. If CLAUDE.md is growing between sessions, something is wrong.
+
 ```markdown
 # Goal: <root goal title>
 
@@ -332,10 +343,10 @@ To continue the OODA loop: `/project:next`
 - **Tree ID**: <tree-id or "pending — bootstrap mode">
 - **API**: $COORDINATOR_URL
 
-## Design Decisions
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| <any decisions made during conversation> |
+## Current Phase
+<1-3 line summary of active phase. Update in place, don't append.>
+
+For session history see `PROGRESS.md`. For design decisions see `DECISIONS.md`.
 
 ## Repos (SOURCE — do not edit directly)
 <list of repos and their source paths>

@@ -1,4 +1,5 @@
 {
+  "model": "${MODEL}",
   "permissions": {
     "allow": [
       "Skill(task-workflow)",
@@ -24,17 +25,39 @@
       "Bash(shellcheck:*)",
       "Bash(jq:*)",
       "Bash(ls:*)",
+      "Bash(find:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(diff:*)",
       "Bash(sort:*)",
+      "Bash(command -v:*)",
+      "Bash(ccusage:*)",
+      "Bash(qmd collection:*)",
       "Bash(pytest:*)",
       "Bash(go test:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(bats:*)",
+      "Bash(mix test:*)",
+      "Bash(mix compile:*)",
+      "Bash(mix deps*:*)",
+      "Bash(mix format:*)",
+      "Bash(mix ecto*:*)",
+      "Bash(MIX_ENV=* mix:*)",
+      "Bash(cd * && mix:*)",
+      "Bash(cd * && MIX_ENV=* mix:*)",
+      "Bash(coord:*)",
+      "Bash(gh pr:*)"
     ],
     "deny": [
       "Bash(rm -rf /:*)",
-      "Bash(sudo:*)"
+      "Bash(sudo:*)",
+      "Bash(find * -exec:*)",
+      "Bash(find * -execdir:*)",
+      "Bash(find * -delete:*)",
+      "Bash(find * -fprint:*)",
+      "Bash(find * -fprintf:*)",
+      "Bash(find * -ok:*)",
+      "Bash(find * -okdir:*)"
     ]
   },
   "hooks": {

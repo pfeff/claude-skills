@@ -65,3 +65,7 @@ Report findings as markdown using this structure:
 - **file:line** — _category_ — Description and recommendation.
 
 If no findings in a severity level, omit that section. If no findings at all, say "No simplicity issues found."
+
+## BLOCKING Eligibility
+
+The synthesizer restricts BLOCKING to correctness failures, security vulnerabilities, and data-loss risks. **No findings from this agent are BLOCKING-eligible** — over-engineering, dead code, and YAGNI violations are always ADVISORY. Do not label any simplicity finding as Critical in a way that implies it should block a merge; use Warning or Info.

@@ -7,11 +7,15 @@
 #
 # Usage:
 #   create-workspace.sh --task-id ID --epic EPIC --headline "HEADLINE" \
-#     [--repos REPOS] [--issue ISSUE] [--description DESC]
+#     [--repos REPOS] [--model ALIAS] [--issue ISSUE] [--description DESC]
 #
 # When --issue is provided, --task-id and --headline can be omitted and will
 # be derived from the GitHub issue metadata via `gh issue view`.
 # Explicit flags always override derived values.
+#
+# --model ALIAS   Claude model alias for the workspace session (e.g. opus,
+#                 sonnet, haiku, or full model IDs). Defaults to "sonnet" when
+#                 omitted.
 #
 # Exit codes:
 #   0 - Success
@@ -41,12 +45,14 @@ TASK_ID=""
 EPIC=""
 HEADLINE=""
 REPOS=""
+MODEL=""
 ISSUE_REF=""
 DESCRIPTION=""
 
 # Node mode values
 MODE=""
 NODE_ID=""
+NODE_DB_ID=""
 PROJECT_DIR=""
 PROJECT_BRANCH=""
 
@@ -69,6 +75,10 @@ while [[ $# -gt 0 ]]; do
       REPOS="$2"
       shift 2
       ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
     --issue)
       ISSUE_REF="$2"
       shift 2
@@ -83,6 +93,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --node-id)
       NODE_ID="$2"
+      shift 2
+      ;;
+    --node-db-id)
+      NODE_DB_ID="$2"
       shift 2
       ;;
     --project-dir)
@@ -318,9 +332,11 @@ format_repos_list() {
   local IFS=','
   for repo in $repos; do
     repo=$(echo "$repo" | xargs)  # trim whitespace
+    local repo_path
+    repo_path=$(resolve_repo_path "$repo" 2>/dev/null || echo "$repo")
     local repo_basename
-    repo_basename=$(basename "$repo")
-    echo "- $repo: \`$workspace_path/$repo_basename\`"
+    repo_basename=$(basename "$repo_path")
+    echo "- $repo_basename: \`$workspace_path/$repo_basename\`"
   done
 }
 
@@ -540,12 +556,13 @@ else
   exit 3
 fi
 
-# Copy settings.json (static template, no envsubst needed)
+# Render settings.json (envsubst for MODEL variable)
+MODEL="${MODEL:-sonnet}"
 mkdir -p "$WORKSPACE_PATH/.claude"
-if cp "$TEMPLATE_DIR/settings.json.tmpl" "$WORKSPACE_PATH/.claude/settings.json"; then
+if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
   echo "  .claude/settings.json: created"
 else
-  echo "Error: Failed to copy settings.json" >&2
+  echo "Error: Failed to render settings.json" >&2
   exit 3
 fi
 
@@ -625,8 +642,11 @@ if [[ -n "$REPOS" ]]; then
     if ! git worktree add "$worktree_path" -b "$branch_name" "origin/$default_branch" 2>/dev/null; then
       # Branch might already exist, try without -b
       if ! git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
-        echo "Error: Failed to create worktree for $repo" >&2
-        exit 4
+        # Local-only repo (no origin): create new branch from current HEAD
+        if ! git worktree add "$worktree_path" -b "$branch_name" 2>/dev/null; then
+          echo "Error: Failed to create worktree for $repo" >&2
+          exit 4
+        fi
       fi
     fi
 
@@ -649,39 +669,10 @@ if [[ -n "$REPOS" ]]; then
 fi
 
 #------------------------------------------------------------------------------
-# Step 6: Create docs/solutions/ directories in repo worktrees
+# Step 6: (removed) docs/solutions/ scaffold — retrieval now lives in QMD over
+# the Obsidian vault (DD4). Repo-local solution trees are no longer a retrieval
+# surface and scaffolding empty subdirectories just attracts drift.
 #------------------------------------------------------------------------------
-
-SOLUTION_CATEGORIES="build-errors test-failures performance-issues runtime-errors integration-issues workflow-issues best-practices patterns"
-
-if [[ -n "$REPOS" ]]; then
-  echo "Creating docs/solutions/ directories..."
-
-  IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
-  for repo in "${REPO_ARRAY[@]}"; do
-    repo=$(echo "$repo" | xargs)
-    repo_path=$(resolve_repo_path "$repo")
-    repo_basename=$(basename "$repo_path")
-    worktree_path="$WORKSPACE_PATH/$repo_basename"
-
-    if [[ -d "$worktree_path" ]]; then
-      for category in $SOLUTION_CATEGORIES; do
-        mkdir -p "$worktree_path/docs/solutions/$category"
-      done
-
-      # Add .gitkeep to empty directories so git tracks them
-      for category in $SOLUTION_CATEGORIES; do
-        if [[ ! "$(ls -A "$worktree_path/docs/solutions/$category" 2>/dev/null)" ]]; then
-          touch "$worktree_path/docs/solutions/$category/.gitkeep"
-        fi
-      done
-
-      echo "  $repo_basename: docs/solutions/ created"
-    fi
-  done
-else
-  echo "Skipping docs/solutions/ (no repos specified)"
-fi
 
 #------------------------------------------------------------------------------
 # Step 7: Run direnv allow
@@ -771,11 +762,11 @@ else
   verify_check ".envrc contains CLAUDE_CODE_TASK_LIST_ID" "fail"
 fi
 
-# Check 5: .claude/settings.json exists with permissions
-if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json"; then
-  verify_check ".claude/settings.json contains permissions" "pass"
+# Check 5: .claude/settings.json exists with permissions and model
+if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json" && grep -q '"model"' "$WORKSPACE_PATH/.claude/settings.json"; then
+  verify_check ".claude/settings.json contains permissions and model" "pass"
 else
-  verify_check ".claude/settings.json contains permissions" "fail"
+  verify_check ".claude/settings.json contains permissions and model" "fail"
 fi
 
 # Check 6: .tmuxp.yaml exists with correct session name
@@ -893,7 +884,12 @@ create_node_workspace() {
     fi
   fi
 
-  NODE_BRANCH="$PROJECT_BRANCH/$NODE_ID"
+  # Strip "-main" integration-branch suffix when composing the node-branch prefix.
+  # Projects whose parent branch ends in "-main" (e.g. loop-optimizer-main) use a "-"
+  # for the integration branch but a "/" namespace for nodes (loop-optimizer/<node>),
+  # because git refuses both a leaf branch <X> and a directory <X>/<Y>. Without the
+  # strip, the node branch (loop-optimizer-main/<node>) collides with the leaf.
+  NODE_BRANCH="${PROJECT_BRANCH%-main}/$NODE_ID"
 
   echo "  Path: $WORKSPACE_PATH"
   echo "  Branch: $NODE_BRANCH"
@@ -944,6 +940,8 @@ create_node_workspace() {
   # Step 4: Create .envrc that sources parent
   # Generate unique task list ID so child doesn't clobber parent's task list
   CHILD_TASK_LIST_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  COORD_LINE=""
+  [[ -n "$NODE_DB_ID" ]] && COORD_LINE="export COORDINATOR_TASK_ID=\"$NODE_DB_ID\""
   cat > "$WORKSPACE_PATH/.envrc" << EOF
 # Node workspace - inherits from project
 source_up
@@ -952,6 +950,7 @@ source_up
 export CLAUDE_CODE_TASK_LIST_ID="$CHILD_TASK_LIST_ID"
 export NODE_ID="$NODE_ID"
 export NODE_BRANCH="$NODE_BRANCH"
+$COORD_LINE
 EOF
   echo "  .envrc: created"
 
@@ -963,7 +962,7 @@ EOF
     repo_basename=$(basename "$repo_path")
     worktree_path="$WORKSPACE_PATH/$repo_basename"
 
-    echo "  $repo:"
+    echo "  $repo_basename:"
     echo "    Source: $repo_path"
     echo "    Worktree: $worktree_path"
     echo "    Branch: $NODE_BRANCH"
@@ -973,18 +972,23 @@ EOF
     git fetch origin "$default_branch" --quiet 2>/dev/null || true
 
     if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" "origin/$default_branch" 2>/dev/null; then
+      # Branch might already exist
       if ! git worktree add "$worktree_path" "$NODE_BRANCH" 2>/dev/null; then
-        echo "Error: Failed to create worktree for $repo" >&2
-        exit 4
+        # Local-only repo (no origin): create new branch from current HEAD
+        if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" 2>/dev/null; then
+          echo "Error: Failed to create worktree for $repo_basename" >&2
+          exit 4
+        fi
       fi
     fi
     echo "    Created worktree"
   done
 
-  # Step 6: Copy .claude/settings.json
-  echo "Copying settings..."
+  # Step 6: Render .claude/settings.json (envsubst for MODEL variable)
+  echo "Rendering settings..."
+  MODEL="${MODEL:-sonnet}"
   mkdir -p "$WORKSPACE_PATH/.claude"
-  if cp "$TEMPLATE_DIR/settings.json.tmpl" "$WORKSPACE_PATH/.claude/settings.json"; then
+  if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
     echo "  .claude/settings.json: created"
   else
     echo "  .claude/settings.json: failed (non-fatal)" >&2
@@ -1054,12 +1058,12 @@ EOF
     if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
       actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD)
       if [[ "$actual_branch" == "$NODE_BRANCH" ]]; then
-        verify_check "Worktree $repo on correct branch" "pass"
+        verify_check "Worktree $repo_basename on correct branch" "pass"
       else
-        verify_check "Worktree $repo on correct branch ($actual_branch != $NODE_BRANCH)" "fail"
+        verify_check "Worktree $repo_basename on correct branch ($actual_branch != $NODE_BRANCH)" "fail"
       fi
     else
-      verify_check "Worktree $repo exists" "fail"
+      verify_check "Worktree $repo_basename exists" "fail"
     fi
   done
 

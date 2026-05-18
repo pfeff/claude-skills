@@ -214,7 +214,7 @@ for node, decision in discuss_nodes:
 
 ### 4. Monitor Active Nodes
 
-Poll active nodes until at least one completes or needs intervention. Monitoring branches on `dispatch_method` — container nodes use AC MCP, tmux nodes use tmux IPC.
+Active monitoring loop for dispatched nodes. Each poll cycle performs four substeps: status check, permission servicing, PR detection with auto-review, and stuck detection.
 
 #### Monitoring Loop
 
@@ -232,7 +232,11 @@ while active_nodes is not empty:
   sleep 30  # adjust based on expected task duration
 ```
 
-#### Container Monitoring
+#### 4a. Monitor Active Nodes (Status Check)
+
+For each active node, check current status:
+
+**Container dispatch**: Query AC for node heartbeats, check container status.
 
 ```
 function monitor_container_node(node_id, node_info):
@@ -254,24 +258,16 @@ function monitor_container_node(node_id, node_info):
     active_nodes.remove(node_id)
     return
 
-  # 4. Detect stall
+  # 4. Check for PR (step 4c)
+  check_for_pr(node_id, node_info)
+
+  # 5. Detect stall (step 4d)
   node_info.monitoring_cycles += 1
   if node_info.monitoring_cycles > STALL_THRESHOLD:
     handle_stall(node_id, node_info)
 ```
 
-**MCP notifications**: When available, the `node_updated` SSE stream from AC supplements polling. The control session holds the stream open and receives push notifications when node status changes. This reduces polling latency for container nodes but does not replace the polling loop (SSE connections can drop).
-
-```
-# SSE notification handler (supplements polling, does not replace it)
-on node_updated(event):
-  if event.node_id in active_nodes:
-    if event.status == "completed":
-      collect_result(event.node_id, active_nodes[event.node_id])
-      active_nodes.remove(event.node_id)
-```
-
-#### Tmux Monitoring
+**Tmux dispatch**: Capture pane output, check for permission prompts and completion signals.
 
 ```
 function monitor_tmux_node(node_id, node_info):
@@ -295,14 +291,124 @@ function monitor_tmux_node(node_id, node_info):
     active_nodes.remove(node_id)
     return
 
-  # 5. Detect need for intervention
+  # 5. Service permission prompts (step 4b)
+  service_permission_prompts(node_id, node_info, output)
+
+  # 6. Detect need for intervention
   if output contains "Assumption Check" or "Escalation Required" or "blocked":
     intervene(node_id, node_info, output)
 
-  # 6. Detect stall
+  # 7. Check for PR (step 4c)
+  check_for_pr(node_id, node_info)
+
+  # 8. Detect stall (step 4d)
   node_info.monitoring_cycles += 1
   if node_info.monitoring_cycles > STALL_THRESHOLD:
     handle_stall(node_id, node_info)
+```
+
+**MCP notifications**: When available, the `node_updated` SSE stream from AC supplements polling. The control session holds the stream open and receives push notifications when node status changes. This reduces polling latency for container nodes but does not replace the polling loop (SSE connections can drop).
+
+```
+# SSE notification handler (supplements polling, does not replace it)
+on node_updated(event):
+  if event.node_id in active_nodes:
+    if event.status == "completed":
+      collect_result(event.node_id, active_nodes[event.node_id])
+      active_nodes.remove(event.node_id)
+```
+
+#### 4b. Service Permission Prompts (Tmux Only)
+
+If a child session is blocked on a permission prompt, the L1 control session can unblock it:
+
+```
+function service_permission_prompts(node_id, node_info, output):
+  # Detect permission prompt patterns in pane output
+  if output contains "Allow" or "permission" or "approve":
+    # Read the command being requested
+    command_requested = extract_permission_command(output)
+
+    # Evaluate safety: is this command aligned with the node's objective?
+    if command_is_safe(command_requested, node_info.node):
+      # Approve by pressing 'y' or sending the approval key
+      tmux send-keys -t "$SESSION_NAME" "y" Enter
+      log("Approved permission for $NODE_ID: $command_requested")
+    else:
+      # Reject and send corrective guidance
+      tmux send-keys -t "$SESSION_NAME" "n" Enter
+      tmux send-keys -l -t "$SESSION_NAME" "Command rejected: $command_requested is not aligned with task objective."
+      tmux send-keys -t "$SESSION_NAME" Enter
+      log("Rejected permission for $NODE_ID: $command_requested")
+```
+
+Safe command heuristics:
+- **Allow**: `mix test`, `mix compile`, `mix deps.get`, `mix format`, `git add/commit/push/diff/log/status`, `mkdir`, `docker`, `gh pr`, `coord`, file reads/writes within the workspace
+- **Reject**: `rm -rf /`, `sudo`, commands targeting directories outside the workspace, network calls to unknown hosts
+- **Escalate**: Ambiguous commands — log and skip (child retries or uses a different approach)
+
+#### 4c. Detect PR Push
+
+Check if the child has pushed commits or created a PR:
+
+```
+function check_for_pr(node_id, node_info):
+  node = node_info.node
+  branch = node.branch  # e.g., "autoresearch/C.3.27/D.1"
+
+  # Check for open PRs on this branch
+  pr_json = gh pr list --repo $REPO --head $BRANCH --json number,state --jq '.[0]'
+
+  if pr_json is not empty and pr_json.state == "OPEN":
+    pr_number = pr_json.number
+
+    # Load and execute the L1 review protocol
+    Load: operations/l1-review.md
+
+    review_result = l1_review(
+      pr_number=pr_number,
+      repo=$REPO,
+      node_id=node_id,
+      tree_id=$TREE_ID,
+      workspace_path=node_info.workspace_path
+    )
+
+    if review_result.verdict == "APPROVE":
+      # Merge, deploy if needed, mark complete
+      # l1-review.md handles merge + deploy + coordinator update
+      active_nodes.remove(node_id)
+      completed_nodes.append(node)
+
+      # Auto-continue: go to step 1 (select next ready nodes)
+      break  # exit monitoring loop to re-enter main loop
+
+    elif review_result.verdict == "REJECT":
+      # l1-review.md handles PR comment + coordinator blocked status
+      # Child session should pick up feedback and retry
+      log("PR #$pr_number rejected for $NODE_ID — child should address feedback")
+```
+
+#### 4d. Stuck Detection
+
+If a node has been active for an extended period with no heartbeat or pane activity:
+
+```
+STUCK_MINUTES = 30
+STUCK_RESPONSE_MINUTES = 5
+
+function check_stuck(node_id, node_info):
+  elapsed = now() - node_info.dispatch_time
+
+  if elapsed > STUCK_MINUTES * 60 and node_info.stall_count >= STALL_THRESHOLD:
+    if node_info.dispatch_method == "tmux":
+      # Send a status check to the child
+      tmux send-keys -l -t "$SESSION_NAME" "What is your current status? Are you blocked?"
+      tmux send-keys -t "$SESSION_NAME" Enter
+      node_info.stuck_check_sent = now()
+
+    # If no response after 5 more minutes, escalate
+    if node_info.stuck_check_sent and (now() - node_info.stuck_check_sent) > STUCK_RESPONSE_MINUTES * 60:
+      handle_stuck(node, "no_response", "No response to status check after ${STUCK_RESPONSE_MINUTES} minutes")
 ```
 
 #### Completion Detection
@@ -926,6 +1032,49 @@ After processing results, evaluate whether results change the strategic picture:
 
 When pausing, present the strategic observation and let the operator steer. Do not present a list of everything that happened — focus on the one thing that matters.
 
+### 5f. Gap Processing
+
+After a node completes and passes evaluation, check its dispatch result for structured gaps. Each gap becomes a new pending node in the goal tree, closing the loop between "noticed during execution" and "tracked for future work."
+
+**Input**: The completed node's dispatch result (from `dispatch_result.json` in the node workspace, or from the coordinator node's result field).
+
+**Reference**: See `references/dispatch-result-schema.md` for the gap object schema.
+
+```
+function process_gaps(node, dispatch_result):
+  gaps = dispatch_result.get("gaps", [])
+  if not gaps:
+    return  # no gaps to process
+
+  parent_id = node.parent_id  # default parent for new nodes
+
+  for gap in gaps:
+    target_parent = gap.get("suggested_parent", parent_id)
+
+    # Register as a new pending node in the goal tree
+    ac_node_update(
+      action="create",
+      tree_id=$TREE_ID,
+      parent_id=target_parent,
+      title=gap["title"],
+      description=gap["description"],
+      metadata={
+        "source": "gap",
+        "source_node": node.id,
+        "severity": gap["severity"]
+      }
+    )
+
+    log("Gap registered: '${gap.title}' under ${target_parent} (severity: ${gap.severity}, source: ${node.id})")
+
+  # Log summary in completion output
+  log("${len(gaps)} gap(s) captured from ${node.id} and registered as pending nodes")
+```
+
+**When to run**: After step 5a (evaluation passes) and before step 5c (commit). Gap processing is non-blocking — failures warn but do not prevent node advancement.
+
+**Error handling**: If coordinator is unreachable or node creation fails, warn and continue. The gap information is still preserved in `dispatch_result.json` in the workspace for manual recovery.
+
 ### 6. Re-Query and Continue
 
 Query the coordinator for fresh state (may have been updated by child sessions):
@@ -1173,3 +1322,4 @@ Dispatching 2 containers via AC...
   - `task-workflow/references/error-classification.md`
   - `task-workflow/references/retry-with-backoff.md`
   - `references/node-lifecycle.md`
+  - `references/dispatch-result-schema.md`

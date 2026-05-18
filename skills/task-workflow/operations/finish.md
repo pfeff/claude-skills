@@ -86,6 +86,75 @@ Failed to update issue checkboxes. You can update manually:
   gh issue edit <number> --repo <repo> --body "..."
 ```
 
+### 2a. Gap Capture
+
+Before committing and creating the PR, prompt for known gaps or deferred items. These are structured into `dispatch_result.json` so the goal tree can automatically register them as new nodes.
+
+```
+AskUserQuestion: "Are there known gaps or deferred items from this work?"
+  Options:
+    - "No gaps" → skip to step 3
+    - "Yes" → collect gap details
+```
+
+**If gaps exist**, collect each gap interactively:
+
+```
+For each gap:
+  AskUserQuestion: "Gap title (imperative form, e.g. 'Handle edge case X'):"
+  AskUserQuestion: "Description (what was deferred and why):"
+  AskUserQuestion: "Severity?"
+    Options: ["minor", "moderate", "major"]
+  AskUserQuestion: "Suggested parent node ID (or leave blank for current node's parent):"
+    Options: ["<blank>", "<enter node ID>"]
+```
+
+**Write `dispatch_result.json`** to the workspace root with the collected gaps:
+
+```json
+{
+  "status": "completed",
+  "summary": "<task completion summary from TaskList>",
+  "gaps": [
+    {
+      "title": "<gap title>",
+      "description": "<gap description>",
+      "severity": "<minor|moderate|major>",
+      "suggested_parent": "<node ID or null>"
+    }
+  ]
+}
+```
+
+```bash
+WORKSPACE_ROOT="$(pwd)"
+# Write dispatch_result.json (jq constructs the JSON from collected inputs)
+jq -n \
+  --arg status "completed" \
+  --arg summary "$SUMMARY" \
+  --argjson gaps "$GAPS_JSON" \
+  '{status: $status, summary: $summary, gaps: $gaps}' \
+  > "${WORKSPACE_ROOT}/dispatch_result.json"
+```
+
+**If no gaps**: Write `dispatch_result.json` with an empty gaps array:
+
+```json
+{
+  "status": "completed",
+  "summary": "<task completion summary>",
+  "gaps": []
+}
+```
+
+**Reference**: See `goal-tree/references/dispatch-result-schema.md` for the full schema.
+
+**On failure**: Warn and continue — gap capture is non-blocking:
+
+```
+Gap capture failed. You can manually create dispatch_result.json later.
+```
+
 ### 3. Commit Phase (R2)
 
 Identify workspace repositories from the "Relevant Repositories" section in CLAUDE.md, then check each for uncommitted changes:
@@ -419,6 +488,7 @@ To close this workspace, run from your control session:
 - **Lessons learned skill**: `skills/lessons-learned/SKILL.md`
 - **Close workspace script**: `skills/task-workflow/scripts/close-workspace.sh`
 - **Close workspace operation**: `skills/task-workflow/operations/close-workspace.md`
+- **Dispatch result schema**: `skills/goal-tree/references/dispatch-result-schema.md`
 - **Metrics log**: `~/src/work/.metrics/finish.jsonl`
 - **Task tracking**: Claude native `TaskList`, `TaskUpdate` tools
 - **Coordinator API** (optional): `COORDINATOR_URL`/`COORDINATOR_TOKEN`/`COORDINATOR_TASK_ID` — reports completion data to coordinator when set

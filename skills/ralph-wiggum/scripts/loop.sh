@@ -6,12 +6,18 @@ set -euo pipefail
 
 # Track background Claude PID for signal cleanup
 CLAUDE_PID=""
+STREAMER_PID=""
 
-# Ensure background Claude process is waited for before exit.
+# Ensure background processes are waited for before exit.
 # Without this, SIGTERM from timeout kills loop.sh while Claude is
 # still writing files, causing dispatch-container.sh to parse partial results.
 # shellcheck disable=SC2317,SC2329  # invoked indirectly via trap
-cleanup_claude() {
+cleanup() {
+  # Stop streamer first
+  if [[ -n "$STREAMER_PID" ]] && kill -0 "$STREAMER_PID" 2>/dev/null; then
+    kill "$STREAMER_PID" 2>/dev/null || true
+    wait "$STREAMER_PID" 2>/dev/null || true
+  fi
   if [[ -n "$CLAUDE_PID" ]] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
     echo "  [cleanup: waiting for Claude PID $CLAUDE_PID]"
     kill "$CLAUDE_PID" 2>/dev/null || true
@@ -19,7 +25,7 @@ cleanup_claude() {
   fi
   sync 2>/dev/null || true
 }
-trap cleanup_claude EXIT
+trap cleanup EXIT
 
 # Verify running inside container
 is_container() {
@@ -523,6 +529,38 @@ EXITEOF
 }
 
 echo "Starting Ralph loop (mode: $MODE, workspace: $WORKSPACE_MODE, max iterations: $MAX_ITER)"
+
+# Start output streaming to AC if env vars are set
+start_output_streaming() {
+  if [[ -z "${COORDINATOR_URL:-}" || -z "${COORDINATOR_TOKEN:-}" || -z "${AC_TREE_ID:-}" || -z "${AC_NODE_ID:-}" ]]; then
+    echo "  Output streaming: disabled (AC env vars not set)"
+    return
+  fi
+
+  mkdir -p .ralph
+
+  # Find stream-output.sh — check volume-injected path, then co-located
+  local stream_script=""
+  if [[ -f ".ac/stream-output.sh" ]]; then
+    stream_script=".ac/stream-output.sh"
+  elif [[ -f "$SCRIPT_DIR/stream-output.sh" ]]; then
+    stream_script="$SCRIPT_DIR/stream-output.sh"
+  elif [[ -f "/opt/ralph/stream-output.sh" ]]; then
+    stream_script="/opt/ralph/stream-output.sh"
+  fi
+
+  if [[ -z "$stream_script" ]]; then
+    echo "  Output streaming: disabled (stream-output.sh not found)"
+    return
+  fi
+
+  # Stream-output.sh watches .ralph/ for iteration-*.jsonl files
+  bash "$stream_script" ".ralph" &
+  STREAMER_PID=$!
+  echo "  Output streaming: started (PID $STREAMER_PID, interval ${STREAM_INTERVAL:-30}s)"
+}
+
+start_output_streaming
 
 EXIT_REASON=""
 PREV_PROGRESS=""

@@ -45,7 +45,7 @@ windows:
     start_directory: $WORKSPACE_DIR
     window_index: 9
     panes:
-      - claude
+      - ${CLAUDE_LAUNCH_CMD:-claude-safe}
 EOF
 
 # Kill existing session if it exists (tmuxp doesn't handle this automatically)

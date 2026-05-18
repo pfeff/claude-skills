@@ -1,97 +1,50 @@
 # Solution Search
 
-Search `docs/solutions/` for relevant past solutions before planning. Surfaces prior knowledge to avoid redundant research and repeat mistakes.
+Surfaces prior knowledge from the Obsidian vault before planning so the plan doesn't re-solve problems already captured. Used by `planning-workflow` to produce a "Prior Solutions" section for the plan.
+
+Per DD4 (qmd-retrieval workspace), retrieval runs through QMD hybrid search over the Obsidian vault. Per-repo `docs/solutions/` trees are no longer consulted here — they remain as read-only historical artifacts.
 
 ## Parameters
 
-- `query_terms` (required): Keywords describing the problem — extracted from issue title, description, or user input
-- `solutions_path` (optional): Path to solutions directory. Defaults to `docs/solutions/` in the current repository root.
+- `query_terms` (required): Problem-describing text — typically the issue/task title plus the first paragraph of its DESIGN.md. A single string, not a list.
 
 ## Execution Steps
 
-### 1. Check for solutions directory
+### 1. Run the QMD search
 
-```
-Glob: pattern="docs/solutions/**/*.md"
-```
+Follow the canonical protocol in `../../task-workflow/references/solution-search.md`:
 
-If no `docs/solutions/` directory exists or no `.md` files found, report "No solutions directory found — skipping local knowledge search" and proceed to step 4.
+- Build `query_text` as a shell variable (safe from issue-body injection), sanitize control chars and QMD-grammar-hostile chars, truncate to 2000 bytes.
+- Invoke `timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION"`.
+- Parse the first 3 `qmd://…` URIs with their Title and Score lines.
 
-### 2. Search frontmatter fields
+Fail-open rules from the reference doc apply (QMD binary missing, `$QMD_COLLECTION` unset, timeout, empty result set — each logs and continues; nothing blocks planning).
 
-Run grep searches against frontmatter fields for each query term. Search these fields in order of specificity:
-
-**By tags** (most targeted):
-```
-Grep: pattern="tags:.*<term>" path="docs/solutions/" -i=true output_mode="content" -A=3
-```
-
-**By symptoms**:
-```
-Grep: pattern="symptoms:.*<term>" path="docs/solutions/" -i=true output_mode="content" -A=3
-```
-
-**By module**:
-```
-Grep: pattern="module:.*<term>" path="docs/solutions/" -i=true output_mode="files_with_matches"
-```
-
-**By component**:
-```
-Grep: pattern="component:.*<term>" path="docs/solutions/" -i=true output_mode="files_with_matches"
-```
-
-Collect unique file paths from all matches. Deduplicate before reading.
-
-### 3. Read matched solutions
-
-For each matched solution file (up to 5 most relevant):
-```
-Read: file_path="<matched_file>"
-```
-
-Extract from each:
-- **Title** (from frontmatter)
-- **Severity** (from frontmatter)
-- **Root cause** (from frontmatter or Problem section)
-- **Solution summary** (from Solution section)
-- **Prevention guidance** (from Prevention section)
-
-### 4. Load critical patterns
-
-Always read critical patterns, regardless of search results:
-```
-Read: file_path="docs/solutions/patterns/critical-patterns.md"
-```
-
-If the file doesn't exist, skip silently.
-
-### 5. Compile findings
+### 2. Compile findings
 
 Produce a summary section for the plan:
 
 ```markdown
 ## Prior Solutions
 
-### Relevant Solutions Found
-- **<title>** (<severity>) — <one-line summary of solution>
-  - Root cause: <root_cause>
-  - Prevention: <prevention summary>
-
-### Critical Patterns
-<content from critical-patterns.md, or "No critical patterns documented yet">
+### Relevant notes (top 3)
+1. [<Title>](<qmd://... URI>) — score <pct>%
+2. [<Title>](<qmd://... URI>) — score <pct>%
+3. [<Title>](<qmd://... URI>) — score <pct>%
 
 ### Assessment
-<brief statement: how much prior knowledge applies to this task>
+<brief statement: how much prior knowledge applies to this task, which note is the strongest match, whether a clear prior fix exists>
 ```
 
-If no solutions matched and no critical patterns exist, output:
+If QMD returned zero results, or fail-open skipped the search:
 
 ```markdown
 ## Prior Solutions
 
-No relevant prior solutions found. No critical patterns documented.
+No prior notes surfaced for this task.
 ```
+
+Include the fail-open reason (`QMD skipped: <reason>`) only if the search was skipped, not when it ran successfully but matched nothing.
 
 ## Output
 
@@ -99,9 +52,4 @@ The compiled "Prior Solutions" section, ready to be included as context in the p
 
 ## Error Handling
 
-| Condition | Behavior |
-|-----------|----------|
-| `docs/solutions/` doesn't exist | Skip search, note absence, continue |
-| `critical-patterns.md` doesn't exist | Skip, continue |
-| No grep matches | Report "no matches", still load critical patterns |
-| Too many matches (>10 files) | Take top 5 by severity (critical > high > medium > low) |
+All failure modes route through the fail-open table in `../../task-workflow/references/solution-search.md` — planning never blocks on retrieval.
