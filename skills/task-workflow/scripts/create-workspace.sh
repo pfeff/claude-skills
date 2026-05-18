@@ -243,6 +243,11 @@ resolve_repo_path() {
   if [[ "$repo_name" =~ ^([a-zA-Z0-9._-]+)/([a-zA-Z0-9._-]+)$ ]]; then
     local owner="${BASH_REMATCH[1]}"
     local repo="${BASH_REMATCH[2]}"
+    # Reject path-traversal segments. The regex above permits `.` because dots
+    # are valid in repo names (e.g. `repo.go`), but `.`, `..`, or any segment
+    # containing `..` would escape `$HOME/src/github` via path traversal.
+    if [[ "$owner" == . || "$owner" == .. || "$owner" == *..* ]]; then return 1; fi
+    if [[ "$repo"  == . || "$repo"  == .. || "$repo"  == *..* ]]; then return 1; fi
     local qualified="$HOME/src/github/$owner/$repo"
     if [[ -d "$qualified" ]]; then
       echo "$qualified"
@@ -252,6 +257,9 @@ resolve_repo_path() {
   fi
 
   if [[ ! "$repo_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    return 1
+  fi
+  if [[ "$repo_name" == . || "$repo_name" == .. || "$repo_name" == *..* ]]; then
     return 1
   fi
 
@@ -293,7 +301,11 @@ generate_issue_url() {
   fi
 }
 
-# Format repos list as markdown
+# Format repos list as markdown.
+# When given owner-qualified names like `pfeff/claude-skills`, the displayed
+# label keeps the qualifier (informative) but the path uses the basename to
+# match where the worktree actually lands (`create_task_workspace` builds
+# `worktree_path` from `basename "$repo_path"`).
 format_repos_list() {
   local repos="$1"
   local workspace_path="$2"
@@ -306,7 +318,9 @@ format_repos_list() {
   local IFS=','
   for repo in $repos; do
     repo=$(echo "$repo" | xargs)  # trim whitespace
-    echo "- $repo: \`$workspace_path/$repo\`"
+    local repo_basename
+    repo_basename=$(basename "$repo")
+    echo "- $repo: \`$workspace_path/$repo_basename\`"
   done
 }
 
@@ -946,7 +960,8 @@ EOF
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
     repo_path=$(resolve_repo_path "$repo")
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
 
     echo "  $repo:"
     echo "    Source: $repo_path"
@@ -1033,7 +1048,9 @@ EOF
   # Check worktrees
   for repo in "${REPO_ARRAY[@]}"; do
     repo=$(echo "$repo" | xargs)
-    worktree_path="$WORKSPACE_PATH/$repo"
+    repo_path=$(resolve_repo_path "$repo")
+    repo_basename=$(basename "$repo_path")
+    worktree_path="$WORKSPACE_PATH/$repo_basename"
     if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
       actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD)
       if [[ "$actual_branch" == "$NODE_BRANCH" ]]; then

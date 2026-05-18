@@ -37,20 +37,6 @@ assert_rc() {
   fi
 }
 
-assert_slug_excludes() {
-  local needle="$1" slug="$2" name="$3"
-  case "-$slug-" in
-    *-"$needle"-*)
-      echo "  FAIL: $name (slug '$slug' still contains stop word '$needle')"
-      FAIL=$((FAIL + 1))
-      ;;
-    *)
-      echo "  PASS: $name"
-      PASS=$((PASS + 1))
-      ;;
-  esac
-}
-
 # Source the script. The dispatcher guard prevents create_task_workspace from
 # running; the args just satisfy validation so the function definitions load.
 # shellcheck disable=SC1090
@@ -66,9 +52,7 @@ echo "=== generate_slug ==="
 
 # Issue #85 example: stop words at the front must not leak into the slug.
 slug=$(generate_slug "Update skills that reference Obsidian vault symlink to use CLI")
-assert_slug_excludes "update" "$slug" "issue #85: 'update' filtered"
-assert_slug_excludes "that"   "$slug" "issue #85: 'that' filtered"
-assert_slug_excludes "to"     "$slug" "issue #85: 'to' filtered"
+assert_eq "skills-reference-obsidian" "$slug" "issue #85 example: stop words filtered"
 
 # Mid-sentence stop words are also filtered, slug fills to 3 content tokens.
 slug=$(generate_slug "Fix the auth timeout in the gateway")
@@ -121,6 +105,51 @@ assert_eq "$FIXTURE/src/github/Tcetra/claude-skills" "$path" "qualified Tcetra/c
 path=$(resolve_repo_path "nobody/claude-skills")
 rc=$?
 assert_rc 1 "$rc" "qualified nonexistent owner returns 1"
+
+# Path traversal attempts must be rejected, even when the resulting filesystem
+# path would exist (e.g. `pfeff/..` resolves to `$HOME/src/github`).
+mkdir -p "$FIXTURE/src/github/pfeff"  # parent dir exists
+path=$(resolve_repo_path "pfeff/..")
+rc=$?
+assert_rc 1 "$rc" "qualified 'pfeff/..' rejected (path traversal)"
+
+path=$(resolve_repo_path "../pfeff/claude-skills" 2>/dev/null)
+rc=$?
+# This one fails the regex outright (multiple slashes), but exercise it anyway.
+assert_rc 1 "$rc" "'../pfeff/claude-skills' rejected"
+
+path=$(resolve_repo_path "pfeff/.")
+rc=$?
+assert_rc 1 "$rc" "qualified 'pfeff/.' rejected"
+
+path=$(resolve_repo_path "foo..bar/claude-skills")
+rc=$?
+assert_rc 1 "$rc" "qualified segment containing '..' rejected"
+
+# Bare-name path traversal: '..' alone passes the existing char-class regex
+# but must be rejected by the dedicated check.
+path=$(resolve_repo_path "..")
+rc=$?
+assert_rc 1 "$rc" "bare-name '..' rejected"
+
+path=$(resolve_repo_path ".")
+rc=$?
+assert_rc 1 "$rc" "bare-name '.' rejected"
+
+# Ambiguous unqualified — claude-skills exists under both pfeff and Tcetra in
+# the fixture. Document the alphabetical-first behavior (the exact scenario R2
+# motivates) as a regression baseline.
+path=$(resolve_repo_path "claude-skills")
+case "$path" in
+  "$FIXTURE/src/github/"*"/claude-skills")
+    echo "  PASS: ambiguous unqualified resolves to one of the fixtures (alphabetical-first)"
+    PASS=$((PASS + 1))
+    ;;
+  *)
+    echo "  FAIL: ambiguous unqualified did not resolve under fixtures (got '$path')"
+    FAIL=$((FAIL + 1))
+    ;;
+esac
 
 # Unqualified Tcetra-only repo still resolves via glob fallback.
 path=$(resolve_repo_path "only-in-tcetra")
