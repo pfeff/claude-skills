@@ -80,9 +80,10 @@ The `/create-workspace` command automatically:
 ~/src/work/<epic>/<task-id>-<slug>/
 ├── .envrc              # Contains CLAUDE_CODE_TASK_LIST_ID
 ├── DESIGN.md           # Task requirements and architecture
-├── <repo>/             # Git worktrees
-└── Obsidian/           # Vault symlink
+└── <repo>/             # Git worktrees
 ```
+
+Obsidian access is provided by the `obsidian-notes` skill (CLI-based, vault resolved per host) — no per-workspace symlink is created.
 
 ### .envrc Contents
 

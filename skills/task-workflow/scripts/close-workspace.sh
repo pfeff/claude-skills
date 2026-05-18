@@ -268,13 +268,6 @@ if tmux has-session -t "=$SESSION_NAME" 2>/dev/null; then
   TMUX_SESSION="$SESSION_NAME"
 fi
 
-# Check for Obsidian symlink
-OBSIDIAN_LINK=""
-if [[ -L "$WORKSPACE_PATH/Obsidian" ]]; then
-  OBSIDIAN_LINK="$WORKSPACE_PATH/Obsidian"
-fi
-
-
 WORKTREE_COUNT=${#WORKTREES[@]}
 
 if [[ "$WORKTREE_COUNT" -gt 0 ]]; then
@@ -283,7 +276,6 @@ else
   echo "  Worktrees:        none"
 fi
 echo "  Tmux session:     ${TMUX_SESSION:-none}"
-echo "  Obsidian symlink: ${OBSIDIAN_LINK:-none}"
 
 #------------------------------------------------------------------------------
 # Step 4: Confirm with user
@@ -305,7 +297,6 @@ if [[ "$FORCE" != true ]]; then
     echo "  - Git worktrees: none"
   fi
   echo "  - Tmux session: ${TMUX_SESSION:-none}"
-  echo "  - Obsidian symlink: ${OBSIDIAN_LINK:-none}"
   if [[ "$NO_ARCHIVE" == true ]]; then
     echo "  - Archive: skipped (--no-archive)"
   else
@@ -382,16 +373,7 @@ if [[ -n "$TMUX_SESSION" ]]; then
 fi
 
 #------------------------------------------------------------------------------
-# Step 8: Remove Obsidian symlink
-#------------------------------------------------------------------------------
-
-if [[ -n "$OBSIDIAN_LINK" ]]; then
-  echo "Removing Obsidian symlink"
-  rm "$OBSIDIAN_LINK"
-fi
-
-#------------------------------------------------------------------------------
-# Step 9: Archive workspace
+# Step 8: Archive workspace
 #------------------------------------------------------------------------------
 
 ARCHIVE_PATH=""
@@ -413,7 +395,7 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 10: Close linked GitHub issue
+# Step 9: Close linked GitHub issue
 #------------------------------------------------------------------------------
 
 ISSUE_CLOSED=false
@@ -431,14 +413,14 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 11: Remove workspace directory
+# Step 10: Remove workspace directory
 #------------------------------------------------------------------------------
 
 echo "Removing workspace directory"
 rm -rf "$WORKSPACE_PATH"
 
 #------------------------------------------------------------------------------
-# Step 12: Verification
+# Step 11: Verification
 #------------------------------------------------------------------------------
 
 echo ""
@@ -517,7 +499,7 @@ echo ""
 echo "All verification checks passed!"
 
 #------------------------------------------------------------------------------
-# Step 13: Summary
+# Step 12: Summary
 #------------------------------------------------------------------------------
 
 echo ""
@@ -531,7 +513,6 @@ echo ""
 echo "Removed:"
 echo "  - Worktrees: $WORKTREE_COUNT"
 echo "  - Tmux session: ${TMUX_SESSION:-skipped}"
-echo "  - Obsidian symlink: ${OBSIDIAN_LINK:+removed}"
 if [[ -n "$ARCHIVE_PATH" ]]; then
   echo ""
   echo "Archived to: $ARCHIVE_PATH"

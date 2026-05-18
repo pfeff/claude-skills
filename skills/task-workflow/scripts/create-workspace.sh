@@ -635,27 +635,7 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 8: Create Obsidian symlink (platform-specific)
-#------------------------------------------------------------------------------
-
-echo "Creating Obsidian symlink..."
-OBSIDIAN_PATH=""
-
-# macOS iCloud path
-if [[ -d "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" ]]; then
-  # Find the first vault (usually there's only one)
-  OBSIDIAN_PATH=$(find "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" -maxdepth 1 -type d ! -name Documents | head -1)
-fi
-
-if [[ -n "$OBSIDIAN_PATH" && -d "$OBSIDIAN_PATH" ]]; then
-  ln -sf "$OBSIDIAN_PATH" "$WORKSPACE_PATH/Obsidian"
-  echo "  Obsidian: linked to $OBSIDIAN_PATH"
-else
-  echo "  Obsidian: skipped (vault not found)"
-fi
-
-#------------------------------------------------------------------------------
-# Step 9: Create tmux session
+# Step 8: Create tmux session
 #------------------------------------------------------------------------------
 
 echo "Creating tmux session..."
@@ -667,7 +647,7 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# Step 10: Verification
+# Step 9: Verification
 #------------------------------------------------------------------------------
 
 echo ""
@@ -962,20 +942,7 @@ EOF
     echo "  direnv: allowed"
   fi
 
-  # Step 9: Create Obsidian symlink
-  echo "Creating Obsidian symlink..."
-  OBSIDIAN_PATH=""
-  if [[ -d "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" ]]; then
-    OBSIDIAN_PATH=$(find "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" -maxdepth 1 -type d ! -name Documents | head -1)
-  fi
-  if [[ -n "$OBSIDIAN_PATH" && -d "$OBSIDIAN_PATH" ]]; then
-    ln -sf "$OBSIDIAN_PATH" "$WORKSPACE_PATH/Obsidian"
-    echo "  Obsidian: linked to $OBSIDIAN_PATH"
-  else
-    echo "  Obsidian: skipped (vault not found)"
-  fi
-
-  # Step 10: Create tmux session (identical to task mode)
+  # Step 9: Create tmux session (identical to task mode)
   SESSION_NAME="$NODE_ID: $HEADLINE"
   SANITIZED_SESSION=$(echo "$SESSION_NAME" | sed 's/:/-/g; s/\.//g')
   echo "Creating tmux session..."
@@ -986,7 +953,7 @@ EOF
     exit 6
   fi
 
-  # Step 11: Verification
+  # Step 10: Verification
   echo ""
   echo "Running verification checks..."
   VERIFICATION_FAILED=0

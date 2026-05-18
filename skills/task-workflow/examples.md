@@ -307,12 +307,9 @@ TaskList
 # Result:
 # ~/src/work/tooling/docs-review/
 # ├── DESIGN.md
-# ├── PLAN.md
-# └── Obsidian -> (vault symlink)
+# └── PLAN.md
 
-# 3. Access docs through Obsidian symlink
-cd ~/src/work/tooling/docs-review
-ls Obsidian/Documentation/API/
+# 3. Access vault docs via the obsidian-notes skill (host-resolved CLI / $OBSIDIAN_VAULT_PATH)
 ```
 
 ### Use Cases
@@ -570,17 +567,7 @@ TaskList
 
 ### Tip 4: Obsidian Integration
 
-```bash
-# From workspace
-cd ~/src/work/platform/DO-123-auth
-cd Obsidian/Notes
-
-# Create task-specific note
-nvim 2025/11/DO-123-auth-investigation.md
-
-# Link from DESIGN.md
-echo "See Obsidian note: Notes/2025/11/DO-123-auth-investigation.md" >> DESIGN.md
-```
+Vault writes go through the `obsidian-notes` skill — see `~/.claude/skills/obsidian-notes/SKILL.md` for the CLI recipes (`create`, `property:set`, `append`). The skill resolves the binary and vault from `~/.claude/hosts/<hostname>.md`; no per-workspace `Obsidian/` symlink is created.
 
 ### Tip 5: Task Archival
 

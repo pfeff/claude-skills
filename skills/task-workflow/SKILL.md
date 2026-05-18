@@ -80,7 +80,6 @@ Operations in this repo may reference public operations from `claude-skills` for
 Each workspace contains:
 - **.envrc**: direnv config with Azure PAT and `CLAUDE_CODE_TASK_LIST_ID` for native task tracking
 - **DESIGN.md**: Task overview with format `# TASK-ID: Headline` on first line
-- **Obsidian/**: Symlink to Obsidian vault
 - **Git worktrees**: Per repository specified
 - **Tmux session**: Named `"<task-id>: <headline>"`
 - **FEEDBACK.md** (optional): Session friction log — agents append entries when encountering complex commands, missing tool flags, or repeated patterns. See `templates/FEEDBACK.md.tmpl`.
@@ -110,7 +109,7 @@ Creates complete development environment for a task.
 
 **Implementation**: Load `operations/workspace-setup.md` for detailed steps.
 
-**Quick summary**: Creates directory, DESIGN.md, .envrc (with task list ID), git worktrees, Obsidian link, tmux session.
+**Quick summary**: Creates directory, DESIGN.md, .envrc (with task list ID), git worktrees, tmux session.
 
 ### 3. Workspace From Issue
 
@@ -190,7 +189,7 @@ Cleanly tears down a workspace: removes worktrees, kills tmux, archives artifact
 
 **Implementation**: Load `operations/close-workspace.md` for detailed steps.
 
-**Quick summary**: Remove git worktrees, kill tmux session, remove symlinks, create tarball archive at `~/src/work/.archive/<epic>/<task>.tar.gz`.
+**Quick summary**: Remove git worktrees, kill tmux session, create tarball archive at `~/src/work/.archive/<epic>/<task>.tar.gz`.
 
 ### 11. Start Task
 

@@ -10,24 +10,22 @@ Scans historical lessons learned documents to extract and aggregate patterns, an
 
 ### Step 1: Resolve Vault Path and Locate Files
 
-Determine the Obsidian vault path using hostname lookup:
+Resolve Obsidian vault constants via the host-config helper (non-blocking per `obsidian-notes/SKILL.md` § Non-Blocking Failure Contract — the helper already emits a `[obsidian-notes] <reason>` line on failure; do not re-warn or `exit`):
 
-1. Read `~/.claude/skills/obsidian-notes/SKILL.md` for the hostname → vault path table
-2. Run `hostname` to determine the current machine
-3. Match hostname against the table (support prefix matching for wildcard entries like `TCETRA*`)
-4. Set `{vault_path}` to the matched path
-
-**Fallback** (macOS only): If hostname lookup fails:
 ```bash
-mdfind "kMDItemDisplayName == '*Lesson*'" | grep "Generated/.*Lesson.*\.md$"
+source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || true
+LESSONS_DIR="${OBSIDIAN_VAULT_PATH:+$OBSIDIAN_VAULT_PATH/Generated}"
+LESSONS_DIR="${LESSONS_DIR:-docs/lessons-learned}"
 ```
 
-Then search for lessons files:
+On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root (used for read-side globs); `$OBSIDIAN_CLI` / `$OBSIDIAN_VAULT` are the CLI binary and vault name for writes (see Step 6). On failure: `$OBSIDIAN_VAULT_PATH` is unset, so `LESSONS_DIR` falls back to the in-repo `docs/lessons-learned/` directory. Step 6's write path checks `$OBSIDIAN_CLI` and gates the CLI block on that same signal.
+
+Search for lessons files:
 ```bash
-ls -1t {vault_path}/Generated/*Lesson*.md 2>/dev/null | head -20
+ls -1t "$LESSONS_DIR"/*Lesson*.md 2>/dev/null | head -20
 ```
 
-Default location: `Generated/*Lesson*.md` in Obsidian vault
+Default location: `*Lesson*.md` under `$LESSONS_DIR` (vault `Generated/` when available, otherwise `docs/lessons-learned/`).
 
 ### Step 1b: Locate Previous Aggregation Report
 
@@ -35,7 +33,7 @@ Search for the most recent aggregation report to use as a baseline for effective
 
 ```bash
 # Find previous aggregation reports
-ls -1 <vault>/Generated/*Pattern*Aggregation*.md 2>/dev/null | sort -r | head -1
+ls -1 "$LESSONS_DIR"/*Pattern*Aggregation*.md 2>/dev/null | sort -r | head -1
 ```
 
 If found, extract:
@@ -196,25 +194,29 @@ If no baseline exists, note: "No previous aggregation found. Run again after imp
 
 ### Step 6: Save Report to Obsidian Vault
 
-Save the aggregation report as an Obsidian note for future baseline comparison:
+Save the aggregation report as an Obsidian note for future baseline comparison.
 
-**Filename**: `Generated/YYYYMMDDHHmm-Pattern Aggregation Report.md`
+**Filename**: `Generated/YYYYMMDDHHmm-Pattern Aggregation Report.md` — this consistent naming enables Step 1b to locate previous reports via the `*Pattern*Aggregation*.md` glob.
 
-This consistent naming enables Step 1b to locate previous reports via `*Pattern*Aggregation*.md` glob.
+**Write via the Obsidian CLI** (Non-Blocking Failure Contract applies per `obsidian-notes/SKILL.md`):
 
-**Frontmatter**: Follow obsidian-notes conventions (consult skill before writing):
-```yaml
----
-date: "[[YYYY-MM-DD]]"
-month: "[[YYYY-MM]]"
-tags:
-  - generated_note
-  - lessons_learned
-keywords:
-  - "[[Pattern Aggregation]]"
-  - "[[Skill Evolution]]"
----
+```bash
+NOTE_PATH="Generated/$(date +%Y%m%d%H%M)-Pattern Aggregation Report.md"
+
+# 1. Create the note. No dedicated template — use Reference, or create without template= if Reference is unsuitable.
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" create path="$NOTE_PATH" template="Reference"
+
+# 2. Set frontmatter via property:set (always pass type=).
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=date     value="[[$(date +%Y-%m-%d)]]" type=text path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=month    value="[[$(date +%Y-%m)]]"    type=text path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=tags     value="generated_note, lessons_learned" type=list path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=keywords value="[[Pattern Aggregation]], [[Skill Evolution]]" type=list path="$NOTE_PATH"
+
+# 3. Append the aggregation report body (the markdown produced in Step 5).
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" append path="$NOTE_PATH" content="<report markdown>"
 ```
+
+After each CLI call, scan stdout's first line for an `Error:` prefix and emit `[obsidian-notes] <captured output>` on stderr without exiting. If `$OBSIDIAN_CLI` is unset (host-config helper failed in Step 1), skip the CLI block — the report is still available in the operation's stdout and can be redirected via `--output`.
 
 ## Options
 
