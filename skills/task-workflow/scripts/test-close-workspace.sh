@@ -25,6 +25,18 @@ make_workspace() {
   echo "$dir"
 }
 
+make_goal_workspace() {
+  local dir
+  dir=$(mktemp -d)
+  # GOAL.md uses em-dash separator: "# <task-id> — <headline>"
+  echo "# 99 — Goal-tree workspace" > "$dir/GOAL.md"
+  echo "$dir"
+}
+
+make_empty_workspace() {
+  mktemp -d
+}
+
 assert_exit_code() {
   local expected="$1" actual="$2" name="$3"
   if [[ "$actual" -eq "$expected" ]]; then
@@ -150,6 +162,47 @@ else
   PASS=$((PASS + 1))
 fi
 rm -rf "$ws" "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 8: GOAL.md fallback closes workspace and parses task-id/headline
+echo "Test 8: GOAL.md fallback parses metadata and closes workspace"
+ws=$(make_goal_workspace)
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$ws" --force --no-archive --no-close-issue </dev/null >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 0 "$exit_code" "GOAL.md fallback exits 0"
+if grep -qF "Task:     99 - Goal-tree workspace" "$stdout_file"; then
+  echo "  PASS: GOAL.md task-id and headline parsed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: GOAL.md metadata not parsed correctly"
+  echo "    stdout was:"
+  sed 's/^/      /' "$stdout_file"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$ws" ]]; then
+  echo "  PASS: GOAL.md workspace removed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: GOAL.md workspace still exists"
+  FAIL=$((FAIL + 1))
+  rm -rf "$ws"
+fi
+rm -rf "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 9: Missing both DESIGN.md and GOAL.md exits with EXIT_WORKSPACE_NOT_FOUND
+echo "Test 9: Missing both DESIGN.md and GOAL.md exits 2"
+ws=$(make_empty_workspace)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$ws" --force --no-archive --no-close-issue </dev/null 2>"$stderr_file" || exit_code=$?
+assert_exit_code 2 "$exit_code" "exits with EXIT_WORKSPACE_NOT_FOUND"
+assert_stderr_contains "No DESIGN.md or GOAL.md" "$stderr_file" "stderr names both files"
+rm -rf "$ws" "$stderr_file"
 
 echo ""
 

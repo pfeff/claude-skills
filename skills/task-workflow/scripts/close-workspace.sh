@@ -166,17 +166,23 @@ echo "Workspace: $WORKSPACE_PATH"
 # Step 2: Validate workspace and extract metadata
 #------------------------------------------------------------------------------
 
-if [[ ! -f "$WORKSPACE_PATH/DESIGN.md" ]]; then
-  echo "Error: No DESIGN.md found in $WORKSPACE_PATH" >&2
+# Extract task-id and headline. Prefer DESIGN.md ("# <task-id>: <headline>");
+# fall back to GOAL.md ("# <task-id> — <headline>") for goal-tree workspaces.
+if [[ -f "$WORKSPACE_PATH/DESIGN.md" ]]; then
+  FIRST_LINE=$(head -1 "$WORKSPACE_PATH/DESIGN.md")
+  TASK_ID="${FIRST_LINE%%:*}"
+  TASK_ID="${TASK_ID#\# }"
+  HEADLINE="${FIRST_LINE#*: }"
+elif [[ -f "$WORKSPACE_PATH/GOAL.md" ]]; then
+  FIRST_LINE=$(head -1 "$WORKSPACE_PATH/GOAL.md")
+  TASK_ID="${FIRST_LINE%% —*}"
+  TASK_ID="${TASK_ID#\# }"
+  HEADLINE="${FIRST_LINE#* — }"
+else
+  echo "Error: No DESIGN.md or GOAL.md found in $WORKSPACE_PATH" >&2
   echo "This may not be a valid task workspace." >&2
   exit "$EXIT_WORKSPACE_NOT_FOUND"
 fi
-
-# Extract task-id and headline from DESIGN.md first line: "# <task-id>: <headline>"
-FIRST_LINE=$(head -1 "$WORKSPACE_PATH/DESIGN.md")
-TASK_ID="${FIRST_LINE%%:*}"
-TASK_ID="${TASK_ID#\# }"
-HEADLINE="${FIRST_LINE#*: }"
 
 # Extract epic and task directory from path
 EPIC=$(basename "$(dirname "$WORKSPACE_PATH")")
