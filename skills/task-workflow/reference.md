@@ -27,11 +27,12 @@ Detailed implementation guide for task workspace management operations.
 ~/src/work/<epic>/<task-id>-<slug>/
 ├── DESIGN.md              # Task overview and architecture
 ├── PLAN.md                # TODO tracking with checkboxes
-├── Obsidian/              # Symlink to Obsidian vault
 ├── <repo-1>/              # Git worktree for repository 1
 ├── <repo-2>/              # Git worktree for repository 2
 └── .tmuxp.yaml            # Tmux session configuration
 ```
+
+Obsidian access is provided by the `obsidian-notes` skill — no per-workspace symlink is created.
 
 ### Metadata Format
 
@@ -152,8 +153,7 @@ Complete environment setup for task workspace.
 
 1. **DESIGN.md**: Must exist with task-id and headline
 2. **Git repositories**: Must be cloned in standard locations
-3. **Obsidian vault**: Must exist (location varies by machine)
-4. **GitHub CLI**: Optional, for issue integration
+3. **GitHub CLI**: Optional, for issue integration
 
 ### Setup Process
 
@@ -210,22 +210,7 @@ After worktree creation, apply repo-specific configuration:
 
 These symlinks are required for `task` commands to work properly in Dev-Stacks.
 
-#### 4. Obsidian Vault Linking
-
-```bash
-# Mac (iCloud)
-ln -s "/Users/<user>/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian" ~/src/work/<epic>/<task-id>-<slug>/Obsidian
-
-# WSL
-ln -s /mnt/c/Users/<user>/Documents/Obsidian/<vault> ~/src/work/<epic>/<task-id>-<slug>/Obsidian
-```
-
-**Purpose**:
-- Access vault from workspace
-- Create task-specific notes
-- Link documentation to knowledge base
-
-#### 5. Tmux Session Creation
+#### 4. Tmux Session Creation
 
 **IMPORTANT**: Always use the tmuxp script - never create tmux sessions manually.
 

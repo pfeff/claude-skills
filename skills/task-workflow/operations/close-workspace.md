@@ -85,12 +85,11 @@ The script handles all operations:
 - Workspace location and validation
 - GitHub issue reference extraction from CLAUDE.md
 - CWD safety warning (if `--caller-cwd` is inside workspace)
-- Component inventory (worktrees, tmux, symlinks)
+- Component inventory (worktrees, tmux)
 - User confirmation (unless `--force`)
 - CWD safety (`cd $HOME` before destructive ops)
 - Worktree removal via `git -C`
 - Tmux session cleanup
-- Obsidian symlink removal
 - Archiving to `~/src/work/.archive/<epic>/<task-dir>.tar.gz`
 - GitHub issue close via `gh issue close` (unless `--no-close-issue`)
 - Directory removal
@@ -138,7 +137,6 @@ Workspace: ~/src/work/platform/TOOS-24-fix-auth
 Inventorying components...
   Worktrees:        Dev-Stacks
   Tmux session:     TOOS-24- Fix authentication bug
-  Obsidian symlink: none
 
 Archiving to: ~/src/work/.archive/platform/TOOS-24-fix-auth.tar.gz
 Removing worktree: Dev-Stacks

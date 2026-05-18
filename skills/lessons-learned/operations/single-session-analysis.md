@@ -329,30 +329,47 @@ Want me to capture any of these as solution docs?
 
 Only after the user confirms the recommendations.
 
-**REQUIRED Pre-flight Check**:
-```
-Read(file_path: "~/.claude/skills/obsidian-notes/SKILL.md")
-```
-This ensures correct filename format, frontmatter structure, and required tags.
+**REQUIRED Pre-flight**:
+
+1. Read the obsidian-notes skill to refresh filename format, frontmatter contract, tag vocabulary, and CLI recipes:
+   ```
+   Read(file_path: "~/.claude/skills/obsidian-notes/SKILL.md")
+   ```
+2. Resolve vault constants via the host-config helper (provides `OBSIDIAN_CLI`, `OBSIDIAN_VAULT`, `OBSIDIAN_VAULT_PATH`):
+   ```bash
+   source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || {
+     echo "[obsidian-notes] vault unavailable on this host; will fall back to docs/lessons-learned/" >&2
+   }
+   ```
+   On failure, follow the non-blocking failure contract: warn once and use the `docs/lessons-learned/` fallback (see Error Handling).
 
 **Tag constraint**: Only use note-type tags from the approved vocabulary in `obsidian-notes/SKILL.md`. Lessons learned notes MUST include both `generated_note` and `lessons_learned` tags. Do NOT invent new tags. Use `keywords:` with wikilinks for all topic-specific terms. Keywords must be capitalized and space-separated (e.g., `"[[Lessons Learned]]"`, `"[[Workflow Improvement]]"`).
 
 **Location**: `Generated/YYYYMMDDHHmm-Lessons Learned - {topic}.md`
 
-**Template** (follows obsidian-notes conventions):
+**Write via the Obsidian CLI** (see `obsidian-notes/SKILL.md` for the full recipes and Non-Blocking Failure Contract):
+
+```bash
+NOTE_PATH="Generated/$(date +%Y%m%d%H%M)-Lessons Learned - <topic>.md"
+
+# 1. Create the note from the Lesson Learned template.
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" create path="$NOTE_PATH" template="Lesson Learned"
+
+# 2. Set frontmatter via property:set (always pass type=).
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=date     value="[[$(date +%Y-%m-%d)]]" type=text path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=month    value="[[$(date +%Y-%m)]]"    type=text path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=tags     value="generated_note, lessons_learned" type=list path="$NOTE_PATH"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set name=keywords value="[[Lessons Learned]], [[<Domain Specific Term>]]" type=list path="$NOTE_PATH"
+
+# 3. Append the body sections (composed by the caller; use \n for newlines).
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" append path="$NOTE_PATH" content="<body markdown matching the template below>"
+```
+
+After each CLI call, scan the first line of stdout for an `Error:` prefix and emit `[obsidian-notes] <captured output>` on stderr without exiting (Non-Blocking Failure Contract). If `$OBSIDIAN_CLI` is unset (host-config failed in pre-flight), skip the CLI block entirely and write the body to `docs/lessons-learned/<filename>.md` instead.
+
+**Body template** (the markdown passed as the `content=` argument to `append`; frontmatter is handled by `property:set` above, do not re-emit it here):
 
 ```markdown
----
-date: "[[YYYY-MM-DD]]"
-month: "[[YYYY-MM]]"
-tags:
-  - generated_note
-  - lessons_learned
-keywords:
-  - "[[Lessons Learned]]"
-  - "[[Domain Specific Term]]"
----
-
 # Lessons Learned - {Topic}
 
 ## Session Overview

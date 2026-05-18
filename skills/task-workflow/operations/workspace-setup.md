@@ -63,7 +63,6 @@ Secrets are optional - the script continues without them if unavailable.
 ├── CLAUDE.md           # Workspace instructions for Claude
 ├── .envrc              # direnv configuration
 ├── .tmuxp.yaml         # Tmux session config
-├── Obsidian/           # Symlink to Obsidian vault (if available)
 └── <repo>/             # Git worktree (one per repo in --repos)
     └── docs/solutions/ # Solution documentation directories
 ```
@@ -179,9 +178,6 @@ Creating git worktrees...
 
 Configuring direnv...
   direnv: allowed
-
-Creating Obsidian symlink...
-  Obsidian: linked
 
 Creating tmux session...
   Tmux session '19- Use deterministic script for workspace bootstrapping' created

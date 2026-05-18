@@ -92,12 +92,9 @@ Tasks are stored in JSON files at `~/.claude/tasks/`:
 
 The `scan-task-dirs.sh` script scans these files to determine workspace status for `/list-workspaces`.
 
-## Obsidian Symlink
+## Obsidian Access
 
-Each workspace includes a symlink to the Obsidian vault:
-```bash
-Obsidian -> /path/to/obsidian/vault
-```
+Obsidian access is handled by the `obsidian-notes` skill (host-resolved CLI). The vault is reached via `$OBSIDIAN_VAULT_PATH` after sourcing `~/.claude/skills/obsidian-notes/scripts/host-config.sh`; no per-workspace symlink is created.
 
 ## Solution Documentation
 

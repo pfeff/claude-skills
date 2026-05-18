@@ -10,22 +10,20 @@ Deep analysis of a specific recommendation to assess feasibility, identify targe
 
 ### Step 1: Resolve Vault Path and Locate Recommendation
 
-Determine the Obsidian vault path using hostname lookup:
+Resolve Obsidian vault constants via the host-config helper:
 
-1. Read `~/.claude/skills/obsidian-notes/SKILL.md` for the hostname → vault path table
-2. Run `hostname` to determine the current machine
-3. Match hostname against the table (support prefix matching for wildcard entries like `TCETRA*`)
-4. Set `{vault_path}` to the matched path
-
-**Fallback** (macOS only): If hostname lookup fails:
 ```bash
-mdfind "kMDItemDisplayName == '*Lesson*'" | grep "Generated/.*Lesson.*\.md$"
+source "$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh" || {
+  echo "[obsidian-notes] vault unavailable on this host" >&2
+}
 ```
+
+On success: `$OBSIDIAN_VAULT_PATH` is the vault filesystem root. If the helper fails, abort this operation — analyze-improvement cannot proceed without locating the source REC.
 
 Search lessons learned files for the specific REC-ID:
 
 ```
-Grep(pattern: "#### REC-{id}:", path: "{vault_path}/Generated/")
+Grep(pattern: "#### REC-{id}:", path: "$OBSIDIAN_VAULT_PATH/Generated/")
 ```
 
 Read the full recommendation context (surrounding 30 lines).
