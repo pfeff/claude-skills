@@ -114,19 +114,21 @@ options:
 
 ### 4. Infer Repos
 
-**Primary repo**: The repo from the issue reference (e.g., `guardian` from `pfeff/guardian#78`).
+Pass repos to `create-workspace.sh` in **owner-qualified form** `owner/repo`. The bootstrap script will resolve `~/src/github/<owner>/<repo>` directly and not fall back to alphabetical globs. Qualifying disambiguates when the same repo name exists under multiple owners (e.g. `pfeff/claude-skills` vs `Tcetra/claude-skills`) — the operation is the layer that knows the owner from the issue reference, so it is the layer that should qualify.
 
-**Additional repos**: Scan issue body for references to other repos under the same owner:
-- Look for `owner/other-repo` patterns
-- Look for repo names in code blocks or file paths
+**Primary repo**: `<owner>/<repo>` from the issue reference (e.g., `pfeff/guardian` from `pfeff/guardian#78`).
+
+**Additional repos**: Scan issue body for repo references:
+- `other-owner/other-repo` patterns → pass through qualified
+- Bare repo names mentioned in code blocks or file paths → default to the issue's owner and pass `<issue-owner>/<repo>`
 
 **If unclear from context**: Prompt the user:
 ```
 question: "Which repositories should be included?"
 options:
-  - label: "<primary-repo> only"
+  - label: "<owner>/<primary-repo> only"
     description: "Just the issue's repository"
-  - label: "<primary-repo>, <detected-repo>"
+  - label: "<owner>/<primary-repo>, <owner>/<detected-repo>"
     description: "Include referenced repository"
 ```
 
@@ -153,14 +155,16 @@ If the user wants to adjust, ask which parameter to change.
 
 ### 6. Run Bootstrap Script
 
-Call `create-workspace.sh` with `--issue` and agent-derived params. The script auto-derives `--task-id` and `--headline` from the issue reference:
+Call `create-workspace.sh` with `--issue` and agent-derived params. The script auto-derives `--task-id` and `--headline` from the issue reference. `--repos` should use the owner-qualified form assembled in step 4:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-workspace.sh \
   --epic <epic> \
-  --repos <repo-list> \
+  --repos <owner>/<primary-repo>[,<owner>/<other-repo>...] \
   --issue <owner>/<repo>#<number>
 ```
+
+Example: `--repos pfeff/guardian,pfeff/cursor-rules`.
 
 Explicit `--task-id` or `--headline` can be passed if the user overrode them during confirmation (step 5).
 
@@ -218,14 +222,14 @@ Checking project board for sprint...
   Epic: sprint-1
 
 Scanning for repo references...
-  Primary: guardian
-  Also found: cursor-rules (mentioned in issue body)
+  Primary: pfeff/guardian
+  Also found: pfeff/cursor-rules (mentioned in issue body)
 
 Inferred parameters:
   task-id:  78
   epic:     sprint-1
   headline: Unified workspace setup from GitHub issue reference
-  repos:    guardian,cursor-rules
+  repos:    pfeff/guardian,pfeff/cursor-rules
   issue:    pfeff/guardian#78
 
 Proceed? → Yes
@@ -260,7 +264,7 @@ Inferred parameters:
   task-id:  99
   epic:     ad-hoc
   headline: Add retry logic to webhook delivery
-  repos:    guardian
+  repos:    pfeff/guardian
   issue:    pfeff/guardian#99
 
 Proceed? → Yes
@@ -373,7 +377,7 @@ AskUserQuestion:
       description: "I'll list the repositories"
 ```
 
-If "Specify repos", ask for comma-separated list.
+If "Specify repos", ask for a comma-separated list. Users can enter either bare names (`some-repo`) or owner-qualified names (`pfeff/some-repo`). The qualified form is recommended when the repo name exists under multiple owners on the local filesystem; the bootstrap script's `resolve_repo_path` will otherwise pick whichever owner sorts first alphabetically.
 
 ### 12. Run Bootstrap Script (PWD Mode)
 
@@ -436,14 +440,14 @@ Checking project board for sprint...
   Epic: sprint-1
 
 Scanning for repo references...
-  Primary: guardian
-  Also found: cursor-rules (mentioned in issue body)
+  Primary: pfeff/guardian
+  Also found: pfeff/cursor-rules (mentioned in issue body)
 
 Inferred parameters:
   task-id:  78
   epic:     sprint-1
   headline: Unified workspace setup from GitHub issue reference
-  repos:    guardian,cursor-rules
+  repos:    pfeff/guardian,pfeff/cursor-rules
   issue:    pfeff/guardian#78
 
 Proceed? → Yes
@@ -478,7 +482,7 @@ Inferred parameters:
   task-id:  99
   epic:     ad-hoc
   headline: Add retry logic to webhook delivery
-  repos:    guardian
+  repos:    pfeff/guardian
   issue:    pfeff/guardian#99
 
 Proceed? → Yes
