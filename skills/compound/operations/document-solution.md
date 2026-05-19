@@ -19,10 +19,15 @@ Source the obsidian-notes host helper to load vault constants:
 ```bash
 HOST_CONFIG="$HOME/.claude/skills/obsidian-notes/scripts/host-config.sh"
 source "$HOST_CONFIG" || {
-    # Helper printed `[obsidian-notes] <reason>`; report capture skipped and stop.
-    :
+    echo "[compound] obsidian-notes unavailable — capture skipped" >&2
+    return 2>/dev/null || exit 0
 }
 # Sets OBSIDIAN_CLI, OBSIDIAN_VAULT, OBSIDIAN_VAULT_PATH
+
+if [[ -z "$OBSIDIAN_CLI" ]]; then
+    echo "[compound] OBSIDIAN_CLI unset after host-config — capture skipped" >&2
+    return 2>/dev/null || exit 0
+fi
 ```
 
 Read the vault's Solution template to see the canonical field list and body structure:
