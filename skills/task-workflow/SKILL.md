@@ -426,5 +426,4 @@ All scripts are in `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/`:
 
 - `templates/DESIGN.md.tmpl` - Task documentation
 - `templates/.envrc.tmpl` - Azure PAT and task list ID configuration
-- `templates/solution.md.tmpl` - Solution documentation with YAML frontmatter
 - `templates/FEEDBACK.md.tmpl` - Session friction log for command simplification feedback loop
