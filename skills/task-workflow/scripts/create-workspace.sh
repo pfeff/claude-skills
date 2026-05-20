@@ -605,7 +605,7 @@ if [[ -d "$WORKSPACE_PATH" ]]; then
 fi
 
 # Check for required templates
-for tmpl in DESIGN.md.tmpl CLAUDE.md.tmpl .envrc.tmpl settings.json.tmpl; do
+for tmpl in DESIGN.md.tmpl CLAUDE.md.tmpl .envrc.tmpl settings.json.tmpl .mcp.json.tmpl; do
   if [[ ! -f "$TEMPLATE_DIR/$tmpl" ]]; then
     echo "Error: Template not found: $TEMPLATE_DIR/$tmpl" >&2
     exit 2
@@ -754,6 +754,14 @@ if envsubst < "$TEMPLATE_DIR/.envrc.tmpl" > "$WORKSPACE_PATH/.envrc"; then
   echo "  .envrc: created"
 else
   echo "Error: Failed to render .envrc" >&2
+  exit 3
+fi
+
+# Render .mcp.json (workspace-scoped MCP server config; supersedes ~/.claude.json global slot)
+if envsubst < "$TEMPLATE_DIR/.mcp.json.tmpl" > "$WORKSPACE_PATH/.mcp.json"; then
+  echo "  .mcp.json: created"
+else
+  echo "Error: Failed to render .mcp.json" >&2
   exit 3
 fi
 
