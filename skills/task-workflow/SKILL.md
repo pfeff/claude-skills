@@ -257,6 +257,16 @@ Displays auto-advance loop state without resuming. Read-only.
 
 **Quick summary**: Categorizes tasks by status, infers loop state (complete, paused, ready, blocked, empty), displays progress summary with guidance for next action.
 
+### 16. Falsification Check
+
+Before writing down a synthesis claim about infrastructure state, run the most direct read-only query that would falsify the claim.
+
+**When**: At the synthesis/write boundary — any time the agent is about to assert a fact about infra state in a status update, PR description, Obsidian note, DESIGN.md, or other persisted artifact. Triggered as a sub-routine from caller operations, not on its own.
+
+**Implementation**: Load `operations/falsification-check.md` for detailed steps.
+
+**Quick summary**: State the claim → identify the single most direct read-only falsifying query (authoritative API, not downstream view) → run it and capture output → only write the claim if the query confirms it. Anti-pattern: synthesizing from one evidence path (logs, plan diff, dashboard) without cross-checking the authoritative read-only API. Source: DO-588 stack17 RCA (LL-1 / R1).
+
 ## Common Patterns
 
 **Slug Creation**: Extract 2-3 keywords from headline
@@ -412,6 +422,7 @@ Load only what you need:
 - `operations/resume.md` - Re-enter auto-advance after human intervention
 - `operations/resume-status.md` - Read-only auto-advance state inspection
 - `operations/session-review.md` - Post-session FEEDBACK.md triage into skill updates, scripts, and tool gaps
+- `operations/falsification-check.md` - Refute-first discipline before writing synthesis claims about infra state
 
 **Reference Documentation**:
 - `reference.md` - Complete technical reference (all operations)
