@@ -54,6 +54,8 @@ Classify each dimension as **Covered** (explicitly addressed), **Implied** (enou
 
 ### 2. Extract validated answers
 
+> **Synthesis discipline**: If extracting a "Current workflow" or "Pain" answer asserts a specific infra/system state ("X is broken", "Y deploys via Z", "no instance exists in Q"), apply `skills/task-workflow/operations/falsification-check.md` before committing the answer to the plan — the answer becomes load-bearing for everything downstream.
+
 For dimensions the doctrine classifies as Covered or Implied, extract the answer directly:
 
 ```

@@ -177,6 +177,8 @@ Commit failed in <repo>. You can commit manually:
 
 ### 4. PR Phase (R3, R9)
 
+> **Synthesis discipline**: When drafting the PR body, if it asserts a fact about infra/system state (resource exists, deployment landed, branch merged), apply `operations/falsification-check.md` before writing the claim — run the single most direct read-only query that would refute it, and only assert if the query confirms.
+
 Check if a PR already exists for the current branch:
 
 ```bash
@@ -253,6 +255,8 @@ Use `run_in_background: true` on the Task tool so the parent continues immediate
 The dispatch result is checked in step 6.
 
 ### 5. Knowledge Capture Phase (R5)
+
+> **Synthesis discipline**: Lessons-learned and compound notes record claims about how systems behave. Apply `operations/falsification-check.md` before persisting any infra-state claim into the vault — the note will outlive the session and be retrieved by future agents.
 
 Prompt the user for each knowledge capture tool. These are optional but the user must consciously accept or decline — do not silently skip.
 
