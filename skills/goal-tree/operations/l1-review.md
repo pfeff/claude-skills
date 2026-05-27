@@ -59,14 +59,14 @@ For each acceptance criterion, assess pass/fail against the diff:
 |-------|---------|-------|
 | Tests present and covering key claims | PASS/FAIL | <test files, coverage notes> |
 | Security concerns (injection, secrets, OWASP) | PASS/FAIL | <findings or "none detected"> |
-| CI status (if available) | PASS/FAIL/PENDING | <check names and states> |
+| CI status (if available) | PASS/FAIL/PENDING | <check names and states — FAIL: attempt autonomous fix; if not fixable cheaply, ESCALATE to operator; do not merge with red CI without explicit operator override> |
 | Code matches spec architecture | PASS/FAIL | <structural alignment notes> |
 
 ### Summary
 
 - **Criteria passed**: N/M
 - **Quality checks passed**: N/M
-- **Verdict**: APPROVE / REJECT
+- **Verdict**: APPROVE / REJECT / ESCALATE
 - **Reason**: <1-2 sentence summary>
 ```
 
@@ -105,6 +105,40 @@ fi
 coord node update $TREE_ID $NODE_ID --status completed --result "PR #$PR_NUMBER merged. <changes summary>"
 ```
 
+#### Escalate (CI blocked)
+
+CI is red and cannot be made green autonomously or without great expense. Surface to operator; do not merge.
+
+```bash
+gh pr comment $PR_NUMBER --repo $REPO --body "## L1 Review: ESCALATE — CI Blocked
+
+CI is not green and cannot be resolved autonomously. Operator decision required before merge.
+
+### Failing Checks
+
+<list each failing check name and its current state>
+
+### Why autonomous resolution is not viable
+
+<one of:>
+- Upstream dependency not yet merged: <dep PR or issue>
+- Fix requires changes outside this PR's scope: <explanation>
+- Estimated effort exceeds autonomous threshold: <explanation>
+
+### Operator options
+
+1. **Land the blocker first** — merge the upstream dependency, rebase this PR, re-request review.
+2. **Restructure PR scope** — split or defer the parts that exercise the unresolved dependency.
+3. **Override and merge** — reply with explicit approval if red CI is acceptable for this merge.
+   Operator must confirm: the failing checks are understood, not a regression, and a follow-up is tracked.
+
+---
+*Automated L1 review via goal-tree operations/l1-review.md*"
+
+# Update coordinator — stay blocked until operator responds
+coord node update $TREE_ID $NODE_ID --status blocked --result "CI escalation: <concise reason>; awaiting operator decision"
+```
+
 #### Reject
 
 Any criterion fails or quality check reveals a blocking issue:
@@ -139,7 +173,9 @@ coord node update $TREE_ID $NODE_ID --status blocked --result "Review failed: <c
 | Any acceptance criterion fails | **REJECT** |
 | Tests missing for key claims | **REJECT** |
 | Security concern (secrets in code, injection vectors) | **REJECT** |
-| CI checks failing | **REJECT** (unless failures are unrelated to the PR) |
+| CI checks failing — fixable autonomously (trivial rebase, cheap patch) | Fix CI, then re-evaluate |
+| CI checks failing — not fixable autonomously or too expensive | **ESCALATE** to operator; do not merge without explicit operator override |
+| CI checks failing — operator override explicitly granted | **APPROVE** (proceed to merge) |
 | Code compiles but doesn't match spec architecture | **REJECT** |
 
 ## Agent-Coordinator Deploy Procedure
