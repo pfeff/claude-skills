@@ -59,7 +59,7 @@ For each acceptance criterion, assess pass/fail against the diff:
 |-------|---------|-------|
 | Tests present and covering key claims | PASS/FAIL | <test files, coverage notes> |
 | Security concerns (injection, secrets, OWASP) | PASS/FAIL | <findings or "none detected"> |
-| CI status (if available) | PASS/FAIL/PENDING | <check names and states> |
+| CI status (if available) | PASS/FAIL/PENDING | <check names and states — FAIL = REJECT regardless of root cause, see Decision Criteria> |
 | Code matches spec architecture | PASS/FAIL | <structural alignment notes> |
 
 ### Summary
@@ -124,6 +124,12 @@ gh pr comment $PR_NUMBER --repo $REPO --body "## L1 Review: REJECT
 
 <numbered list of specific changes needed to pass review>
 
+Example for upstream-dep / red CI case:
+1. Land the missing dependency PR first, then rebase this PR on the updated base.
+   OR restructure the PR scope so this PR does not exercise the unresolved dependency.
+   OR pin the failing check with `continue-on-error: true` + a gate comment on the job
+      explaining why CI is green from this PR onward before re-requesting review.
+
 ---
 *Automated L1 review via goal-tree operations/l1-review.md*"
 
@@ -139,7 +145,8 @@ coord node update $TREE_ID $NODE_ID --status blocked --result "Review failed: <c
 | Any acceptance criterion fails | **REJECT** |
 | Tests missing for key claims | **REJECT** |
 | Security concern (secrets in code, injection vectors) | **REJECT** |
-| CI checks failing | **REJECT** (unless failures are unrelated to the PR) |
+| CI checks failing — caused by this PR | **REJECT** |
+| CI checks failing — caused by an upstream gap (missing dep, stale base, etc.) | **REJECT** — land the dep first, restructure PR scope, or pin failing jobs with `continue-on-error: true` + an explicit gate comment so CI is green from this PR onward |
 | Code compiles but doesn't match spec architecture | **REJECT** |
 
 ## Agent-Coordinator Deploy Procedure
