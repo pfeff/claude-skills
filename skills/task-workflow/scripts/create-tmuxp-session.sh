@@ -56,6 +56,12 @@ fi
 # Load the session using tmuxp
 tmuxp load -d "$TMUXP_CONFIG"
 
+# Select window 9 (claude) after load so the active window is the claude pane.
+# This ensures that ct add --session <name> (which targets the active window)
+# sends ticks to claude:9, not to nvim:1. Without this, every L1/L2 tickler
+# silently dumps into vim for the first 30+ minutes. (REC-002)
+tmux select-window -t "${SANITIZED_SESSION_NAME}:9" 2>/dev/null || true
+
 echo "Tmux session '$SANITIZED_SESSION_NAME' created in $WORKSPACE_DIR"
 if [ "$SESSION_NAME" != "$SANITIZED_SESSION_NAME" ]; then
   echo "Note: Session name sanitized from '$SESSION_NAME' to '$SANITIZED_SESSION_NAME'"
