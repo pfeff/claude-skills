@@ -403,9 +403,11 @@ install_worktree_branch_hook() {
   if [[ -f "$hook_file" ]]; then
     # Append only if not already present (idempotent)
     if ! grep -qF "$assert_script" "$hook_file"; then
-      echo "" >> "$hook_file"
-      echo "# worktree-branch alignment check (task-workflow REC-001)" >> "$hook_file"
-      echo "\"$assert_script\"" >> "$hook_file"
+      {
+        echo ""
+        echo "# worktree-branch alignment check (task-workflow REC-001)"
+        echo "\"$assert_script\""
+      } >> "$hook_file"
     fi
   else
     {
