@@ -366,6 +366,59 @@ verify_check() {
 }
 
 #------------------------------------------------------------------------------
+# install_worktree_branch_hook - Install pre-commit guard for worktree-branch
+# alignment (REC-001). Idempotent: re-running will not append duplicates.
+# Usage: install_worktree_branch_hook <worktree_path>
+#------------------------------------------------------------------------------
+
+install_worktree_branch_hook() {
+  local worktree_path="$1"
+  local actual_git hooks_dir hook_file assert_script
+
+  # Resolve the hooks directory. For git worktrees, .git is a file
+  # "gitdir: <path>" pointing to <main>/.git/worktrees/<name>. Git reads
+  # hooks from <main>/.git/hooks/, NOT from <main>/.git/worktrees/<name>/hooks/,
+  # so walk up two levels from the resolved gitdir.
+  if [[ -f "$worktree_path/.git" ]]; then
+    actual_git=$(awk '/^gitdir:/{print $2}' "$worktree_path/.git")
+    if [[ "$actual_git" != /* ]]; then
+      actual_git="$worktree_path/$actual_git"
+    fi
+    hooks_dir="$(dirname "$(dirname "$actual_git")")/hooks"
+  elif [[ -d "$worktree_path/.git/hooks" ]]; then
+    hooks_dir="$worktree_path/.git/hooks"
+  else
+    return 0  # No .git found; silently skip
+  fi
+
+  mkdir -p "$hooks_dir"
+  hook_file="$hooks_dir/pre-commit"
+  assert_script="$SCRIPT_DIR/assert-worktree-branch.sh"
+
+  if [[ ! -x "$assert_script" ]]; then
+    echo "    WARNING: assert-worktree-branch.sh not found at $assert_script; skipping hook install" >&2
+    return 0
+  fi
+
+  if [[ -f "$hook_file" ]]; then
+    # Append only if not already present (idempotent)
+    if ! grep -qF "$assert_script" "$hook_file"; then
+      echo "" >> "$hook_file"
+      echo "# worktree-branch alignment check (task-workflow REC-001)" >> "$hook_file"
+      echo "\"$assert_script\"" >> "$hook_file"
+    fi
+  else
+    {
+      echo "#!/bin/bash"
+      echo "# Auto-installed by create-workspace.sh (task-workflow REC-001)"
+      echo "\"$assert_script\""
+    } > "$hook_file"
+    chmod +x "$hook_file"
+  fi
+  echo "    Installed pre-commit hook (assert-worktree-branch)"
+}
+
+#------------------------------------------------------------------------------
 # create_task_workspace - Create a task workspace (original behavior)
 #------------------------------------------------------------------------------
 
@@ -667,46 +720,7 @@ if [[ -n "$REPOS" ]]; then
     echo "    Created worktree"
 
     # Install pre-commit hook for worktree-branch alignment (REC-001)
-    # The hook warns or fails if a commit is attempted on the wrong branch.
-    HOOK_TARGET="$worktree_path/.git"
-    # Worktrees use a .git file (pointer), not a directory; resolve the actual hook dir.
-    if [[ -f "$worktree_path/.git" ]]; then
-      # .git is a file: "gitdir: <path>" — resolve to actual git dir
-      ACTUAL_GIT=$(awk '/^gitdir:/{print $2}' "$worktree_path/.git")
-      if [[ "$ACTUAL_GIT" != /* ]]; then
-        ACTUAL_GIT="$worktree_path/$ACTUAL_GIT"
-      fi
-      HOOKS_DIR="$ACTUAL_GIT/hooks"
-    elif [[ -d "$worktree_path/.git/hooks" ]]; then
-      HOOKS_DIR="$worktree_path/.git/hooks"
-    else
-      HOOKS_DIR=""
-    fi
-
-    if [[ -n "$HOOKS_DIR" ]]; then
-      mkdir -p "$HOOKS_DIR"
-      HOOK_FILE="$HOOKS_DIR/pre-commit"
-      ASSERT_SCRIPT="$SCRIPT_DIR/assert-worktree-branch.sh"
-      if [[ -x "$ASSERT_SCRIPT" ]]; then
-        # Prepend or create the pre-commit hook
-        if [[ -f "$HOOK_FILE" ]]; then
-          # Append to existing hook (don't overwrite other checks)
-          echo "" >> "$HOOK_FILE"
-          echo "# worktree-branch alignment check (task-workflow REC-001)" >> "$HOOK_FILE"
-          echo "\"$ASSERT_SCRIPT\"" >> "$HOOK_FILE"
-        else
-          {
-            echo "#!/bin/bash"
-            echo "# Auto-installed by create-workspace.sh (task-workflow REC-001)"
-            echo "\"$ASSERT_SCRIPT\""
-          } > "$HOOK_FILE"
-          chmod +x "$HOOK_FILE"
-        fi
-        echo "    Installed pre-commit hook (assert-worktree-branch)"
-      else
-        echo "    WARNING: assert-worktree-branch.sh not found at $ASSERT_SCRIPT; skipping hook install" >&2
-      fi
-    fi
+    install_worktree_branch_hook "$worktree_path"
   done
 fi
 
@@ -1006,33 +1020,7 @@ EOF
     echo "    Created worktree"
 
     # Install pre-commit hook for worktree-branch alignment (REC-001)
-    if [[ -f "$worktree_path/.git" ]]; then
-      ACTUAL_GIT=$(awk '/^gitdir:/{print $2}' "$worktree_path/.git")
-      if [[ "$ACTUAL_GIT" != /* ]]; then
-        ACTUAL_GIT="$worktree_path/$ACTUAL_GIT"
-      fi
-      HOOKS_DIR="$ACTUAL_GIT/hooks"
-    elif [[ -d "$worktree_path/.git/hooks" ]]; then
-      HOOKS_DIR="$worktree_path/.git/hooks"
-    else
-      HOOKS_DIR=""
-    fi
-    if [[ -n "$HOOKS_DIR" ]]; then
-      mkdir -p "$HOOKS_DIR"
-      HOOK_FILE="$HOOKS_DIR/pre-commit"
-      ASSERT_SCRIPT="$SCRIPT_DIR/assert-worktree-branch.sh"
-      if [[ -x "$ASSERT_SCRIPT" ]]; then
-        if [[ -f "$HOOK_FILE" ]]; then
-          echo "" >> "$HOOK_FILE"
-          echo "# worktree-branch alignment check (task-workflow REC-001)" >> "$HOOK_FILE"
-          echo "\"$ASSERT_SCRIPT\"" >> "$HOOK_FILE"
-        else
-          { echo "#!/bin/bash"; echo "\"$ASSERT_SCRIPT\""; } > "$HOOK_FILE"
-          chmod +x "$HOOK_FILE"
-        fi
-        echo "    Installed pre-commit hook (assert-worktree-branch)"
-      fi
-    fi
+    install_worktree_branch_hook "$worktree_path"
   done
 
   # Step 6: Render .claude/settings.json (envsubst for MODEL variable)

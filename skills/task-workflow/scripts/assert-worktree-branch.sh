@@ -43,9 +43,6 @@ if [[ -z "$CURRENT_BRANCH" ]]; then
   exit 0
 fi
 
-# Get the basename of the worktree directory
-WORKTREE_BASENAME="$(basename "$WORKTREE_ROOT")"
-
 # -----------------------------------------------------------------------
 # Strategy: derive the expected branch namespace from the directory path.
 #
@@ -86,9 +83,6 @@ if [[ -n "$NODE_ID" && "$NODE_ID" != "$WORKTREE_PARENT" ]]; then
   if echo "$CURRENT_BRANCH" | grep -qF "/$NODE_ID"; then
     exit 0
   fi
-  if echo "$CURRENT_BRANCH" | grep -qF "/$NODE_ID."; then
-    exit 0
-  fi
 fi
 
 # Check 4: the branch could share just the worktree repo basename for simple feature branches
@@ -103,7 +97,7 @@ else
   echo "  worktree: $WORKTREE_ROOT" >&2
   echo "  branch:   $CURRENT_BRANCH" >&2
   echo "  expected a branch under namespace: $WORKTREE_PARENT/" >&2
-  echo "  Proceeding (set ASSERT_WORKTREE_BRANCH_WARN_ONLY=0 to block on unknown patterns)" >&2
+  echo "  Proceeding (set ASSERT_WORKTREE_BRANCH_WARN_ONLY=1 to downgrade to warn-only)" >&2
   exit 0
 fi
 
