@@ -115,6 +115,33 @@ When merge conflicts occur during synthesis (merging node branches to integratio
 5. If root cannot resolve → escalate to user
 ```
 
+## Integration Branch Lifecycle: Rebase vs Merge
+
+### When to rebase
+
+Use **rebase** when:
+- Updating a node branch to pick up upstream integration-branch changes before opening a PR.
+- Command: `git -C <repo-worktree> rebase <integration-branch>` (or `git rebase origin/<integration-branch>` after fetch).
+- Goal: keep node-branch history linear so the integration PR diff is clean.
+- **Never rebase a branch that has already been pushed and has an open PR** — force-pushes to an open PR require notifying reviewers and can break in-flight review threads.
+
+### When to merge (fast-forward or squash)
+
+Use **merge** (or squash-merge via `gh pr merge --squash`) when:
+- Landing a completed node branch into the integration branch. Squash-merging keeps the integration branch history clean.
+- Landing the integration branch into main. Use a regular merge commit (not squash) to preserve the integration-branch summary.
+
+### Rebase before PR, not after
+
+The safe pattern:
+1. Rebase node branch onto latest integration branch **before** opening the PR (`git rebase <integration>`).
+2. Open the PR; do not rebase again after the PR is open (unless the integration branch is force-pushed, which should not happen).
+3. Merge via `gh pr merge --squash` when the PR is approved.
+
+### Force-push discipline
+
+Force-push is allowed only on node branches with NO open PR. Once a PR is open, treat the branch as immutable to avoid blast radius on reviewers. If you must rebase a branch with an open PR, notify the operator first. (2026-05-26 session: rebase of slice-1-main required repairing 17 worktrees — always verify blast radius before rebasing an integration branch.)
+
 ## Safety Rules
 
 1. **Never checkout branches in source repos** — source repos (`~/src/github/`) always stay on main
