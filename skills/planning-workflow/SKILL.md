@@ -7,10 +7,11 @@ allowed-tools:
   - Grep
   - Glob
   - Write
+  - Task
   - AskUserQuestion
   - WebSearch
   - WebFetch
-version: 1.0.0
+version: 1.0.1
 ---
 
 # Planning Workflow
@@ -62,7 +63,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/solution-search.md`
 
-**Quick summary**: Runs a QMD query (hybrid BM25 + vector + reranker + HyDE) against the configured vault collection, delegating to `task-workflow/references/solution-search.md` for the canonical invocation and fail-open protocol. Surfaces the top-3 notes as "Prior Solutions" context for downstream phases. Per DD4, no longer reads `docs/solutions/`.
+**Quick summary**: Delegates a QMD query (hybrid BM25 + vector + reranker + HyDE) against the configured vault collection to an out-of-context `Explore` subagent (Task tool, `subagent_type: Explore`), which follows `task-workflow/references/solution-search.md` for the canonical invocation and fail-open protocol and returns the compiled "Prior Solutions" section. The planning session consumes that section as context for downstream phases; it does not run `qmd` directly. Per DD4, no longer reads `docs/solutions/`.
 
 ### 4. Research Gating
 
