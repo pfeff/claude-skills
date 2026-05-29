@@ -203,6 +203,7 @@ Load on-demand as needed:
 | `references/node-lifecycle.md` | State machine, completion rules, dependency resolution |
 | `references/goal-document.md` | GOAL.md format (bootstrap mode) |
 | `references/goal-md-format.md` | GOAL.md parsing specification |
+| `docs/native-vs-homebrew-boundary.md` (repo root) | Native↔homebrew KEEP/ADOPT map, Workflow↔goal-tree routing rule, and `/goal` usage (D1–D9) |
 
 ## Scripts
 
