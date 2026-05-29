@@ -61,9 +61,6 @@ For each agent in agents:
 
 All calls must be in the same tool-use block to ensure parallel execution.
 
-Pass `isolation: 'worktree'` only for single-repo parallel **file-mutating** agents
-(see "Worktree isolation" above); leave it unset for read-only fan-outs.
-
 ### 3. Collect Results
 
 As each agent returns, record its result:
@@ -202,8 +199,10 @@ Caller decides: proceed with 2 successful results, note workspace check was skip
     `isolation`.
   - `implement-feature` (Phase 2 parallel implementation) — parallel agents that
     **edit/write files in one repo**, so it should pass `isolation: 'worktree'`.
-    Note: `implement-feature` is defined outside this `claude-skills` package, so its
-    call site is updated where that command lives.
+
+  Note: `implement-feature`, `sprint-review`, and `analyze-project` are defined
+  outside this `claude-skills` package; only `review` lives here. Their call sites are
+  updated where those commands live — this package only ships the passthrough.
 - **Depends on**: Task tool (subagent_type: general-purpose)
 - **Related**: `dispatch-task.md` for single-task dispatch with retry; fan-out is for concurrent independent work
 - **Reference**: See `references/subagent-dispatch.md` for the dispatch contract and RESULT_START/END format spec
