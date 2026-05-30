@@ -12,7 +12,7 @@ None — reads task state from the workspace's task list.
 
 After auto-advance pauses (validation failure, ambiguous decision, commit failure), the human fixes the issue and invokes `/resume` to re-enter the loop. This operation provides context about where the loop left off, confirms readiness, and delegates to auto-advance for actual loop execution.
 
-`/resume` is the re-entry path for the within-session driver: when a session is driven by `/goal` and halts while the tool-based complete-check still reports incomplete (pending tasks, unpushed commits, dirty tree), the loop is **re-driven** — re-issue `/goal` or invoke `/resume` to re-enter the auto-advance entry guard. A `/goal` halt is a turn-budget/driver signal, **not** node completion; authoritative "done" stays the tool-based complete-check defined in `auto-advance.md` (all native Tasks completed + validation + commit/PR), never `/goal`'s transcript evaluator. See `auto-advance.md` → "Within-Session Driver (`/goal`)".
+`/resume` is the re-entry path for the within-session driver: when a session driven by `/goal` halts while the tool-based complete-check still reports incomplete (pending tasks, unpushed commits, dirty tree), the loop is **re-driven** — re-issue `/goal` or invoke `/resume` to re-enter the auto-advance entry guard. A `/goal` halt is a turn-budget/driver signal, **not** node completion; authoritative "done" stays the tool-based complete-check, never `/goal`'s transcript evaluator. See `auto-advance.md` → "Within-Session Driver (`/goal`)" for the gate definition.
 
 ## Execution Steps
 

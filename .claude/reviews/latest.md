@@ -1,24 +1,24 @@
 ---
-target: PR #98 (A.4 goal-tree routing-rule diff)
+target: PR #98
 timestamp: 2026-05-29T00:00:00Z
-agents: 1
+agents: 4
 degraded: false
 blocking: 0
-advisory: 0
+advisory: 4
 verdict: CLEAN
 ---
 
 ## Review Summary
 
-**Target**: PR #98 (pfeff/claude-skills) — A.4 (D6/D8) changes: `skills/goal-tree/SKILL.md` (References row + version bump) and new `skills/goal-tree/references/workflow-vs-goal-tree.md`.
-**Agents**: 1 (focused doc/consistency review — documentation-only 43-line diff)
-**Verdict**: CLEAN — no issues found.
+**Target**: PR #98 (A.5 — `/goal` within-session driver, D9)
+**Agents**: 4
+**Verdict**: CLEAN — advisory findings only
 
-Scope note: this PR also carries prior A.2/A.3 work (planning-workflow, task-workflow) already reviewed under those nodes; this review covers the A.4 goal-tree diff only.
+A.5-scoped files reviewed: `skills/task-workflow/operations/auto-advance.md`, `skills/task-workflow/operations/resume.md`, `skills/task-workflow/SKILL.md`. Correctness confirmed all five A.5 acceptance criteria PASS (additive-only; loop control flow and tool-based completion semantics unchanged; version bumped to 1.6.2). Architecture CLEAN — cross-references between the three files resolve and terminology is consistent. No security or data-loss findings in the A.5 diff.
 
-Checks:
-- **Correctness (AC#3)** — Routing rule states the required boundary exactly: bounded in-session fan-out → native `Workflow`; durable multi-session / multi-repo orchestration → goal-tree / L{N}. Placed in a skill-author-facing location (goal-tree `references/`, linked from `SKILL.md`'s References table).
-- **AC#4** — `version:` bumped `1.0.0` → `1.1.0` for the changed skill text.
-- **Consistency** — Layer-model (L2/L1/L0 ownership) and `.claude/workflows/*.js` claims match `SKILL.md` and the verified native discovery path. New References table row matches the format of existing rows; the referenced file exists.
+### Advisory
 
-No issues found across 1 agent.
+- **skills/task-workflow/operations/auto-advance.md / resume.md / SKILL.md** — [simplicity] _redundancy_ (warning) — The "`/goal` is a driver, not the completion gate; a halt with pending tasks/unpushed commits/dirty tree means re-drive" thesis appears in all three files. Partially intentional: AC#1 requires the explicit statement in `auto-advance.md`, R1 requires the re-entry path in `resume.md`, and these operation docs load à la carte (each must read standalone). Addressed: `resume.md` trimmed to defer the gate enumeration to the canonical `auto-advance.md` pointer while keeping the re-drive rule self-contained.
+- **skills/task-workflow/operations/auto-advance.md** — [simplicity] _redundancy_ (info) — The complete-check conditions appear as both a bullet list and a table row set. Retained: the bullets define the authoritative gate (AC#1 requires explicit enumeration); the table defines the stop-disposition branch (complete vs re-drive). They serve distinct purposes.
+- **skills/task-workflow/operations/auto-advance.md** — [simplicity] _structure_ (info) — The `### /goal-stop ≠ node-complete` sub-heading restates the boundary set just above. Retained for scannability of the re-drive rule (AC#2).
+- **skills/planning-workflow/operations/solution-search.md** — [security] _injection_ (info) — Defense-in-depth note on QMD query sanitization. Out of A.5 scope (belongs to an earlier node); no action for A.5.
