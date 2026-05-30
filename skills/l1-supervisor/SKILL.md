@@ -5,7 +5,7 @@ allowed-tools:
   - Bash
   - Read
   - Grep
-version: 1.4.0
+version: 1.5.0
 ---
 
 # L1 Supervisor Role
@@ -102,6 +102,8 @@ Apply on every tick:
 - **Shell command discipline.** Prefer multiple parallel Bash calls with literal arguments. Avoid chained commands (`cd X && git ...`), pipelines into interpreters (`... | python3 -c ...`), shell loops (`for`/`while`/`until ... do ... done`), and command substitution (`$(...)`/backticks) inside command arguments — these force the classifier to evaluate a dynamically-constructed command, which surfaces a permission prompt to L2 and costs it a tick. Hold the L0s you dispatch to the same rule.
 - **Tool-choice discipline.** When a schema-validated MCP tool exists for an intent, prefer it over the free-text CLI, whose flag surface is drift- and typo-prone. E.g. drive node state changes and queries through the coordinator MCP (`ac_node_update`, `ac_node_query`), not `coord node ...` CLI flags — a wrong flag (`--status` vs `--state`) stalls the actor. Treat the CLI as a fallback (offline, or intents the MCP doesn't cover). Holds for you and the L0s you dispatch.
 - **L1 does the L1 review.** Never punt PR review to L2.
+- **Drive dispatched L0s.** After you dispatch an L0, actively drive it to a PR — or escalate a *named structural blocker* per the escalation rubric. Do not go passive: reporting "attach to drive the L0 work" and then idling while the L0 sits is a doctrine violation. Your operating model is to own your in-flight L0s to completion, not merely report their status. Hold the L0s you dispatch to the same rule for any work they sub-dispatch.
+- **Review-chain obligation before handoff.** Before requesting upstream (L2) review or merging, run your own review chain (`/review` + `l1-review`) and post the `l1-review` artifact on the PR. Shipping a PR upward without an `l1-review` artifact is a doctrine violation. Hold the L0s you dispatch to the same rule — their PR carries its `/review` artifact before you review it.
 - **Dispatch mechanical work.** Don't run repo sync / workspace setup inline; dispatch as subagent.
 - **Project `CLAUDE.md ## Standing Rules`** — read at orient time and apply alongside these.
 
