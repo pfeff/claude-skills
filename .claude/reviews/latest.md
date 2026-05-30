@@ -1,10 +1,10 @@
 ---
 target: PR #98
-timestamp: 2026-05-29T20:30:00Z
+timestamp: 2026-05-29T21:15:00Z
 agents: 4
 degraded: false
 blocking: 0
-advisory: 5
+advisory: 4
 verdict: CLEAN
 ---
 
@@ -14,30 +14,35 @@ verdict: CLEAN
 **Agents**: 4 (security, simplicity, architecture, correctness)
 **Verdict**: CLEAN — advisory findings only; no blocking (correctness/security/data-loss) issues
 
-This pass exercises the **A.2 / D3** diff: `skills/task-workflow/operations/fan-out.md`
-(optional `isolation: 'worktree'` passthrough) and `skills/task-workflow/SKILL.md`
-(version bump). The earlier A.1 `solution-search.md` findings remain resolved.
-
-### Blocking
-
-_None._
+This pass exercises the **A.3 / D4** diff: the Plan Mode drafting front-end in
+`skills/planning-workflow` — `SKILL.md` (Plan Mode Front-End section, pipeline
+diagram, allowed-tools, version 1.0.1→1.0.2), `operations/plan-generation.md`
+(materialization step 5 + new step 6 seeding native Tasks), and the new
+`operations/plan-mode-frontend.md`. Correctness confirmed all A.3 acceptance
+criteria are met; the two `TodoWrite` strings in the diff are *prohibitions*
+("do not use `TodoWrite`"), not residual usage. Earlier A.1/A.2 findings remain
+resolved.
 
 ### Advisory
 
-- **skills/task-workflow/operations/fan-out.md:195** — [architecture] _factual-correctness_ (warning) — The "Called by" list / per-caller note implied `review` consumes `fan-out`, but `review` spawns its 4 agents directly in `run-review.md` (it does not route through fan-out). ADDRESSED: reworded the per-caller block into read-only-vs-mutating **guidance** that applies "when a caller dispatches its parallel agents through this operation," and added a note that `review` is in-package but currently spawns directly. (Pre-existing "Called by" line left intact — out of D3 scope.)
-- **skills/task-workflow/operations/fan-out.md:55 / references/subagent-dispatch.md** — [architecture] _spec-layering_ (warning) — The new `isolation` passthrough was not reflected in the canonical dispatch contract. ADDRESSED: added an "Optional `isolation` field" note to `references/subagent-dispatch.md` (Working Directory section) so the source of truth stays coherent.
-- **skills/task-workflow/operations/fan-out.md:13,26** — [simplicity] _redundant-documentation_ (warning) — The default-unset / no-op guarantee was stated 3×. ADDRESSED: trimmed the prose restatement at line 26; the Inputs-table cell and pseudocode comment retain it.
-- **skills/task-workflow/operations/fan-out.md:58** — [correctness] _pseudocode-semantics_ (info) — `agent.isolation ?? isolation` (nullish-coalescing) only short-circuits on null/undefined; "omit when unset" relies on the prose comment. Acceptable for non-executed markdown pseudocode; intent is unambiguous. No change.
-- **skills/task-workflow/operations/fan-out.md:58** — [architecture] _naming_ (info) — Per-agent field and fan-out-level default both named `isolation`; `agent.isolation ?? isolation` is mildly overloaded but readable. No change.
+- **skills/planning-workflow/operations/plan-mode-frontend.md:5** — [architecture] _internal-consistency_ (warning) — Intro stated the drafting range three ways (1–8 / 1–6+7 / 1–7). ADDRESSED: standardized on "phases 1–7 draft ephemerally; phase 8 (ADR propagation) runs in materialization."
+- **skills/planning-workflow/operations/plan-mode-frontend.md:88** — [architecture] _single-source-of-truth_ (info) — Native-Task seeding contract was fully restated in both this file (Step 4.3) and `plan-generation.md` step 6. ADDRESSED: Step 4.3 now references `plan-generation.md` step 6 as the procedural home instead of restating granularity.
+- **skills/planning-workflow/operations/plan-mode-frontend.md (file)** — [architecture] _convention_ (warning) — Uses `## When`/`## Flow`/`## Steps` rather than the `## Parameters`/`## Execution Steps` shape of other operation files. NOT CHANGED: this operation is an orchestration wrapper that produces no plan section, so the divergent shape is defensible (the reviewer concurred the absence of `## Output`/`## Parameters` is acceptable for a wrapper).
+- **skills/planning-workflow/operations/solution-search.md:37** — [security] _consistency_ (info) — Delegated subagent prompt says truncate to "~2000 bytes" while the canonical reference says "~2000 chars." Non-security-impacting (truncation is a DoS bound, not the injection control — double-quoted `"$query_text"` is). Pre-existing A.1 wording, out of A.3 scope — NOT CHANGED.
 
 ### Security
 
-Security agent: nothing security-relevant requiring change. The `isolation: 'worktree'`
-passthrough is correctly bounded (default-unset, single-repo-write-scoped, explicitly
-NOT the multi-repo `~/src/work` layout); no injection or path-traversal vector.
+No exploitable issues. The A.3 diff is pure process/prose documentation — no shell
+invocations, untrusted-data handling, credentials, or new executable code. The A.1
+`solution-search.md` shell invocation (in-PR, not A.3) uses the injection-safe
+double-quoted-variable pattern and explicitly sanitizes untrusted query terms.
 
 ### Correctness vs DESIGN.md
 
-Correctness agent confirmed the passthrough is internally consistent (Inputs table ↔
-Step 2 pseudocode), the per-caller rationale is accurate, references resolve, and the
-task-workflow 1.6.0→1.6.1 patch bump is appropriate (additive, behavior preserved).
+All A.3 acceptance criteria met: (1) Plan Mode documented with `EnterPlanMode`/
+`ExitPlanMode` named, materializing durable `DESIGN.md`/`PLAN.md` + seeding native
+`TaskCreate`/`TaskList`, durable docs authoritative; (3) `planning-workflow` version
+bumped (task-workflow behavior text unchanged by A.3, no bump needed); (4) diff
+scoped to `planning-workflow` only — no `goal-tree`, no `~/src/work` layout edits.
+Criterion 2 (no residual `TodoWrite` in the D4 scope) holds — the two diff matches
+are prohibitions reinforcing the native-Tasks mandate.

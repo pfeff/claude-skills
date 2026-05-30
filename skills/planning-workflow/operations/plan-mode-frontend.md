@@ -2,9 +2,10 @@
 
 Plan Mode (`EnterPlanMode` → interactive drafting → `ExitPlanMode`) is the
 interactive drafting front-end for the planning workflow. It brackets the phase
-pipeline (phases 1–8): the draft is assembled **ephemerally** inside Plan Mode,
-and only the post-approval **materialization** step writes the durable
-`DESIGN.md`/`PLAN.md` and seeds native `TaskCreate`/`TaskList`.
+pipeline: phases 1–7 draft **ephemerally** inside Plan Mode, and only the
+post-approval **materialization** step (which also runs phase 8, ADR
+propagation) writes the durable `DESIGN.md`/`PLAN.md` and seeds native
+`TaskCreate`/`TaskList`.
 
 **Durable docs remain authoritative.** Plan Mode state is ephemeral — it resets
 when the user accepts and the session leaves the mode (acceptEdits). Nothing in
@@ -84,11 +85,10 @@ hand-off):
 
 1. **DESIGN.md** — apply the design updates reconciled in phase 2.
 2. **PLAN.md** — write per `operations/plan-generation.md` step 5.
-3. **Seed native Tasks** — for each acceptance criterion (or phase, for "A Lot"
-   plans), call `TaskCreate` so the durable plan's criteria become trackable
-   native tasks. Confirm with `TaskList`. This replaces any ad-hoc todo list:
-   the native task store + `PLAN.md` checkboxes are the progress mechanism (no
-   `TodoWrite`).
+3. **Seed native Tasks** — per `operations/plan-generation.md` step 6:
+   `TaskCreate` per acceptance criterion (or phase, for "A Lot" plans), then
+   `TaskList` to confirm. The native task store + `PLAN.md` checkboxes are the
+   progress mechanism (no `TodoWrite`).
 4. **ADR propagation** — run `operations/adr-propagation.md` (phase 8).
 
 After materialization, `DESIGN.md`/`PLAN.md` and the seeded native tasks are the
