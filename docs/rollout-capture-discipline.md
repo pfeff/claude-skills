@@ -33,8 +33,7 @@ stub is consciously preserved with the pending marker).
 ## The capture discipline
 
 Rollout work is **journaled in Obsidian via the `obsidian-notes` skill — never by
-freehand-writing the vault.** The skill applies the vault's template handling,
-path conventions, and frontmatter schema that hand-composed Markdown would skip.
+freehand-writing the vault.**
 
 Each lane cycle produces a **journal-note evidence artifact** in the vault:
 
@@ -45,8 +44,8 @@ Each lane cycle produces a **journal-note evidence artifact** in the vault:
   boundary at a glance, and how it is captured and gated.
 
 These notes are the **capture-SC evidence** for the lane — the evidence is the
-journal-note link, not a PR. A follow-up cycle adds its own evidence note rather
-than overwriting prior ones.
+journal-note link, not a PR. Each follow-up cycle adds its own evidence note
+rather than overwriting prior ones.
 
 ## Regression gate (cutover)
 
