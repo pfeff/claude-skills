@@ -55,7 +55,7 @@ allowed-prompts:
     prompt: write metrics log
   - tool: Bash
     prompt: sleep for backoff between retries
-version: 1.6.0
+version: 1.6.2
 ---
 
 # Task Workflow Skill
@@ -220,6 +220,8 @@ Autonomously cycles through the task list: pick next task → implement → vali
 **When**: Default behavior after `/init-workspace` creates the task list, or when resuming a session with pending tasks.
 
 **Implementation**: Load `operations/auto-advance.md` for detailed steps.
+
+**Driver**: Self-driving by default; a session may optionally be driven by native `/goal <condition>; stop after N turns` as a within-session turn budget. `/goal` is only a driver — the authoritative completion gate stays the tool-based complete-check (all native Tasks completed + validation + commit/PR), never `/goal`'s transcript evaluator. A `/goal` halt with pending tasks / unpushed commits / dirty tree means re-drive, not done. See `operations/auto-advance.md` → "Within-Session Driver (`/goal`)".
 
 **Quick summary**: Entry guard checks task list state (zero tasks, all blocked, in-progress resume). Loop body: TaskList → pick next unblocked → implement → validate-implementation → git commit → TaskUpdate(completed) → loop. Transient errors (rate limits, timeouts, 5xx) at any step are retried with exponential backoff via `references/error-classification.md` and `references/retry-with-backoff.md`. On all-tasks-complete: commits remaining changes, creates PR via `/gh-pr-create` (with `Closes #N` issue linking), waits for CI checks, and reports status. Pauses on: CI failure, validation failure after retries, transient retries exhausted, ambiguous decision, or commit failure. Pause messages include retry history when applicable. No PR created when blocked tasks remain.
 

@@ -7,15 +7,31 @@ allowed-tools:
   - Grep
   - Glob
   - Write
+  - Task
   - AskUserQuestion
   - WebSearch
   - WebFetch
-version: 1.0.0
+  - EnterPlanMode
+  - ExitPlanMode
+  - TaskCreate
+  - TaskList
+version: 1.0.2
 ---
 
 # Planning Workflow
 
 Structured planning that validates the problem and mines past knowledge before investing in new research. Produces living plans with checkable acceptance criteria.
+
+## Plan Mode Front-End
+
+Plan Mode (`EnterPlanMode` → interactive drafting → `ExitPlanMode`) is the
+interactive drafting front-end that brackets the phase pipeline below. The draft
+is assembled **ephemerally** inside Plan Mode (no durable writes); only on user
+approval does the **materialization** step write the durable `DESIGN.md`/`PLAN.md`
+and seed native `TaskCreate`/`TaskList`. Plan Mode is ephemeral (it resets on
+acceptEdits) — the durable docs and seeded native tasks remain authoritative.
+See `operations/plan-mode-frontend.md`. If Plan Mode is unavailable, run the
+pipeline directly and write durable artifacts as before.
 
 ## Overview
 
@@ -62,7 +78,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/solution-search.md`
 
-**Quick summary**: Runs a QMD query (hybrid BM25 + vector + reranker + HyDE) against the configured vault collection, delegating to `task-workflow/references/solution-search.md` for the canonical invocation and fail-open protocol. Surfaces the top-3 notes as "Prior Solutions" context for downstream phases. Per DD4, no longer reads `docs/solutions/`.
+**Quick summary**: Delegates a QMD query (hybrid BM25 + vector + reranker + HyDE) against the configured vault collection to an out-of-context `Explore` subagent (Task tool, `subagent_type: Explore`), which follows `task-workflow/references/solution-search.md` for the canonical invocation and fail-open protocol and returns the compiled "Prior Solutions" section. The planning session consumes that section as context for downstream phases; it does not run `qmd` directly. Per DD4, no longer reads `docs/solutions/`.
 
 ### 4. Research Gating
 
@@ -115,7 +131,15 @@ When invoked, run all phases sequentially. Each phase produces a section that fe
 
 ### Phase Pipeline
 
+When Plan Mode is available, `EnterPlanMode` wraps the pipeline (phases 1–7 draft
+ephemerally), `ExitPlanMode` presents the assembled draft for approval, and the
+materialization step writes durable `DESIGN.md`/`PLAN.md` + seeds native Tasks
+(see `operations/plan-mode-frontend.md`).
+
 ```
+EnterPlanMode  (read-only drafting; no durable writes)
+      │
+      ▼
 Task Description
       │
       ▼
@@ -180,6 +204,13 @@ Task Description
 │ 8. ADR       │──→ ADR Propagation section
 │  Propagation │     (strategic doc edits + issue/board checklist)
 └─────────────┘
+      │
+      ▼
+ExitPlanMode  ──→ present assembled draft for approval
+      │
+      ▼ (approved)
+MATERIALIZE   ──→ write durable DESIGN.md/PLAN.md (phase 7 step 5)
+                  + seed native TaskCreate/TaskList from criteria
 ```
 
 ### Output
@@ -231,6 +262,7 @@ Full path remains the default. The fast path gate evaluates criteria and routes 
 
 Load only what you need:
 
+- `operations/plan-mode-frontend.md` — Plan Mode front-end: `EnterPlanMode` → ephemeral drafting → `ExitPlanMode` → materialize durable docs + seed native Tasks
 - `operations/problem-validation.md` — Problem validation, user interview, task type classification, and interactive content gate
 - `operations/designmd-reconciliation.md` — DESIGN.md three-layer reconciliation
 - `operations/fast-path-gate.md` — Fast path criteria evaluation and routing

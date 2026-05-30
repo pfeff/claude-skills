@@ -8,8 +8,22 @@ Spawns N subagents in parallel via the Task tool, collects all results, handles 
 
 | Input | Required | Description |
 |-------|----------|-------------|
-| `agents` | Yes | List of agent specs, each with `prompt` (string) and `description` (short label) |
+| `agents` | Yes | List of agent specs, each with `prompt` (string) and `description` (short label), plus an optional per-agent `isolation` (see below) |
 | `result_format` | No | `structured` (expect RESULT_START/END markers) or `raw` (return full response text). Default: `raw` |
+| `isolation` | No | Fan-out-level default for the per-agent `isolation`. When set to `'worktree'`, agents that don't specify their own `isolation` inherit it. Default: unset (no isolation — current behavior preserved exactly) |
+
+### Worktree isolation (optional)
+
+`isolation: 'worktree'` (per-agent, or fan-out-level as a default) is passed straight
+through to the `Task` tool agent spec. It runs that agent in its own throwaway git
+worktree, auto-cleaned when the agent finishes.
+
+Use it **only** for parallel agents that **mutate files concurrently within a single
+repo** — without it, simultaneous edits/writes to the same working tree collide.
+**Omit it for read-only fan-outs** (review, analysis): isolation adds worktree
+setup/teardown cost and buys nothing when no agent writes. It is **not** for the
+multi-repo `~/src/work/<epic>/<task>/<repo>` layout — that is a separate, non-D3
+concern.
 
 ## Purpose
 
@@ -37,7 +51,11 @@ For each agent in agents:
   Task(
     subagent_type: "general-purpose",
     prompt: agent.prompt,
-    description: agent.description
+    description: agent.description,
+    # Optional. Resolve agent.isolation, else the fan-out-level isolation.
+    # Only emit the field when it resolves to a value (e.g. 'worktree');
+    # when unset, omit it entirely so behavior is unchanged.
+    isolation: agent.isolation ?? isolation   # omit if unset
   )
 ```
 
@@ -175,6 +193,18 @@ Caller decides: proceed with 2 successful results, note workspace check was skip
 ## Integration Points
 
 - **Called by**: review (Step 5), sprint-review (Steps 2-4), implement-feature (Phase 2 parallel), analyze-project (parallel agents)
+- **Worktree isolation guidance** (apply when a caller dispatches its parallel agents
+  through this operation):
+  - **Read-only** parallel agents — review/analysis only (the `review`,
+    `sprint-review`, `analyze-project` patterns) — do not mutate the working tree, so
+    they **omit** `isolation`.
+  - **File-mutating** parallel agents in a single repo — e.g. `implement-feature`
+    (Phase 2 parallel implementation) — pass `isolation: 'worktree'`.
+
+  Note: these callers are defined outside this `claude-skills` package (only `review`
+  is in-package, and it currently spawns its agents directly rather than through this
+  operation). Their call sites adopt the split where those commands live — this package
+  only ships the passthrough.
 - **Depends on**: Task tool (subagent_type: general-purpose)
 - **Related**: `dispatch-task.md` for single-task dispatch with retry; fan-out is for concurrent independent work
 - **Reference**: See `references/subagent-dispatch.md` for the dispatch contract and RESULT_START/END format spec

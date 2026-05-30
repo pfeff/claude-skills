@@ -24,6 +24,35 @@ This provides `coord_create_task`, `coord_sync_status`, and `coord_report_progre
 
 Eliminates per-task human prompts by chaining task selection, implementation, validation, and commit into an autonomous loop. The agent operates independently until: all tasks complete, a validation failure exhausts retries, the agent encounters an ambiguous decision, a commit fails, or stuck detection triggers escalation. See DESIGN.md R1-R8 for full requirements.
 
+## Within-Session Driver (`/goal`)
+
+This loop is **self-driving by default** — once entered, it runs the loop body until a termination condition fires. A session may *optionally* be driven by native `/goal` instead, which is purely additive on top of the loop:
+
+```
+/goal <completion-condition>; stop after N turns
+```
+
+`/goal` installs a session-scoped Stop hook that re-engages the agent toward the stated condition for up to `N` turns. Used this way, `/goal` is the **within-session driver / turn budget** for the auto-advance loop (the same role applies on the re-entry path — see `resume.md`). It keeps the agent advancing through the task list without per-turn human prompts.
+
+**The authoritative completion gate is NOT `/goal`.** `/goal`'s evaluator inspects the session transcript to decide whether to release the Stop hook; that is a *driver* signal, never the source of truth for "node complete." The authoritative "done" remains the **tool-based complete-check** that this loop already enforces:
+
+- every native `TaskList` task is `completed` (the entry guard / step 6 termination condition), **and**
+- validation passed for each task (step 3), **and**
+- changes are committed **and pushed**, with a PR opened for L0 nodes (step 7a).
+
+These conditions are evaluated with `TaskList` / `git` / `gh` — real tool state, not transcript inference. Step 7's termination on "no pending tasks (+ validation + commit/PR success)" **is** that complete-check; `/goal` does not replace or relax it.
+
+### `/goal`-stop ≠ node-complete
+
+A `/goal` halt (turn budget exhausted, or its transcript evaluator deciding the condition is met) can occur while the tool-based check still says **NOT complete** — e.g. pending tasks remain, commits are unpushed, or the worktree is dirty. In that case the node is **not done**:
+
+| Tool-based check at `/goal`-stop | Meaning | Action |
+|----------------------------------|---------|--------|
+| All Tasks completed + validated + committed/pushed (PR open) | Complete | Done — release. |
+| Pending/in-progress tasks remain, or unpushed commits, or dirty tree | **Incomplete** | **Re-drive** — re-issue `/goal` (or nudge the session) to resume the loop. Do **not** treat the halt as completion. |
+
+The supervising layer (L1) is responsible for detecting the halted-but-incomplete state (via `TaskList` / `git status` / `gh pr` on the worktree) and re-driving rather than signing off. A clean stop is only a completion when the tool-based gate above passes.
+
 ## Configuration
 
 Read workspace settings before entering the loop:

@@ -63,7 +63,7 @@ allowed-prompts:
     prompt: create node via discuss-dispatch script
   - tool: Bash
     prompt: check active nodes for completion
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Goal Tree Workflow
@@ -203,6 +203,7 @@ Load on-demand as needed:
 | `references/node-lifecycle.md` | State machine, completion rules, dependency resolution |
 | `references/goal-document.md` | GOAL.md format (bootstrap mode) |
 | `references/goal-md-format.md` | GOAL.md parsing specification |
+| `references/workflow-vs-goal-tree.md` | When to reach for a native `Workflow` (bounded in-session fan-out) vs. goal-tree / L{N} (durable multi-session orchestration) |
 
 ## Scripts
 
