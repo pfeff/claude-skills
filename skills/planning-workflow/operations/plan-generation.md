@@ -212,7 +212,12 @@ If DESIGN.md reconciliation was skipped or produced no upstream flags, the propa
 No upstream flags from DESIGN.md reconciliation — propagation skipped.
 ```
 
-### 5. Write plan file
+### 5. Write plan file (materialization)
+
+This is the materialization step of the Plan Mode front-end (see
+`operations/plan-mode-frontend.md`): the ephemeral draft becomes the durable,
+authoritative artifact. Under Plan Mode, run this only after `ExitPlanMode`
+approval.
 
 Write the plan to PLAN.md in the workspace root:
 
@@ -221,6 +226,19 @@ Write: file_path="PLAN.md" content=<generated plan>
 ```
 
 If PLAN.md already exists, ask the user before overwriting.
+
+### 6. Seed native Tasks
+
+After writing PLAN.md, seed native Tasks from the acceptance criteria so the
+durable plan's criteria are trackable in the native task store:
+
+- For each acceptance criterion (or each phase, for "A Lot" plans), call
+  `TaskCreate` with the criterion text.
+- Call `TaskList` to confirm the seeded set.
+
+The native task store plus the `PLAN.md` `[ ]`/`[x]` checkboxes are the progress
+mechanism — do not use `TodoWrite`. `PLAN.md` remains the authoritative record;
+the seeded tasks mirror its criteria for native tracking during implementation.
 
 ## Living Plan Usage
 
