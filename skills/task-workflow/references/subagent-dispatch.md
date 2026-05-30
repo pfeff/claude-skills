@@ -35,6 +35,12 @@ ${TASK_LEDGER_ENTRIES_FOR_DEPENDENCIES}
 - Workspace: ${WORKSPACE_PATH}
 - Repository: ${REPO_PATH}
 
+**Optional `isolation` field**: a dispatch may pass `isolation: 'worktree'` to the
+Task spec to run the subagent in its own throwaway git worktree (auto-cleaned on
+finish). Use it only for parallel subagents that mutate files concurrently within a
+single repo (see `operations/fan-out.md`); omit it for sequential or read-only
+dispatch. Default-unset preserves current behavior.
+
 ## Instructions
 
 1. Read the source files relevant to this task

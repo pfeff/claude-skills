@@ -23,7 +23,7 @@ repo** — without it, simultaneous edits/writes to the same working tree collid
 **Omit it for read-only fan-outs** (review, analysis): isolation adds worktree
 setup/teardown cost and buys nothing when no agent writes. It is **not** for the
 multi-repo `~/src/work/<epic>/<task>/<repo>` layout — that is a separate, non-D3
-concern. Default-unset means existing callers behave exactly as before.
+concern.
 
 ## Purpose
 
@@ -193,16 +193,18 @@ Caller decides: proceed with 2 successful results, note workspace check was skip
 ## Integration Points
 
 - **Called by**: review (Step 5), sprint-review (Steps 2-4), implement-feature (Phase 2 parallel), analyze-project (parallel agents)
-- **Worktree isolation per caller**:
-  - `review`, `sprint-review`, `analyze-project` — **read-only** parallel agents
-    (review/analysis only); they do not mutate the working tree, so they **omit**
-    `isolation`.
-  - `implement-feature` (Phase 2 parallel implementation) — parallel agents that
-    **edit/write files in one repo**, so it should pass `isolation: 'worktree'`.
+- **Worktree isolation guidance** (apply when a caller dispatches its parallel agents
+  through this operation):
+  - **Read-only** parallel agents — review/analysis only (the `review`,
+    `sprint-review`, `analyze-project` patterns) — do not mutate the working tree, so
+    they **omit** `isolation`.
+  - **File-mutating** parallel agents in a single repo — e.g. `implement-feature`
+    (Phase 2 parallel implementation) — pass `isolation: 'worktree'`.
 
-  Note: `implement-feature`, `sprint-review`, and `analyze-project` are defined
-  outside this `claude-skills` package; only `review` lives here. Their call sites are
-  updated where those commands live — this package only ships the passthrough.
+  Note: these callers are defined outside this `claude-skills` package (only `review`
+  is in-package, and it currently spawns its agents directly rather than through this
+  operation). Their call sites adopt the split where those commands live — this package
+  only ships the passthrough.
 - **Depends on**: Task tool (subagent_type: general-purpose)
 - **Related**: `dispatch-task.md` for single-task dispatch with retry; fan-out is for concurrent independent work
 - **Reference**: See `references/subagent-dispatch.md` for the dispatch contract and RESULT_START/END format spec
