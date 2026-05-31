@@ -2,6 +2,37 @@
 
 How goal tree depth maps to the autoresearch layer architecture. The tree encodes layer ownership without requiring schema changes in the coordinator.
 
+## Platform constraint — what can be a layer
+
+The hard platform limit is **no nesting**: an Agent-tool subagent is **depth-1**
+(it cannot spawn its own subagents), and an agent team is **one flat level**
+(teammates cannot spawn their own teams or subagents). Only a top-level session —
+or a Workflow script — spawns agents. So substrate is chosen **per layer and use
+case**, not "sessions only":
+
+- **L0 (leaf task):** (a) a full **tmux session** (or container), (b) a
+  **subagent** (use worktree-isolation when it must produce its own PR), or
+  (c) a **Workflow** — whichever fits the task.
+- **One L1 + its L0 workers (a single attended burst):** separate sessions, *or*
+  an **agent team** (lead = L1, teammates = L0 — one flat level).
+- **The durable, multi-session L2→L1→L0 tree** — and any layer that dispatches a
+  *child dispatching layer* — must be **separate sessions** (tmux/container)
+  coordinated by the heartbeat (`ct`). This is the **only** hard "must be a
+  session" case: it is where the nesting + durability limits actually bite (a
+  subagent/teammate can't spawn the next dispatching layer, and can't persist or
+  self-supervise across sessions).
+
+**What you cannot do:** model a layer that must **dispatch a child dispatching
+layer**, or **persist/self-supervise across sessions**, as a subagent or a
+teammate — that collapses the layer separation. Everything else has options.
+
+**Forward note:** the **Workflow** implementation may supersede tmux as the
+session substrate over time; the load-bearing invariant is *no-nesting +
+durability*, not the specific substrate.
+
+*(Canonical treatment: `lN-lifecycle-doctrine` Platform constraints 1–3 + the
+scoped agent-team pattern.)*
+
 ## Layer Assignment Rules
 
 | Rule | Layer | Description |
