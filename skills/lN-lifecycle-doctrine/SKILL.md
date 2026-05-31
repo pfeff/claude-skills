@@ -3,7 +3,7 @@ name: lN-lifecycle-doctrine
 description: Shared doctrine reference for child-session lifecycle management at every supervision layer. Defines the generic child state machine (spawned→working→complete→retired, context-pressure axis, edge states), per-state entry/act/exit rules, complete-check guards, teardown discipline, idle-fleet handling, and per-layer executor bindings for an L1 supervision launcher (child=L0) and an L2 supervision launcher (child=L1). This skill has no operations — it is reference content a supervision executor loads at tick time and applies at its layer. Never inline this doctrine into the executor skills themselves.
 allowed-tools:
   - Read
-version: 1.0.0
+version: 1.1.0
 ---
 
 # lN-lifecycle-doctrine — shared child-session lifecycle doctrine
@@ -20,32 +20,49 @@ the skill; the rendered body enters context). If you find yourself about to add 
 lifecycle rule by editing an executor skill, **edit this file instead** — that is
 the doctrine-drift failure mode this split exists to prevent.
 
-## Layer = session, not subagent
+## Platform constraints — what can be a layer
 
-A layer (L2/L1/L0) is a **real session** (an agent process such as a tmux pane or
-a container), never an Agent-tool subagent. Subagents are depth-1 — they cannot
-spawn their own subagents — so a subagent is a leaf helper within one session,
-never a dispatching or supervised layer. (Canonical statement: the goal-tree
-`references/layer-model.md` "Platform constraint" section.)
+The hard platform limit is **no-nesting + durability**, not "a layer is always a
+session." Three verified facts about the agent platform bound what a layer can be:
 
-Lifecycle implications of that fact:
+1. **Subagents cannot spawn subagents.** An Agent-tool subagent is strictly
+   depth-1 — only a top-level session or a Workflow script may spawn agents. So a
+   subagent is a leaf helper within one session, never a *dispatching* layer.
+   - **Lifecycle implication:** a supervisor cannot delegate supervision to a
+     subagent that itself spawns workers. The per-tick observation subagent is
+     one-shot — it observes the fleet and **reports back**; it does **not** spawn
+     the next layer.
+2. **Agent-team teammates cannot spawn subagents; no nested teams.** A team is
+   exactly ONE flat level (lead + teammates); teammates cannot spawn their own
+   teams or subagents. You therefore cannot run L2→L1→L0 as live nested teams — a
+   team models ONE attended layer, not the multi-deep tree.
+3. **The loop depends on ~0% live conversation context and ~100% durable disk
+   state + stateless re-grounding ticks.** Nothing is carried in memory between
+   ticks; every tick re-reads doctrine + a fresh pane capture + the sweep log +
+   the goal tree / coordinator + live PR state. The only thing that must stay
+   alive is the heartbeat (until a sanctioned confirmed-idle auto-stop removes
+   it); panes are live but gracefully re-groundable. Ephemerality of teams /
+   `/clear` is **not fatal** — the child rebuilds from its `CLAUDE.md` alone (see
+   **State-preserving design**).
 
-- A supervisor **cannot delegate supervision to a subagent** that itself spawns
-  workers. The per-tick observation subagent is one-shot: it observes the fleet
-  and **reports back**; it does **not** spawn the next layer. The supervisor
-  dispatches its children as sessions/containers.
-- You cannot run L2→L1→L0 as live nested subagents (or nested agent-teams). The
-  autonomous tree is **separate per-layer sessions** wired by a heartbeat
-  scheduler; nesting comes from that, not from subagent nesting.
+### What can be a layer (substrate is a choice)
 
-The loop therefore depends on **~0% live conversation context and ~100% durable
-disk state + stateless re-grounding ticks.** Nothing is carried in memory between
-ticks; every tick re-reads doctrine + a fresh pane capture + the sweep log +
-the goal tree / coordinator + live PR state. The only thing that must stay alive
-is the heartbeat (until a sanctioned confirmed-idle auto-stop removes it); panes
-are live but gracefully re-groundable. Ephemerality of teams / `/clear` is **not
-fatal** — the child rebuilds from its `CLAUDE.md` alone (see **State-preserving
-design**).
+Constraints 1–2 bound *nesting*, not *substrate*. Within the no-nesting +
+durability limit, the substrate for a child is chosen **per layer and use case**:
+
+- **L0 (leaf task):** a real session / container, an Agent-tool **subagent**
+  (worktree-isolated when it must produce its own PR), or a **Workflow** —
+  whichever fits the task.
+- **One L1 + its L0 workers (a single attended burst):** separate sessions, *or*
+  an **agent team** (lead = L1, teammates = L0 — one flat level; see below).
+- **The durable multi-session L2→L1→L0 tree** — and any layer that dispatches a
+  *child dispatching layer* — **must** be separate sessions coordinated by the
+  heartbeat scheduler. This is the **only** hard "must be a session" case: a
+  subagent/teammate can neither spawn the next dispatching layer nor
+  persist/self-supervise across sessions.
+
+(Canonical "what can be a layer" treatment: the goal-tree
+`references/layer-model.md` *Platform constraint* section.)
 
 ### Agent-teams as an inner engine (optional, flag-gated)
 
@@ -86,6 +103,47 @@ A supervisor MAY, however, **auto-stop its own tick loop** once its fleet is
 *confirmed idle* for `auto_stop_idle_ticks` consecutive ticks — see **Idle-fleet
 signal** below. This bounds the otherwise-unbounded idle escalation loop; it stops
 the supervisor itself, never its children.
+
+---
+
+## Objective-scoped lifetime (child = L1)
+
+**An L1's lifetime keys on its OBJECTIVE — not its tree, not the mission.**
+Three scopes must be kept distinct:
+
+- **Tree** — one dispatch graph (decomposition → all-nodes-complete). The
+  shortest scope. **Tree-completion is NOT a teardown trigger.**
+- **Objective** — a defined outcome with acceptance criteria, solved by a set of
+  L0 activities. **May span more than one tree.** Finite — it has a terminal
+  accept state.
+- **Mission** — the continuous L∞ vector; never "done."
+
+An objective-scoped L1 is spawned for one objective, heartbeat-drives its L0s to
+that objective's AC, and is retired once the objective is accepted. It is **not**
+a persistent generic worker or a reusable pool: **new objective → new L1** (the
+concrete spawn op lives in the L2 supervision launcher's reference,
+*Spawn-on-new-objective*).
+
+### Reconciliation (supersedes the "mission-immortal L1" framing)
+
+An earlier rule held that an L1's session is *persistent across iteration trees;
+do not kill on tree completion.* That rule conflated tree, objective, and
+mission. Its **valid kernel is preserved**: tree-completion does NOT retire an
+L1 — an objective may legitimately span multiple trees. Its **superseded part**
+is the framing of the L1 as a mission-scoped, effectively immortal actor.
+Mission continuity is the **supervisor's** concern (L2 / L(top)), realized by
+**spawning successive objective-scoped L1s**, not by keeping one L1 alive
+forever. Both rules' real concerns survive; only the over-broad
+"mission-immortal L1" framing is replaced.
+
+### Where the objective + AC are declared
+
+The objective and its acceptance criteria live in a structured **"Objective +
+AC" block in the L1's PLAN.md** (a coordinator node field when the coordinator is
+live). The L1 is spawned with this block. Full machine-checkability is **not**
+required — the terminal gate is an **L2 acceptance judgment** over the AC plus
+the evidence the L1 surfaces, not a strict machine predicate (see
+*Objective-accept marker* under **Teardown guards**).
 
 ---
 
@@ -163,9 +221,45 @@ Before teardown, the supervisor MUST verify all guards:
 2. **Leaf PR is merged or abandoned** — not draft, not open.
 3. **No unpushed commits** (complete-check condition 2).
 4. **No dirty tracked files** (complete-check condition 3).
+5. **Supervisor has accepted the objective outcome** (objective-scoped children
+   only — e.g. child = L1). The supervisor has made an acceptance judgment over
+   the child's objective AC + surfaced evidence and written a durable
+   **objective-accept marker** (see below). For a non-objective-scoped child
+   (e.g. an L0 leaf, where the CLEAN review marker + merge IS the acceptance),
+   this guard is satisfied by guards 2–4 plus complete-check condition 4.
 
 If any guard fails: **do not proceed**. Emit `teardown-blocked: <child> —
 <reason>` and escalate to parent.
+
+### Objective-accept marker (the supervisor retires the child; the child does not self-terminate)
+
+Termination is **the supervisor retiring the child**, not the child
+self-destructing. For an objective-scoped L1:
+
+1. The L2 makes its **acceptance judgment** over the objective's AC + the L1's
+   surfaced evidence (per `lN-review-doctrine` axis 3 / the l2-review verdict).
+2. On accept, the L2 writes a **durable accept-marker the L1 can poll** — a
+   per-tree record keyed by objective-id (or the coordinator node "accepted"
+   field when the coordinator is live). It survives `/clear` and is readable by
+   the L1 between ticks, so the L1 can observe its own retirement is sanctioned.
+3. The L2 then runs teardown — it owns the L1's lifecycle (*Recursive ownership*
+   above) and **never tears down its own session**.
+
+This appends to the existing teardown guards (PRs merged ∧ no-unpushed ∧
+no-dirty-tracked) the final gate **+ the supervisor has accepted the objective
+outcome**. The accept-marker is what guard 5 verifies. The concrete write +
+retire mechanics live in the L2 supervision launcher's reference
+(*Accept-marker and retire*).
+
+### Heartbeat teardown (retiring a child that runs its own heartbeat)
+
+A child that is itself a supervisor (e.g. an L1, which runs its own supervision
+heartbeat) carries durable heartbeat state. Retiring it MUST also tear that down:
+remove its heartbeat entry and **archive** its per-instance config/state. This is
+distinct from the confirmed-idle auto-stop / `--stop` (which preserves the state
+for restart) — retirement closes the objective, so the heartbeat state is
+archived, not preserved. See the per-layer **L2 binding** below for the concrete
+sequence.
 
 ---
 
@@ -360,8 +454,8 @@ subagent. The subagent observes and reports; the supervisor acts.
 | Property | L2 value |
 |----------|---------|
 | Child type | L1 supervisor session |
-| `complete` trigger | L1's sub-system AC green (all L0 PRs merged, no remaining work in L1's tree) |
-| Teardown method | Stop the L1's supervision tick against its tree-id; remove the L1 from the L2's session registry |
+| `complete` trigger | L1's objective AC met (per the Objective + AC block) **AND** L2 has accepted the outcome (objective-accept marker written) |
+| Teardown method | Stop the L1's supervision tick against its tree-id (removes its heartbeat entry); **archive** the L1's heartbeat state (move it to a retired location); remove the L1 from the L2's session registry |
 | `/clear` target | L1's agent REPL pane |
 | Parent receives reports | Operator |
 
