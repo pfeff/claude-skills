@@ -2,6 +2,28 @@
 
 How goal tree depth maps to the autoresearch layer architecture. The tree encodes layer ownership without requiring schema changes in the coordinator.
 
+## Platform constraint — what can be a layer
+
+A layer (L2, L1, L0) is a **real session** — a separate agent process such as a
+tmux pane running an interactive agent, or a container — **never** an Agent-tool
+subagent.
+
+Subagents are **depth-1** on this platform: a subagent cannot spawn its own
+subagents. Only the top-level session (or a workflow script) dispatches agents.
+A subagent is therefore a **leaf helper within one session**, never a
+dispatching or supervised layer:
+
+- An L1 modeled as a subagent **cannot** dispatch L0 subagents — it would have to
+  do the L0 work itself and self-review, collapsing the layer separation. Real
+  L1s are sessions, which can dispatch.
+- A supervisor cannot delegate supervision to a subagent that itself spawns
+  workers. A tick/observation subagent observes and reports back; it does **not**
+  spawn the next layer.
+
+**Consequence for dispatch:** each supervised/dispatching layer is its own
+session (or container). Nesting comes from separate per-layer sessions, not from
+nested subagents.
+
 ## Layer Assignment Rules
 
 | Rule | Layer | Description |
