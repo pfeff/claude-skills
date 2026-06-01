@@ -204,6 +204,7 @@ Load on-demand as needed:
 | `references/goal-document.md` | GOAL.md format (bootstrap mode) |
 | `references/goal-md-format.md` | GOAL.md parsing specification |
 | `references/workflow-vs-goal-tree.md` | When to reach for a native `Workflow` (bounded in-session fan-out) vs. goal-tree / L{N} (durable multi-session orchestration) |
+| `references/reformulation-direction.md` | Provisional reformulation direction — dispatch-when-ripe (planner/dispatcher), driving moves to the durable driver, rename pending. No behavior change. |
 | `docs/native-vs-homebrew-boundary.md` (repo root) | Native↔homebrew KEEP/ADOPT map, Workflow↔goal-tree routing rule, and `/goal` usage (D1–D9) |
 | `docs/rollout-capture-discipline.md` (repo root) | Finish gate (DDD step 5b), Obsidian capture discipline, and regression-gate (cutover) criteria for the rollout |
 
