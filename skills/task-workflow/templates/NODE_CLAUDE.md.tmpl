@@ -18,19 +18,6 @@ ${REPOS_LIST}
 
 ## Instructions
 
-- See **DESIGN.md** for requirements and acceptance criteria
-- Use `TaskList` to see implementation progress
-- Return to project root: `cd ${PROJECT_DIR}`
-- Check project state: `Read(${PROJECT_DIR}/GOAL.md)`
-
-## Auto-Advance
-
-This workspace uses auto-advance: after `/init-workspace` creates the task list, the agent autonomously cycles through tasks (implement → validate → commit → next).
-
-**The loop stops when**:
-- All tasks are complete
-- A task fails validation after retries
-- The agent encounters an ambiguous decision
-- A commit fails
-
-On pause, review the output and provide guidance. On completion, run `/finish` to create the PR.
+- See **DESIGN.md** for requirements and acceptance criteria.
+- Use `TaskList` for implementation progress; `cd ${PROJECT_DIR}` and `Read(${PROJECT_DIR}/GOAL.md)` for project state.
+- This workspace auto-advances (implement → validate → commit → next); see the `auto-advance` operation for loop/stop behavior.
