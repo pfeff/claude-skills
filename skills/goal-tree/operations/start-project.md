@@ -18,26 +18,26 @@ Transforms a user's project idea into a structured, executable goal tree. The ou
 
 ### 1. Context Gathering
 
-Read guardian-level documentation to understand the project landscape:
+Read strategic meta-repo documentation to understand the project landscape:
 
-Read guardian docs if available. Check for local copies first:
+Read strategic meta-repo docs if available. Check for local copies first:
 
 ```
-Glob(pattern: "~/src/github/<owner>/guardian/{REQUIREMENTS,ARCHITECTURE,PROJECT}.md")
+Glob(pattern: "~/src/github/<owner>/<strategic-repo>/{REQUIREMENTS,ARCHITECTURE,PROJECT}.md")
 ```
 
 If local copies exist, use the Read tool. Otherwise fetch via API:
 
 ```bash
-gh api repos/<owner>/guardian/contents/REQUIREMENTS.md --jq '.content | @base64d' 2>/dev/null
-gh api repos/<owner>/guardian/contents/ARCHITECTURE.md --jq '.content | @base64d' 2>/dev/null
+gh api repos/<owner>/<strategic-repo>/contents/REQUIREMENTS.md --jq '.content | @base64d' 2>/dev/null
+gh api repos/<owner>/<strategic-repo>/contents/ARCHITECTURE.md --jq '.content | @base64d' 2>/dev/null
 ```
 
-If guardian docs exist, use them to ground the decomposition in existing architecture and requirements.
+If strategic meta-repo docs exist, use them to ground the decomposition in existing architecture and requirements.
 
 ### 2. Project Discussion (MANDATORY)
 
-**Always have this conversation — even if `description` and guardian docs are provided.** Do not skip to decomposition. The user's intent, priorities, and scope boundaries cannot be reliably inferred from documentation alone.
+**Always have this conversation — even if `description` and strategic meta-repo docs are provided.** Do not skip to decomposition. The user's intent, priorities, and scope boundaries cannot be reliably inferred from documentation alone.
 
 Present what you learned from context gathering, then begin a **focused conversation** to fill in the project spec. The goal is a natural dialogue, not an interrogation.
 
@@ -93,7 +93,7 @@ The conversation does not end at decomposition. After the tree is approved and e
 If `repos` not provided:
 
 1. Check the conversation for repo references
-2. Check guardian docs for repo inventory
+2. Check strategic meta-repo docs for repo inventory
 3. Ask the user which repos are involved
 
 Resolve each repo name to a source path:
@@ -288,8 +288,8 @@ mkdir -p ~/src/work/<project-slug>
 The project slug is a 2-3 word identifier. Choose it carefully — it's the primary way the user identifies the project in `ls`, tmux session names, and branch prefixes.
 
 **Slug selection rules:**
-1. **Derive from the objective, not the title.** If the objective is "Migrate traceability to AC and execute S1," the slug is about the *work*, not the project name. `s1-traceability` is better than `guardian-platform`.
-2. **Match the scope.** A slug that's too narrow (`ac-local-prod`) becomes wrong when scope expands. A slug that's too broad (`guardian`) is meaningless. Target the scope of the actual goal tree.
+1. **Derive from the objective, not the title.** If the objective is "Migrate traceability to AC and execute S1," the slug is about the *work*, not the project name. `s1-traceability` is better than `acme-platform`.
+2. **Match the scope.** A slug that's too narrow (`ac-local-prod`) becomes wrong when scope expands. A slug that's too broad (`acme`) is meaningless. Target the scope of the actual goal tree.
 3. **Explain your reasoning.** Tell the user what slug you chose and why. If they don't like it, change it — the directory hasn't been created yet.
 4. **Check for existing workspaces.** Run `ls ~/src/work/` to see what's already there. Avoid collisions and maintain continuity with prior sessions when applicable.
 
@@ -335,7 +335,7 @@ To continue the OODA loop: `/project:next`
 ## Context
 <problem statement, motivation, scope from conversation>
 
-## Guardian
+## Strategic Meta-Repo
 - **Issue**: <owner/repo#number>
 - **Spec**: <issue URL>
 
@@ -384,7 +384,7 @@ Note: In normal mode, repo worktrees are created per-node at dispatch time by `o
 
 | Error | Response |
 |-------|----------|
-| Guardian repo not accessible | Skip guardian doc reading, proceed with user input |
+| Strategic meta-repo not accessible | Skip strategic meta-repo doc reading, proceed with user input |
 | `gh issue create` fails | Report error, ask user to create manually, continue with manual issue reference |
 | Repo not found in ~/src/github/ | Ask user for correct path |
 | User rejects decomposition | Iterate: revise text, re-present — do not create files until approved |
@@ -400,9 +400,9 @@ Note: In normal mode, repo worktrees are created per-node at dispatch time by `o
 User: "I need to add OAuth authentication across our API and web app"
 
 Agent:
-  1. Reads guardian REQUIREMENTS.md — finds auth requirements
+  1. Reads strategic meta-repo REQUIREMENTS.md — finds auth requirements
   2. Conversation (multiple turns):
-     Turn 1: "I found auth requirements in guardian docs. Here's what I understand so far:
+     Turn 1: "I found auth requirements in strategic meta-repo docs. Here's what I understand so far:
               [spec table with inferred values]. What's the concrete end-state —
               which OAuth providers do you need?"
      Turn 2: User answers → "Got it. Google and GitHub OAuth.
@@ -426,7 +426,7 @@ Agent:
         C.2. Add token refresh handling [pending] → web-app (depends: C.1)
 
   5. User approves (or iterates)
-  6. Creates guardian issue pfeff/api-service#45
+  6. Creates tracking issue <owner>/<repo>#45
   7. Checks coordinator → available → registers tree + nodes via coord CLI
      (If unavailable → enters bootstrap mode, uses TodoWrite + scripted workspaces)
   8. Creates project directory with CLAUDE.md, session via scripted path

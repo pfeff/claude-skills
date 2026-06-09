@@ -558,7 +558,7 @@ repositories:
 - Organizations: `~/src/github/<org>/*`
 
 **Azure DevOps**: `~/src/azdevops/<org>/<project>/<repo>`
-- Work repos: `~/src/azdevops/tcetra/*`
+- Work repos: `~/src/azdevops/<work-org>/*`
 
 **Worktrees**: `~/src/work/<epic>/<task-id>-<slug>/<repo>`
 

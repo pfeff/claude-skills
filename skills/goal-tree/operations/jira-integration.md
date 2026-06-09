@@ -225,7 +225,7 @@ acli jira auth status
 ```
 
 Environment variables (optional, for scripts):
-- `JIRA_SITE`: Jira instance (e.g., `tcetra.atlassian.net`)
+- `JIRA_SITE`: Jira instance (e.g., `your-org.atlassian.net`)
 - `JIRA_EMAIL`: User email
 - `JIRA_API_TOKEN`: API token (or use `~/.acli/token.txt`)
 

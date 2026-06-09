@@ -1,6 +1,6 @@
 # Status Operation
 
-Observe phase utility. Pulls current state from AC and guardian docs, presents a capability/performance/gap narrative.
+Observe phase utility. Pulls current state from AC and strategic meta-repo docs, presents a capability/performance/gap narrative.
 
 ## Inputs
 
@@ -26,8 +26,8 @@ In parallel:
 # AC tree state
 ac_node_query(action="get", tree_id=$TREE_ID)
 
-# Guardian strategy docs
-Read ~/src/github/pfeff/guardian/PROJECT.md
+# Strategic meta-repo docs
+Read ~/src/github/<owner>/<strategic-repo>/PROJECT.md
 ```
 
 ### 3. Synthesize Narrative
@@ -77,5 +77,5 @@ Sprint 3 measurement is overdue. Want to run it, or deprioritize?
 ## Integration Points
 
 - **Called by**: `/status` command
-- **Calls**: `ac_node_query` MCP tool, Read (guardian docs)
+- **Calls**: `ac_node_query` MCP tool, Read (strategic meta-repo docs)
 - **Does not call**: execute-tree, dispatch-node

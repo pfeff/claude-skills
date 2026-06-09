@@ -82,10 +82,10 @@ echo "=== resolve_repo_path ==="
 FIXTURE=$(mktemp -d)
 trap 'rm -rf "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/src/github/pfeff/claude-skills"
-mkdir -p "$FIXTURE/src/github/Tcetra/claude-skills"
-mkdir -p "$FIXTURE/src/github/Tcetra/only-in-tcetra"
+mkdir -p "$FIXTURE/src/github/Acme/claude-skills"
+mkdir -p "$FIXTURE/src/github/Acme/only-in-acme"
 mkdir -p "$FIXTURE/src/github/pfeff/only-in-pfeff"
-mkdir -p "$FIXTURE/src/azdevops/tcetra/Infra/legacy-repo"
+mkdir -p "$FIXTURE/src/azdevops/acme/Infra/legacy-repo"
 
 ORIG_HOME="$HOME"
 export HOME="$FIXTURE"
@@ -96,10 +96,10 @@ rc=$?
 assert_rc 0 "$rc" "qualified pfeff/claude-skills returns 0"
 assert_eq "$FIXTURE/src/github/pfeff/claude-skills" "$path" "qualified pfeff/claude-skills path"
 
-path=$(resolve_repo_path "Tcetra/claude-skills")
+path=$(resolve_repo_path "Acme/claude-skills")
 rc=$?
-assert_rc 0 "$rc" "qualified Tcetra/claude-skills returns 0"
-assert_eq "$FIXTURE/src/github/Tcetra/claude-skills" "$path" "qualified Tcetra/claude-skills path"
+assert_rc 0 "$rc" "qualified Acme/claude-skills returns 0"
+assert_eq "$FIXTURE/src/github/Acme/claude-skills" "$path" "qualified Acme/claude-skills path"
 
 # Qualified form pointing at a missing owner returns failure (no fallback).
 path=$(resolve_repo_path "nobody/claude-skills")
@@ -136,7 +136,7 @@ path=$(resolve_repo_path ".")
 rc=$?
 assert_rc 1 "$rc" "bare-name '.' rejected"
 
-# Ambiguous unqualified — claude-skills exists under both pfeff and Tcetra in
+# Ambiguous unqualified — claude-skills exists under both pfeff and Acme in
 # the fixture. Document the alphabetical-first behavior (the exact scenario R2
 # motivates) as a regression baseline.
 path=$(resolve_repo_path "claude-skills")
@@ -151,9 +151,9 @@ case "$path" in
     ;;
 esac
 
-# Unqualified Tcetra-only repo still resolves via glob fallback.
-path=$(resolve_repo_path "only-in-tcetra")
-assert_eq "$FIXTURE/src/github/Tcetra/only-in-tcetra" "$path" "Tcetra-only unqualified resolves"
+# Unqualified Acme-only repo still resolves via glob fallback.
+path=$(resolve_repo_path "only-in-acme")
+assert_eq "$FIXTURE/src/github/Acme/only-in-acme" "$path" "Acme-only unqualified resolves"
 
 # Unqualified pfeff-only repo resolves.
 path=$(resolve_repo_path "only-in-pfeff")
@@ -161,7 +161,7 @@ assert_eq "$FIXTURE/src/github/pfeff/only-in-pfeff" "$path" "pfeff-only unqualif
 
 # Unqualified azdevops fallback continues to work.
 path=$(resolve_repo_path "legacy-repo")
-assert_eq "$FIXTURE/src/azdevops/tcetra/Infra/legacy-repo" "$path" "azdevops fallback"
+assert_eq "$FIXTURE/src/azdevops/acme/Infra/legacy-repo" "$path" "azdevops fallback"
 
 export HOME="$ORIG_HOME"
 

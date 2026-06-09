@@ -17,7 +17,7 @@ Query project board items filtered by sprint name, with optional status filter. 
 ### 1. Query with sprint filter only
 
 ```bash
-sqlite3 -separator '|' ~/Library/Caches/guardian/project-board.db "
+sqlite3 -separator '|' ~/Library/Caches/<project>/project-board.db "
   SELECT i.repo, i.issue_number, i.title,
          COALESCE(sv.value, '') as status
   FROM items i
@@ -36,7 +36,7 @@ Replace `<sprint_name>` with the target sprint name (case-sensitive).
 ### 2. Query with sprint and status filter
 
 ```bash
-sqlite3 -separator '|' ~/Library/Caches/guardian/project-board.db "
+sqlite3 -separator '|' ~/Library/Caches/<project>/project-board.db "
   SELECT i.repo, i.issue_number, i.title,
          COALESCE(sv.value, '') as status
   FROM items i
@@ -57,7 +57,7 @@ Each row returns: `repo|issue_number|title|status`
 
 Format for display:
 ```
-pfeff/guardian#42 — Implement state machine (In Progress)
+<owner>/<repo>#42 — Implement state machine (In Progress)
 pfeff/cursor-rules#152 — Create GitHub Projects V2 skill (Planned)
 ```
 
@@ -66,7 +66,7 @@ pfeff/cursor-rules#152 — Create GitHub Projects V2 skill (Planned)
 To include Horizon and Strategic Objective:
 
 ```bash
-sqlite3 -separator '|' ~/Library/Caches/guardian/project-board.db "
+sqlite3 -separator '|' ~/Library/Caches/<project>/project-board.db "
   SELECT i.repo, i.issue_number, i.title,
          COALESCE(sv.value, '') as status,
          COALESCE(hv.value, '') as horizon,

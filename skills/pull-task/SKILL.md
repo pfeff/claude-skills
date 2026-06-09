@@ -60,7 +60,7 @@ The skill detects which backend to use by checking workspace CLAUDE.md:
 
 ### GitHub Backend
 
-**Cache sync**: `project-board-helper sync` refreshes the local SQLite cache at `~/Library/Caches/guardian/project-board.db`.
+**Cache sync**: `project-board-helper sync` refreshes the local SQLite cache at `~/Library/Caches/<project>/project-board.db`.
 
 **Item filtering**: `sqlite3` queries against the cache DB, filtering by Status and Sprint field values.
 
@@ -68,7 +68,7 @@ The skill detects which backend to use by checking workspace CLAUDE.md:
 
 **Item lookup**: `project-board-helper lookup <owner/repo> <number>` resolves issue to project item ID.
 
-**Issue reference**: Constructed from `repo` + `#` + `issue_number` (e.g., `pfeff/guardian#77`).
+**Issue reference**: Constructed from `repo` + `#` + `issue_number` (e.g., `<owner>/<repo>#77`).
 
 ### Jira Backend
 
@@ -89,7 +89,7 @@ The skill detects which backend to use by checking workspace CLAUDE.md:
 | Permission | Commands | Purpose |
 |------------|----------|---------|
 | sync project board cache | `project-board-helper sync` | Refresh local board cache |
-| query project board cache | `sqlite3 ~/Library/Caches/guardian/project-board.db` | Filter items by status/sprint |
+| query project board cache | `sqlite3 ~/Library/Caches/<project>/project-board.db` | Filter items by status/sprint |
 | look up board item ID | `project-board-helper lookup` | Resolve issue to item ID |
 | query board field metadata | `project-board-helper field` | Discover field IDs and options |
 | view GitHub issue details | `gh issue view` | Fetch full issue details for selected item |

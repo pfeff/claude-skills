@@ -4,7 +4,7 @@ Assign an item to a sprint on the project board via GraphQL mutation.
 
 ## Parameters
 
-- `owner_repo` (required): Repository in `owner/repo` format (e.g., `pfeff/guardian`)
+- `owner_repo` (required): Repository in `owner/repo` format (e.g., `<owner>/<repo>`)
 - `issue_number` (required): Issue number
 - `target_sprint` (required): Sprint option name (e.g., `Sprint 3 (Mar 3-7)`)
 
@@ -58,7 +58,7 @@ Values:
 
 ```bash
 project-board-helper sync
-sqlite3 ~/Library/Caches/guardian/project-board.db "
+sqlite3 ~/Library/Caches/<project>/project-board.db "
   SELECT spv.value
   FROM items i
   JOIN item_field_values spv ON i.item_id = spv.item_id
@@ -72,7 +72,7 @@ sqlite3 ~/Library/Caches/guardian/project-board.db "
 To assign multiple items to the same sprint, resolve the sprint field/option IDs once in step 2, then repeat steps 1 and 3 for each item:
 
 ```bash
-for item in "pfeff/guardian 42" "pfeff/cursor-rules 152"; do
+for item in "<owner>/<repo> 42" "pfeff/cursor-rules 152"; do
   repo=$(echo "$item" | cut -d' ' -f1)
   number=$(echo "$item" | cut -d' ' -f2)
   item_id=$(project-board-helper lookup "$repo" "$number")

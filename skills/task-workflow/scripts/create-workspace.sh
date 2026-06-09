@@ -340,16 +340,13 @@ format_repos_list() {
   done
 }
 
-# Detect organization context from hostname
-# Returns: org identifier (e.g., "tcetra", "personal")
+# Detect organization context.
+# Config-driven (host-agnostic): set WORKSPACE_ORG in the environment or your
+# per-host config (~/.claude/hosts/<hostname>.md) to a work-org identifier on
+# machines that need org-specific workspace setup. Defaults to "personal".
+# Returns: org identifier (e.g., a work-org slug, or "personal")
 detect_org() {
-  local host
-  host=$(hostname)
-
-  case "$host" in
-    TCETRA*) echo "tcetra" ;;
-    *)       echo "personal" ;;
-  esac
+  echo "${WORKSPACE_ORG:-personal}"
 }
 
 # Verification check helper
@@ -502,9 +499,10 @@ echo "  Prerequisites OK"
 # Format: epic|secret_type|source|identifier
 # Sources: 1password, aws-secrets-manager
 # Add new epics here as needed
+# Example rows use the placeholder epic "work-org"; replace with your epic name.
 SECRETS_CONFIG="
-t-cetra|AZURE_PAT|1password|Azure CLI PAT
-t-cetra|OCTOPUS_API_KEY|aws-secrets-manager|tcetra-devops-sso:DevExtTFEnv/octopus/api_key
+work-org|AZURE_PAT|1password|Azure CLI PAT
+work-org|OCTOPUS_API_KEY|aws-secrets-manager|devops-sso:DevExtTFEnv/octopus/api_key
 "
 
 # Initialize secret variables (referenced indirectly via ${!secret_var})
@@ -621,8 +619,8 @@ else
   exit 3
 fi
 
-# Append org-specific .envrc content
-if [[ "$ORG_CONTEXT" == "tcetra" ]]; then
+# Append org-specific .envrc content (any non-personal work-org)
+if [[ -n "$ORG_CONTEXT" && "$ORG_CONTEXT" != "personal" ]]; then
   {
     echo ""
     echo "# Organization-specific configuration ($ORG_CONTEXT)"
@@ -635,11 +633,12 @@ fi
 # Environment variable configuration by epic
 # Format: epic|env_var|value_source
 # value_source: secret:VAR_NAME (use fetched secret) or literal:value
+# Example rows use the placeholder epic "work-org"; replace with your epic name.
 ENVRC_CONFIG="
-t-cetra|TF_VAR_azure_devops_pat|secret:AZURE_PAT
-t-cetra|AZURE_DEVOPS_EXT_PAT|secret:AZURE_PAT
-t-cetra|OCTOPUS_API_KEY|secret:OCTOPUS_API_KEY
-t-cetra|OCTOPUS_SERVER|literal:https://t-cetra-deploy.octopus.app
+work-org|TF_VAR_azure_devops_pat|secret:AZURE_PAT
+work-org|AZURE_DEVOPS_EXT_PAT|secret:AZURE_PAT
+work-org|OCTOPUS_API_KEY|secret:OCTOPUS_API_KEY
+work-org|OCTOPUS_SERVER|literal:https://deploy.example.octopus.app
 "
 
 has_epic_config=false

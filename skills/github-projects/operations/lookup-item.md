@@ -4,7 +4,7 @@ Resolve a GitHub issue reference to its project board item ID. The item ID is re
 
 ## Parameters
 
-- `owner_repo` (required): Repository in `owner/repo` format (e.g., `pfeff/guardian`)
+- `owner_repo` (required): Repository in `owner/repo` format (e.g., `<owner>/<repo>`)
 - `issue_number` (required): Issue number
 
 ## Prerequisites
@@ -22,7 +22,7 @@ project-board-helper lookup <owner_repo> <issue_number>
 
 Example:
 ```bash
-project-board-helper lookup pfeff/guardian 42
+project-board-helper lookup <owner>/<repo> 42
 ```
 
 Returns the project item ID (e.g., `PVTI_lAHNa8POARiyqc4BcDef`).

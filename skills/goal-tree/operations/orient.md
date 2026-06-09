@@ -19,7 +19,7 @@ Answers: "What does this mean for our strategy?" Takes the current state (from /
 
 If observations aren't available from a prior `/status`, run the status observation step first.
 
-Read guardian PROJECT.md for:
+Read strategic meta-repo PROJECT.md for:
 - Mission statement
 - Strategic objectives (S1, S2, S3) and their priority order
 - Enabling objectives and KR targets
@@ -79,5 +79,5 @@ Is the control loop a prerequisite for MVP work, or should they run in parallel?
 ## Integration Points
 
 - **Called by**: `/orient` command, or as step in `/resume-project` preamble
-- **Calls**: Read (guardian docs), `coord tree show`
+- **Calls**: Read (strategic meta-repo docs), `coord tree show`
 - **May lead to**: Tree restructuring, doc refinement, or Decide phase
