@@ -34,7 +34,7 @@ coord tree show $TREE_ID
 ```
 
 ```
-Read ~/src/github/pfeff/guardian/PROJECT.md
+Read ~/src/github/<owner>/<strategic-repo>/PROJECT.md
 ```
 
 Parse the tree response. Categorize nodes by status:
@@ -142,5 +142,5 @@ up the skill files, or reprioritize?
 ## Integration Points
 
 - **Called by**: `/resume-project` command
-- **Calls**: `coord tree show`, Read (guardian docs), execute-tree
+- **Calls**: `coord tree show`, Read (strategic meta-repo docs), execute-tree
 - **References**: `operations/status.md` (preamble shares observation logic)

@@ -19,8 +19,8 @@ Accept any of these issue reference formats (R1):
 
 | Format | Example | Parse |
 |--------|---------|-------|
-| Short form | `pfeff/guardian#78` | owner=`pfeff`, repo=`guardian`, number=`78` |
-| URL | `https://github.com/pfeff/guardian/issues/78` | Extract from URL path segments |
+| Short form | `<owner>/<repo>#78` | owner, repo, number=`78` |
+| URL | `https://github.com/<owner>/<repo>/issues/78` | Extract from URL path segments |
 | Number + repo | `78` (with repo context) | Requires owner/repo from context |
 
 ### PWD Mode
@@ -116,7 +116,7 @@ options:
 
 Pass repos to `create-workspace.sh` in **owner-qualified form** `owner/repo`. The bootstrap script will resolve `~/src/github/<owner>/<repo>` directly and not fall back to alphabetical globs. Qualifying disambiguates when the same repo name exists under multiple owners (e.g. `pfeff/claude-skills` vs `Tcetra/claude-skills`) — the operation is the layer that knows the owner from the issue reference, so it is the layer that should qualify.
 
-**Primary repo**: `<owner>/<repo>` from the issue reference (e.g., `pfeff/guardian` from `pfeff/guardian#78`).
+**Primary repo**: `<owner>/<repo>` from the issue reference (e.g., `acme/webapp` from `acme/webapp#78`).
 
 **Additional repos**: Scan issue body for repo references:
 - `other-owner/other-repo` patterns → pass through qualified
@@ -164,7 +164,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-workspace.sh \
   --issue <owner>/<repo>#<number>
 ```
 
-Example: `--repos pfeff/guardian,pfeff/cursor-rules`.
+Example: `--repos acme/webapp,acme/shared-lib`.
 
 Explicit `--task-id` or `--headline` can be passed if the user overrode them during confirmation (step 5).
 
@@ -210,34 +210,34 @@ Next steps:
 ### From /claude-skills:pull-task handoff
 
 ```
-Input: pfeff/guardian#78
+Input: acme/webapp#78
 
-Fetching issue pfeff/guardian#78...
+Fetching issue acme/webapp#78...
   Title: Unified workspace setup from GitHub issue reference
   Labels: enhancement, process-improvement
 
 Checking project board for sprint...
-  Project: Guardian Development
+  Project: Acme Development
   Sprint: Sprint 1 (Feb 17-21)
   Epic: sprint-1
 
 Scanning for repo references...
-  Primary: pfeff/guardian
+  Primary: acme/webapp
   Also found: pfeff/cursor-rules (mentioned in issue body)
 
 Inferred parameters:
   task-id:  78
   epic:     sprint-1
   headline: Unified workspace setup from GitHub issue reference
-  repos:    pfeff/guardian,pfeff/cursor-rules
-  issue:    pfeff/guardian#78
+  repos:    acme/webapp,acme/shared-lib
+  issue:    acme/webapp#78
 
 Proceed? → Yes
 
 Running create-workspace.sh...
   (script output)
 
-Workspace created from pfeff/guardian#78
+Workspace created from acme/webapp#78
   Path: ~/src/work/sprint-1/78-unified-workspace-setup/
   Session: 78- Unified workspace setup from GitHub issue reference
 
@@ -249,9 +249,9 @@ Next steps:
 ### With missing epic (prompt fallback)
 
 ```
-Input: pfeff/guardian#99
+Input: acme/webapp#99
 
-Fetching issue pfeff/guardian#99...
+Fetching issue acme/webapp#99...
   Title: Add retry logic to webhook delivery
 
 Checking project board for sprint...
@@ -264,8 +264,8 @@ Inferred parameters:
   task-id:  99
   epic:     ad-hoc
   headline: Add retry logic to webhook delivery
-  repos:    pfeff/guardian
-  issue:    pfeff/guardian#99
+  repos:    acme/webapp
+  issue:    acme/webapp#99
 
 Proceed? → Yes
 ```
@@ -273,9 +273,9 @@ Proceed? → Yes
 ### URL input
 
 ```
-Input: https://github.com/pfeff/guardian/issues/78
+Input: https://github.com/acme/webapp/issues/78
 
-Parsed: pfeff/guardian#78
+Parsed: acme/webapp#78
 (continues as above)
 ```
 
@@ -428,34 +428,34 @@ Next steps:
 ### Issue Mode: From /claude-skills:pull-task handoff
 
 ```
-Input: pfeff/guardian#78
+Input: acme/webapp#78
 
-Fetching issue pfeff/guardian#78...
+Fetching issue acme/webapp#78...
   Title: Unified workspace setup from GitHub issue reference
   Labels: enhancement, process-improvement
 
 Checking project board for sprint...
-  Project: Guardian Development
+  Project: Acme Development
   Sprint: Sprint 1 (Feb 17-21)
   Epic: sprint-1
 
 Scanning for repo references...
-  Primary: pfeff/guardian
+  Primary: acme/webapp
   Also found: pfeff/cursor-rules (mentioned in issue body)
 
 Inferred parameters:
   task-id:  78
   epic:     sprint-1
   headline: Unified workspace setup from GitHub issue reference
-  repos:    pfeff/guardian,pfeff/cursor-rules
-  issue:    pfeff/guardian#78
+  repos:    acme/webapp,acme/shared-lib
+  issue:    acme/webapp#78
 
 Proceed? → Yes
 
 Running create-workspace.sh...
   (script output)
 
-Workspace created from pfeff/guardian#78
+Workspace created from acme/webapp#78
   Path: ~/src/work/sprint-1/78-unified-workspace-setup/
   Session: 78- Unified workspace setup from GitHub issue reference
 
@@ -467,9 +467,9 @@ Next steps:
 ### Issue Mode: With missing epic (prompt fallback)
 
 ```
-Input: pfeff/guardian#99
+Input: acme/webapp#99
 
-Fetching issue pfeff/guardian#99...
+Fetching issue acme/webapp#99...
   Title: Add retry logic to webhook delivery
 
 Checking project board for sprint...
@@ -482,8 +482,8 @@ Inferred parameters:
   task-id:  99
   epic:     ad-hoc
   headline: Add retry logic to webhook delivery
-  repos:    pfeff/guardian
-  issue:    pfeff/guardian#99
+  repos:    acme/webapp
+  issue:    acme/webapp#99
 
 Proceed? → Yes
 ```
@@ -491,9 +491,9 @@ Proceed? → Yes
 ### Issue Mode: URL input
 
 ```
-Input: https://github.com/pfeff/guardian/issues/78
+Input: https://github.com/acme/webapp/issues/78
 
-Parsed: pfeff/guardian#78
+Parsed: acme/webapp#78
 (continues as issue mode above)
 ```
 

@@ -24,23 +24,23 @@ Otherwise, extract each flag as a structured item:
 
 ### 2. Locate strategic docs
 
-Resolve the guardian repo path using the same mechanism as DESIGN.md reconciliation layer 3:
+Resolve the strategic meta-repo path using the same mechanism as DESIGN.md reconciliation layer 3:
 
 ```
 Grep: pattern="Project Documentation" path="<repo_root>/CLAUDE.md" output_mode="content"
 ```
 
-Check for a local clone at conventional paths (`~/src/github/pfeff/guardian`, or `../../pfeff/guardian` relative to the repo root).
+Check for a local clone at conventional paths (`<conventional checkout path>`, or `../../<org>/<strategic-repo>` relative to the repo root).
 
-If the guardian repo cannot be located:
+If the strategic meta-repo cannot be located:
 - Mark all strategic doc updates as "deferred" in the checklist
 - Skip to step 4 (issue/board propagation)
 
 If found, read the target files:
 ```
-Read: file_path="<guardian_path>/PROJECT.md"
-Read: file_path="<guardian_path>/REQUIREMENTS.md"
-Read: file_path="<guardian_path>/ARCHITECTURE.md"
+Read: file_path="<strategic_repo_path>/PROJECT.md"
+Read: file_path="<strategic_repo_path>/REQUIREMENTS.md"
+Read: file_path="<strategic_repo_path>/ARCHITECTURE.md"
 ```
 
 Only read files referenced by the upstream flags.
@@ -129,7 +129,7 @@ Produce a section for the plan:
 <count> flag(s) from DESIGN.md reconciliation
 
 ### Strategic Doc Changes
-<"Applied" | "Deferred (guardian repo unavailable)" | "Skipped by user" | "None needed">
+<"Applied" | "Deferred (strategic meta-repo unavailable)" | "Skipped by user" | "None needed">
 
 <For each applied change:>
 - **<target_doc>**: <section> — <one-line summary of change>
@@ -196,9 +196,9 @@ DESIGN.md reconciliation found no upstream flags.
 No upstream flags from DESIGN.md reconciliation — propagation skipped.
 ```
 
-### Guardian repo unavailable
+### Strategic meta-repo unavailable
 
-Upstream flags exist but guardian repo not found locally.
+Upstream flags exist but strategic meta-repo not found locally.
 
 ```markdown
 ## ADR Propagation
@@ -207,7 +207,7 @@ Upstream flags exist but guardian repo not found locally.
 2 flag(s) from DESIGN.md reconciliation
 
 ### Strategic Doc Changes
-Deferred (guardian repo unavailable)
+Deferred (strategic meta-repo unavailable)
 
 - **REQUIREMENTS.md**: AO-AGENT-01 — status may need update from "In Progress" to reflect new backend selection approach
 - **PROJECT.md**: S3-E3 — KR3.7 target may need revision based on reduced backend count
@@ -252,7 +252,7 @@ Checklist only (user deferred)
 |-----------|----------|
 | DESIGN.md reconciliation was skipped | No upstream flags possible — skip propagation, minimal output |
 | Upstream flags section is "None" | Skip propagation, minimal output |
-| Guardian repo not found locally | Defer strategic doc changes to checklist, continue with issue/board items |
+| Strategic meta-repo not found locally | Defer strategic doc changes to checklist, continue with issue/board items |
 | Target file doesn't contain the superseded reference | Note "reference not found" in checklist, include for manual review |
 | Edit tool fails when applying a change | Warn user, convert to checklist item for manual application |
 | User skips all propagation | Note in output that upstream flags were not acted on |

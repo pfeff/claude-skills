@@ -33,7 +33,7 @@ Consolidated operations for GitHub Projects V2 board management. Provides query 
 - `sqlite3` (ships with macOS)
 - `jq` for JSON processing
 
-Cache DB: `~/Library/Caches/guardian/project-board.db`
+Cache DB: `~/Library/Caches/<project>/project-board.db`
 
 ## Operations
 
@@ -111,7 +111,7 @@ New items need to be added to the board first, then cache synced to pick up the 
 | Owner | `pfeff` |
 | Project number | `4` |
 | Project node ID | `PVT_kwHNa8POARiyqQ` |
-| Cache DB | `~/Library/Caches/guardian/project-board.db` |
+| Cache DB | `~/Library/Caches/<project>/project-board.db` |
 
 For full default configuration, see `references/project-defaults.md`.
 

@@ -9,7 +9,7 @@ All notable changes to the **lessons-learned** skill will be documented in this 
 - When a discussed problem has a concrete, reusable fix, offers to capture it as a searchable solution doc via `/claude-skills:compound` skill
 - Solution Docs Created section in output note template
 
-**Reasoning**: Session retrospectives identify problems but don't make solutions discoverable by future agents. Phase 3d bridges to `/claude-skills:compound` so concrete fixes become searchable via grep-first frontmatter filtering (pfeff/guardian#88, R2).
+**Reasoning**: Session retrospectives identify problems but don't make solutions discoverable by future agents. Phase 3d bridges to `/claude-skills:compound` so concrete fixes become searchable via grep-first frontmatter filtering (<owner>/<repo>#88, R2).
 
 ## [1.1.0] - 2026-02-15
 

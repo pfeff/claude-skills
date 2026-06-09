@@ -1,13 +1,13 @@
 # Project Defaults
 
-Default configuration values for the Guardian GitHub Projects V2 board.
+Default configuration values for a GitHub Projects V2 board.
 
 ## Project Identity
 
 | Setting | Value |
 |---------|-------|
 | Owner | `pfeff` |
-| Project name | `Guardian` |
+| Project name | `<project>` |
 | Project number | `4` |
 | Project node ID | `PVT_kwHNa8POARiyqQ` |
 | Project URL | `https://github.com/users/pfeff/projects/4` |
@@ -16,7 +16,7 @@ Default configuration values for the Guardian GitHub Projects V2 board.
 
 | Setting | Value |
 |---------|-------|
-| Cache DB path | `~/Library/Caches/guardian/project-board.db` |
+| Cache DB path | `~/Library/Caches/<project>/project-board.db` |
 | Cache tool | `project-board-helper` |
 | Sync command | `project-board-helper sync` |
 
@@ -37,7 +37,7 @@ Common repositories on this project board:
 
 | Repository | Description |
 |------------|-------------|
-| `pfeff/guardian` | Meta-repository, project docs, sprint planning |
+| `<owner>/<repo>` | Meta-repository, project docs, sprint planning |
 | `pfeff/cursor-rules` | Skills, commands, workflow automation (deprecated — migrated to `pfeff/claude-skills`) |
 | `pfeff/agent-coordinator` | Agent coordination service |
 | `pfeff/agent-orchestrator` | Agent orchestration service |
@@ -47,7 +47,7 @@ Common repositories on this project board:
 Standard format used across skills: `owner/repo#number`
 
 Examples:
-- `pfeff/guardian#42`
+- `<owner>/<repo>#42`
 - `pfeff/cursor-rules#152`
 
 To construct a URL from a reference:

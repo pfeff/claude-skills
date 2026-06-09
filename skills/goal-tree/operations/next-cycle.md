@@ -48,7 +48,7 @@ Check the content pipeline alongside tree state:
 
 1. **Pipeline state**: Identify content-tagged nodes in the tree (nodes with `content:` prefix or content tag). Report their current stage (pending, in-progress, completed, shipped). If a content project is already active, note it and skip to Orient — do not re-SCAN for new signals.
 
-2. **Demand signal scan** (only when no content project is active and capacity is available): Review demand signals from target companies — job postings, engineering blogs, OSS activity, conference talks. Sources: `career-targets.md` in guardian, target company public activity. This is a manual checklist, not automated.
+2. **Demand signal scan** (only when no content project is active and capacity is available): Review demand signals from target companies — job postings, engineering blogs, OSS activity, conference talks. Sources: `career-targets.md` in the strategic meta-repo, target company public activity. This is a manual checklist, not automated.
 
 3. **Signal inventory**: Note any new or existing unmatched signals. Signals persist until manually pruned — there is no auto-drop threshold.
 
@@ -80,7 +80,7 @@ If a completed node's result changes the strategic picture (new gap, invalidated
 
 If the SCAN checkpoint surfaced unmatched demand signals:
 
-1. **Match signals against artifacts**: Compare each signal against the artifact registry (claude-skills, guardian docs, agent-coordinator, agent-orchestrator, ai-agents-book, career intelligence). A match requires a real, shipped artifact that speaks to the signal — no speculative content.
+1. **Match signals against artifacts**: Compare each signal against the artifact registry (claude-skills, strategic meta-repo docs, agent-coordinator, agent-orchestrator, ai-agents-book, career intelligence). A match requires a real, shipped artifact that speaks to the signal — no speculative content.
 
 2. **Evaluate content worthiness**: Does a matched signal warrant a content node? Consider: is there a real audience asking this question? Does the artifact demonstrate genuine capability?
 
@@ -103,7 +103,7 @@ CYCLE_START=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' \
   || date -u -v-7d '+%Y-%m-%dT%H:%M:%SZ')
 ```
 
-**Determine epic**: Extract from the project CLAUDE.md or workspace path segment (e.g., `guardian`, `mission`).
+**Determine epic**: Extract from the project CLAUDE.md or workspace path segment (e.g., `acme`, `platform`).
 
 **Query metrics and compare against baselines**:
 
@@ -190,7 +190,7 @@ Present the output as a "Cycle Metrics" block before the retrospective. If the f
 `~/src/work/.metrics/baselines.jsonl` — one JSON object per line, one line per epic:
 
 ```json
-{"epic":"guardian","sample_size":33,"computed_at":"2026-04-09T00:00:00Z","elapsed_hours_avg":4.8,"elapsed_hours_stddev":3.2,"review_rounds_avg":0.2,"review_rounds_stddev":0.4,"task_count_avg":4.4,"task_count_stddev":1.8,"regression_threshold":1}
+{"epic":"acme","sample_size":33,"computed_at":"2026-04-09T00:00:00Z","elapsed_hours_avg":4.8,"elapsed_hours_stddev":3.2,"review_rounds_avg":0.2,"review_rounds_stddev":0.4,"task_count_avg":4.4,"task_count_stddev":1.8,"regression_threshold":1}
 ```
 
 | Field | Description |
@@ -324,7 +324,7 @@ When a content node completes (merged PR containing content):
 
 1. **Publish**: The content goes from merged PR to published via the SHIP pipeline — merge to pfeff.github.io (GitHub Pages). If the site repo doesn't exist yet, the first content node's implementation includes site setup.
 
-2. **Update traceability**: Link the demand signal → artifact → published content in guardian docs. Update GOAL.md if the content project was a tree node.
+2. **Update traceability**: Link the demand signal → artifact → published content in strategic meta-repo docs. Update GOAL.md if the content project was a tree node.
 
 3. **Release WIP capacity**: Mark the content project complete, freeing capacity for the next content cycle. The next Observe phase can SCAN for new signals.
 

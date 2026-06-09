@@ -292,7 +292,7 @@ Check the background subagent dispatched in step 4b. If the dispatch completed s
 | Metric | Source |
 |--------|--------|
 | task_id | DESIGN.md first line (e.g., `57`) |
-| epic | Workspace path segment (e.g., `guardian`) |
+| epic | Workspace path segment (e.g., `acme`) |
 | task_count | `TaskList` — count of completed tasks |
 | started_at | Workspace creation time from `.envrc` or directory mtime |
 | finished_at | Current timestamp |
@@ -328,7 +328,7 @@ fi
 **Format** (one JSON object per line):
 
 ```json
-{"task_id":57,"epic":"guardian","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/pfeff/guardian/pull/12","criteria_passed":3,"criteria_total":3,"acceptance_rate":1.0,"rules_passed":1,"rules_total":1,"rules_pass_rate":1.0}
+{"task_id":57,"epic":"acme","task_count":5,"started_at":"2026-02-20T10:00:00Z","finished_at":"2026-02-22T15:30:00Z","elapsed_hours":53.5,"pr_url":"https://github.com/acme/webapp/pull/12","criteria_passed":3,"criteria_total":3,"acceptance_rate":1.0,"rules_passed":1,"rules_total":1,"rules_pass_rate":1.0}
 ```
 
 The `criteria_*` and `rules_*` fields are optional — omitted when no evaluation data exists or when no standing rules are defined.
@@ -359,12 +359,12 @@ fi
 
 jq -n \
   --argjson task_id 57 \
-  --arg epic "guardian" \
+  --arg epic "acme" \
   --argjson task_count 5 \
   --arg started_at "2026-02-20T10:00:00Z" \
   --arg finished_at "2026-02-22T15:30:00Z" \
   --argjson elapsed_hours 53.5 \
-  --arg pr_url "https://github.com/pfeff/guardian/pull/12" \
+  --arg pr_url "https://github.com/acme/webapp/pull/12" \
   $EVAL_ARGS \
   -c "{task_id: \$task_id, epic: \$epic, task_count: \$task_count, started_at: \$started_at, finished_at: \$finished_at, elapsed_hours: \$elapsed_hours, pr_url: \$pr_url${EVAL_FIELDS}}" \
   >> ~/src/work/.metrics/finish.jsonl

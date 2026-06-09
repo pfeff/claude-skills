@@ -62,7 +62,7 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/designmd-reconciliation.md`
 
-**Quick summary**: Three-layer validation of workspace DESIGN.md against problem validation findings, repo-level docs (CLAUDE.md, docs/), and strategic docs (guardian REQUIREMENTS.md, ARCHITECTURE.md, PROJECT.md). Surfaces contradictions and gaps for user approval. Bidirectional conflict resolution for strategic docs — changes may flow down (update DESIGN.md) or up (flag strategic doc update). Produces a "DESIGN.md Reconciliation" section for the plan.
+**Quick summary**: Three-layer validation of workspace DESIGN.md against problem validation findings, repo-level docs (CLAUDE.md, docs/), and strategic docs (strategic meta-repo REQUIREMENTS.md, ARCHITECTURE.md, PROJECT.md). Surfaces contradictions and gaps for user approval. Bidirectional conflict resolution for strategic docs — changes may flow down (update DESIGN.md) or up (flag strategic doc update). Produces a "DESIGN.md Reconciliation" section for the plan.
 
 ### 2a. Fast Path Gate
 
