@@ -4,7 +4,9 @@ description: Spawn parallel specialist review agents (security, simplicity, arch
 argument-hint: "[PR number, branch name, or blank for current branch]"
 allowed-tools:
   - Bash(git diff:*)
+  - Bash(git -C:*)
   - Bash(gh pr diff:*)
+  - Bash(gh pr view:*)
   - Bash(git rev-parse:*)
   - Bash(git branch:*)
   - Bash(git log:*)
@@ -17,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.4.0
+version: 0.5.0
 ---
 
 # Review Skill
@@ -31,6 +33,30 @@ Parallel multi-agent code review. Spawns security, simplicity, architecture, and
 /claude-skills:review 42           # PR #42
 /claude-skills:review feature-xyz  # Branch feature-xyz vs main
 ```
+
+### Out-of-repo anchors (optional)
+
+By default the skill assumes the current working directory **is** the target git
+repo. Two optional anchors let it review a target that lives elsewhere — for
+example reviewing a PR from a non-git workspace, or a branch in a different
+worktree. When neither anchor is given, behavior is **exactly** as above.
+
+```
+/claude-skills:review 42 --repo <owner>/<repo>       # PR #42 in another repo
+/claude-skills:review feature-xyz --worktree <path>  # branch in another worktree
+```
+
+- `--repo <owner>/<repo>` — threads the repo through every `gh` call (`gh pr diff`
+  and `gh pr view` via `--repo`; `gh repo view` takes it positionally) so a bare
+  PR-number target resolves against the named repo instead of cwd. Use when
+  reviewing an out-of-repo PR.
+- `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
+  or current-branch target diffs against that worktree instead of cwd. Use when
+  the target branch lives in a different checkout. `--repo` may be combined to
+  also anchor the inline-comment posting step.
+
+The anchors only change *where* the diff is fetched from; the target value
+itself is still constrained to a safe PR number or git ref.
 
 ## Execution Flow
 

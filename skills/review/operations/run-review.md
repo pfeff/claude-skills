@@ -2,24 +2,46 @@
 
 ## Step 1: Determine Diff Source
 
+### Parse anchors
+
+Before resolving the target, extract two optional anchors from `$ARGUMENTS`.
+Both default to empty (in-repo behavior). When both are empty, every command in
+this step is byte-for-byte identical to the no-anchor form.
+
+- `--repo <owner>/<repo>`: out-of-repo anchor for `gh` PR calls. Validate that
+  `<owner>` and `<repo>` each contain only alphanumerics, hyphens, underscores,
+  and dots (one `/` separator). Store as `$REPO`. If invalid, report the error
+  and stop.
+- `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
+  `$WORKTREE`.
+
+Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
+token is the target (PR number, branch name, or empty). Derive two prefixes used
+below:
+
+- `$REPO_FLAG` = ` --repo $REPO` when `$REPO` is set, otherwise empty.
+- `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
+
 ### Detect base branch
 
 Detect the remote default branch to use as the diff base:
 
-1. Run `git symbolic-ref refs/remotes/origin/HEAD`. If successful, strip the `refs/remotes/` prefix (e.g., `refs/remotes/origin/main` → `origin/main`).
+1. Run `$GIT symbolic-ref refs/remotes/origin/HEAD`. If successful, strip the `refs/remotes/` prefix (e.g., `refs/remotes/origin/main` → `origin/main`).
 2. If the command fails, fall back to `origin/main`.
 
 Store the result as `$BASE`.
 
 ### Parse arguments
 
-Parse `$ARGUMENTS` to determine the review target:
+Parse the remaining target token to determine the review target:
 
-- **Empty / no args**: Current branch vs base. Run `git diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
-- **Numeric** (e.g. `42`): PR number. Run `gh pr diff $ARGUMENTS`. Set `$PR_NUMBER` to the numeric value.
-- **Otherwise**: Branch name. Run `git diff $BASE...$ARGUMENTS`. Set `$PR_NUMBER` to empty.
+- **Empty / no args**: Current branch vs base. Run `$GIT diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
+- **Numeric** (e.g. `42`): PR number. Run `gh pr diff <target>$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
+- **Otherwise**: Branch name. Run `$GIT diff $BASE...<target>`. Set `$PR_NUMBER` to empty.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
+
+Carry `$REPO` forward to Step 10 so the inline-comment posting step targets the same repo.
 
 ## Step 2: Check Diff Size
 
@@ -196,4 +218,4 @@ Present the contents of `.claude/reviews/latest.md` to the user (without the YAM
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 
-When `$PR_NUMBER` is set, automatically post findings as inline PR review comments by executing the `operations/post-review.md` operation with the current `$PR_NUMBER`. This posts line-level comments on the PR diff and a summary review comment.
+When `$PR_NUMBER` is set, automatically post findings as inline PR review comments by executing the `operations/post-review.md` operation with the current `$PR_NUMBER` (and `$REPO` from Step 1, if set, so the comments post to the out-of-repo PR). This posts line-level comments on the PR diff and a summary review comment.

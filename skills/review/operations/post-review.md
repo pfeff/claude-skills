@@ -4,6 +4,11 @@ Posts review findings from `.claude/reviews/latest.md` as a GitHub PR review wit
 
 **Requires**: PR number passed as `$PR_NUMBER`. Must be a positive integer.
 
+**Optional**: `$REPO` (`<owner>/<repo>`) — out-of-repo anchor. When set, the PR
+lives in a repo other than the current working directory. Derive
+`$REPO_FLAG` = ` --repo $REPO` when `$REPO` is set, otherwise empty. When `$REPO`
+is empty, every command below is identical to the in-repo form.
+
 ## Step 1: Read Review Output
 
 Read `.claude/reviews/latest.md` (relative to working directory). If the file does not exist, stop silently — there is nothing to post.
@@ -20,17 +25,20 @@ Extract from the YAML frontmatter:
 ## Step 3: Get Repository Context
 
 ```bash
-gh repo view --json owner,name
+gh repo view $REPO --json owner,name
 ```
 
-Extract `owner` and `name` from the JSON response. Validate that both values contain only alphanumeric characters, hyphens, and underscores.
+(`gh repo view` takes the repository as a **positional** argument, not a `--repo`
+flag — so this uses `$REPO` directly, not `$REPO_FLAG`. When `$REPO` is empty it
+falls back to cwd's repo.) Extract `owner` and `name` from the JSON response. When
+`$REPO` is set this resolves the named repo instead of cwd's repo. Validate that both values contain only alphanumeric characters, hyphens, and underscores.
 
 ## Step 4: Build Diff Line Map
 
 Validate that `$PR_NUMBER` is a positive integer before use.
 
 ```bash
-gh pr diff $PR_NUMBER
+gh pr diff $PR_NUMBER$REPO_FLAG
 ```
 
 Parse the unified diff to build a set of valid `(file, line)` pairs on the **right side** of the diff. These are lines that exist in the PR's changed files and can receive line-level comments.
