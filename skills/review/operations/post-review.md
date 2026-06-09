@@ -25,11 +25,13 @@ Extract from the YAML frontmatter:
 ## Step 3: Get Repository Context
 
 ```bash
-gh repo view$REPO_FLAG --json owner,name
+gh repo view $REPO --json owner,name
 ```
 
-Extract `owner` and `name` from the JSON response. When `$REPO` is set this
-resolves the named repo instead of cwd's repo. Validate that both values contain only alphanumeric characters, hyphens, and underscores.
+(`gh repo view` takes the repository as a **positional** argument, not a `--repo`
+flag — so this uses `$REPO` directly, not `$REPO_FLAG`. When `$REPO` is empty it
+falls back to cwd's repo.) Extract `owner` and `name` from the JSON response. When
+`$REPO` is set this resolves the named repo instead of cwd's repo. Validate that both values contain only alphanumeric characters, hyphens, and underscores.
 
 ## Step 4: Build Diff Line Map
 

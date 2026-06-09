@@ -46,9 +46,10 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
 /claude-skills:review feature-xyz --worktree <path>  # branch in another worktree
 ```
 
-- `--repo <owner>/<repo>` — threads through every `gh` PR call (`gh pr diff`,
-  `gh pr view`, `gh repo view`) so a bare PR-number target resolves against the
-  named repo instead of cwd. Use when reviewing an out-of-repo PR.
+- `--repo <owner>/<repo>` — threads the repo through every `gh` call (`gh pr diff`
+  and `gh pr view` via `--repo`; `gh repo view` takes it positionally) so a bare
+  PR-number target resolves against the named repo instead of cwd. Use when
+  reviewing an out-of-repo PR.
 - `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
   or current-branch target diffs against that worktree instead of cwd. Use when
   the target branch lives in a different checkout. `--repo` may be combined to
