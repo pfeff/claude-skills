@@ -29,7 +29,7 @@ The script handles all setup steps and runs verification checks.
 | `--task-id` | Yes* | Task identifier | `19`, `DO-242` |
 | `--epic` | Yes | Epic/project slug | `cursor-rules`, `ad-hoc` |
 | `--headline` | Yes* | Task title | `"Use deterministic script..."` |
-| `--repos` | No | Comma-separated repo names. Each can be a bare name (`cursor-rules`) or owner-qualified (`pfeff/cursor-rules`). Use the qualified form to disambiguate when the same repo name exists under multiple owners on disk. | `cursor-rules`, `pfeff/claude-skills,Tcetra/Dev-Stacks` |
+| `--repos` | No | Comma-separated repo names. Each can be a bare name (`cursor-rules`) or owner-qualified (`pfeff/cursor-rules`). Use the qualified form to disambiguate when the same repo name exists under multiple owners on disk. | `cursor-rules`, `pfeff/claude-skills,acme/Dev-Stacks` |
 | `--issue` | No | GitHub issue reference | `pfeff/cursor-rules#19` |
 | `--description` | No | Extended description | `"Detailed task description..."` |
 
@@ -49,7 +49,7 @@ The script will check for these before proceeding:
 
 **Optional secrets:**
 - **Azure PAT**: From 1Password item "Azure CLI PAT" (requires `op signin`)
-- **Octopus API Key**: From AWS Secrets Manager (requires `aws sso login --profile tcetra-devops-sso`)
+- **Octopus API Key**: From AWS Secrets Manager (requires `aws sso login --profile <your-devops-sso-profile>`)
 
 Secrets are optional - the script continues without them if unavailable.
 

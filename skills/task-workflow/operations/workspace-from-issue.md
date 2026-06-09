@@ -114,7 +114,7 @@ options:
 
 ### 4. Infer Repos
 
-Pass repos to `create-workspace.sh` in **owner-qualified form** `owner/repo`. The bootstrap script will resolve `~/src/github/<owner>/<repo>` directly and not fall back to alphabetical globs. Qualifying disambiguates when the same repo name exists under multiple owners (e.g. `pfeff/claude-skills` vs `Tcetra/claude-skills`) — the operation is the layer that knows the owner from the issue reference, so it is the layer that should qualify.
+Pass repos to `create-workspace.sh` in **owner-qualified form** `owner/repo`. The bootstrap script will resolve `~/src/github/<owner>/<repo>` directly and not fall back to alphabetical globs. Qualifying disambiguates when the same repo name exists under multiple owners (e.g. `pfeff/claude-skills` vs `acme/claude-skills`) — the operation is the layer that knows the owner from the issue reference, so it is the layer that should qualify.
 
 **Primary repo**: `<owner>/<repo>` from the issue reference (e.g., `acme/webapp` from `acme/webapp#78`).
 

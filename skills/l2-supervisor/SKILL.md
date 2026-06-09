@@ -58,7 +58,7 @@ When generating an intervention hypothesis (Tick Procedure step 5), you may cons
 | Tier | Access path |
 |------|-------------|
 | `project-local` | `Read` and `Grep` over `sweeps.jsonl`, GOAL.md, repo files. `Bash` for `git log`, `gh pr list`, `gh pr view`. Datadog monitor metadata via `~/.claude/skills/l2-supervise/scripts/dd-query.sh monitor <id>` and the response's tags/description. |
-| `obsidian` | `Bash` invoking `qmd query "<intent>" -c tcetra` (TCETRA host) per the `~/.claude/hosts/<hostname>.md` config. |
+| `obsidian` | `Bash` invoking `qmd query "<intent>" -c "$QMD_COLLECTION"` (collection from the per-host `~/.claude/hosts/<hostname>.md` config). |
 | `web` | `Bash` invoking `curl` (raw fetch) or any host-installed web-search CLI. Note: `WebFetch` / `WebSearch` tools are not in `allowed-tools` — web access is shell-only at this layer. |
 | `confluence-jira` | `Bash` invoking the Atlassian CLI (`acli`) for ticket / page queries. The Atlassian MCP tools are not in `allowed-tools` — corporate KB access is shell-only at this layer. |
 

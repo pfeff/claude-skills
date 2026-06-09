@@ -15,14 +15,14 @@ repo: claude-skills
 
 ## Problem
 
-A skill (task-workflow) contained both generic execution mechanics (auto-advance, validate-implementation, finish workflow, workspace management) and employer-specific integrations (org detection, secret fetching, Azure PAT, Jira, TCETRA paths) in the same repo. Publishing as a public plugin required clean separation without breaking the private repo's functionality.
+A skill (task-workflow) contained both generic execution mechanics (auto-advance, validate-implementation, finish workflow, workspace management) and employer-specific integrations (org detection, secret fetching, Azure PAT, Jira, corporate-host paths) in the same repo. Publishing as a public plugin required clean separation without breaking the private repo's functionality.
 
 ## Solution
 
 Systematic extraction following this pattern:
 
 1. **Inventory**: Catalog every file (operations, scripts, templates, references) and classify as public or private
-2. **Copy-then-scrub**: Copy files to the public repo, then audit each for employer-specific terms using grep with a comprehensive term list (`jira`, `azdevops`, `azure`, `tcetra`, `1password`, `octopus`, `pfeff`, `/mbp/`, personal paths)
+2. **Copy-then-scrub**: Copy files to the public repo, then audit each for employer-specific terms using grep with a comprehensive term list (`jira`, `azdevops`, `azure`, your corporate hostname, `1password`, `octopus`, your org slug, personal paths)
 3. **Scrub categories**:
    - **Examples/URLs**: Replace org-specific GitHub URLs and repo names with generic placeholders (`user/repo`)
    - **Hardcoded conventions**: Parameterize or remove personal conventions (e.g., `/mbp/` branch infix)

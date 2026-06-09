@@ -16,7 +16,7 @@ timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION"
 
 Sanitization (caller responsibility): strip control characters (`\n \r \t`) and QMD-grammar-hostile characters (backtick, `$`, backslash) before passing the text through. Truncate to ~2000 chars.
 
-`$QMD_COLLECTION` is per-host config, set in the DD6 host file (e.g. `tcetra` on the TCETRA-* WSL host).
+`$QMD_COLLECTION` is per-host config, set in the host file (`~/.claude/hosts/<hostname>.md`); each host selects its own collection name.
 
 No other flags. The plain `qmd query <text>` form runs hybrid BM25 + vector with auto-expansion and HyDE by default. A 60-second hard timeout is mandatory — reranking can run long on CPU-only hosts; CUDA-offloaded hosts still benefit from the bound.
 

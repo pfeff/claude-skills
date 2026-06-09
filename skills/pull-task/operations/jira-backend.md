@@ -201,5 +201,5 @@ The key output is the issue key in `PROJECT-123` format, which `/create-workspac
 - Candidate display: top 4 ranked items
 
 **Environment Variables** (optional, from atlassian-cli skill):
-- `JIRA_SITE`: Jira instance (default: tcetra.atlassian.net)
+- `JIRA_SITE`: Jira instance (e.g., your-org.atlassian.net)
 - `JIRA_EMAIL`: Atlassian email for API auth

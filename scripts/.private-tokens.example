@@ -1,0 +1,16 @@
+# scripts/.private-tokens — host-local blocklist for check-host-agnostic.sh
+#
+# Copy this file to scripts/.private-tokens (which is gitignored and MUST NOT be
+# committed) and add one private token per line. Each token is treated as a
+# private machine hostname / identifier that must never appear in published
+# content; the lint flags both its literal and lower-cased form.
+#
+# check-host-agnostic.sh ALSO auto-derives tokens from the basenames of your
+# ~/.claude/hosts/*.md config files, so listing them here is only needed for
+# tokens that have no corresponding host-config file.
+#
+# Blank lines and lines starting with '#' are ignored.
+#
+# Example (remove the leading '#', use your real private hostnames):
+# my-private-laptop
+# my-corp-host
