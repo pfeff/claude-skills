@@ -29,9 +29,10 @@ jobs:
         id: guard
         env:
           APP_ID: ${{ secrets.APPROVER_APP_ID }}
+          APP_KEY: ${{ secrets.APPROVER_APP_PRIVATE_KEY }}
         run: |
-          if [ -z "$APP_ID" ]; then
-            echo "APPROVER_APP_ID not set — approver gate not yet provisioned; skipping."
+          if [ -z "$APP_ID" ] || [ -z "$APP_KEY" ]; then
+            echo "approver App secrets not fully set — gate not yet provisioned; skipping."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -53,6 +54,12 @@ jobs:
         with:
           github-token: ${{ steps.app.outputs.token }}
           script: |
+            // Fail closed: an unset/empty expected reviewer must NOT accept any author's
+            // marker. Without this guard `L2_REVIEWER_LOGIN` being unset would auto-approve
+            // on a CLEAN marker from anyone.
+            const expected = process.env.EXPECTED_REVIEWER;
+            if (!expected) { core.info('L2_REVIEWER_LOGIN not configured — fail closed; skip'); return; }
+
             const {owner, repo} = context.repo;
             const pr = context.payload.pull_request
               || (context.payload.check_suite && context.payload.check_suite.pull_requests[0]);
@@ -60,28 +67,40 @@ jobs:
             const number = pr.number;
             const head = pr.head.sha;
 
-            // 1) Find an l2-review:metadata marker with verdict CLEAN, from the expected reviewer.
+            // 1) Require a CLEAN, level-2 l2-review marker from the expected reviewer,
+            //    submitted against THIS head SHA. Binding to commit_id prevents a stale
+            //    CLEAN review on an earlier commit from approving a newer push.
             const reviews = await github.paginate(
               github.rest.pulls.listReviews, {owner, repo, pull_number: number});
             const marker = /<!--\s*l2-review:metadata([\s\S]*?)-->/;
-            const clean = reviews
-              .filter(r => !process.env.EXPECTED_REVIEWER
-                        || r.user?.login === process.env.EXPECTED_REVIEWER)
-              .map(r => (r.body || '').match(marker))
-              .filter(Boolean)
-              .some(m => /verdict:\s*CLEAN/.test(m[1]) && /level:\s*2/.test(m[1]));
-            if (!clean) { core.info('no CLEAN l2-review marker from expected reviewer; skip'); return; }
+            const clean = reviews.some(r => {
+              if (r.user?.login !== expected) return false;
+              if (r.commit_id !== head) return false;
+              const m = (r.body || '').match(marker);
+              return !!m && /verdict:\s*CLEAN\b/.test(m[1]) && /level:\s*2\b/.test(m[1]);
+            });
+            if (!clean) { core.info('no CLEAN l2-review marker from expected reviewer on this SHA; skip'); return; }
 
-            // 2) Require all check-runs on the head SHA to be successful (excluding this gate).
+            // 2) Require every check-run on the head SHA to be successful (exclude this
+            //    gate's own run, if it ever produces one).
             const runs = await github.paginate(
               github.rest.checks.listForRef, {owner, repo, ref: head});
-            const selfRun = `${context.workflow}`;
             const bad = runs.filter(c =>
-              c.name !== selfRun &&
+              c.name !== context.workflow &&
               !(c.status === 'completed' &&
                 ['success', 'neutral', 'skipped'].includes(c.conclusion)));
             if (bad.length) {
               core.info(`checks not green: ${bad.map(c => c.name).join(', ')}; skip`);
+              return;
+            }
+
+            // 2b) Honor legacy commit statuses (Status API) too — check-runs do not include
+            //     them, so a required status context would otherwise be invisible. Guarded on
+            //     total_count so repos with no statuses (check-runs only) are not blocked.
+            const combined = (await github.rest.repos.getCombinedStatusForRef(
+              {owner, repo, ref: head})).data;
+            if (combined.total_count > 0 && combined.state !== 'success') {
+              core.info(`commit statuses not green: ${combined.state}; skip`);
               return;
             }
 
