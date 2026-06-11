@@ -472,7 +472,7 @@ Formalizing acceptance criteria...
   Source: explicit "Acceptance Criteria" section in issue body
   4 criteria written to DESIGN.md (AC-1..AC-4)
 
-Searching existing solutions (qmd query, collection=work-notes)...
+Searching existing solutions (qmd query, collection=$QMD_COLLECTION)...
   No existing notes surfaced.
 
 Creating task list...
@@ -524,14 +524,14 @@ Interviewing...
 
   Architecture: updated from interview
 
-Searching existing solutions (qmd query, collection=work-notes)...
+Searching existing solutions (qmd query, collection=$QMD_COLLECTION)...
   Query: "Fix authentication timeout in API gateway. <description>"
   Top 3:
-    1. qmd://work-notes/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
+    1. qmd://<collection>/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
        Title: Auth token expiry race in API gateway
-    2. qmd://work-notes/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
+    2. qmd://<collection>/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
        Title: Gateway connection-pool saturation under retry storms
-    3. qmd://work-notes/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
+    3. qmd://<collection>/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
        Title: JWT exp clock-skew 401s on pipeline agents
 
 Creating task list...
