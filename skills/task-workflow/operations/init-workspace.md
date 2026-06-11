@@ -310,7 +310,7 @@ Empty result set: write the section with a single line `_No prior notes surfaced
 
 ### 11. Create Task List
 
-Create implementation tasks from the best available planning artifact.
+Create implementation tasks that collectively satisfy the `## Acceptance Criteria` contract in DESIGN.md. ACs define *what must be true when done*; tasks define *how to get there* — every task traces to the AC(s) it advances, and every AC must be covered.
 
 **Before creating tasks**:
 1. Call `TaskList` to check for existing tasks
@@ -319,8 +319,8 @@ Create implementation tasks from the best available planning artifact.
 
 **Select decomposition source** (first match wins):
 
-1. **PLAN.md** — If a `PLAN.md` exists in the workspace root (produced by `/claude-skills:planning-workflow`), use it as the primary source. PLAN.md contains refined acceptance criteria, edge case analysis, and checkable items that produce higher-quality task decomposition than raw requirements.
-2. **DESIGN.md** — Fallback when no PLAN.md exists. Read the Requirements section and decompose from there.
+1. **PLAN.md** — If a `PLAN.md` exists in the workspace root (produced by `/claude-skills:planning-workflow`), use it as the primary source for implementation phases and edge cases. The DESIGN.md AC section remains the done-contract; reconcile PLAN.md's checkable items against it.
+2. **DESIGN.md** — Fallback when no PLAN.md exists. Decompose from the `## Acceptance Criteria` section, consulting Requirements for context (per design: Requirements are the "why", ACs are the contract).
 
 ```
 Check for PLAN.md:
@@ -329,24 +329,36 @@ Check for PLAN.md:
 If PLAN.md exists:
   Read PLAN.md
   Extract tasks from checkable criteria ([ ] items) and implementation phases
-  Cross-reference with DESIGN.md requirements for traceability (R-IDs)
+  Map each task to the DESIGN.md AC(s) it advances
 
 If no PLAN.md:
-  Read DESIGN.md Requirements section
-  For each requirement, determine the implementation steps
+  Read DESIGN.md ## Acceptance Criteria (contract) and ## Requirements (context)
+  For each AC, determine the implementation steps that make it true
   Group related steps into coherent tasks
 ```
 
 **Decomposition approach** (applies to both sources):
 - Group related steps into coherent tasks
 - Order tasks by dependency (earlier tasks should enable later ones)
-- Include requirement IDs (from DESIGN.md) in task descriptions for traceability
+- Trace every task to the AC(s) it advances; include R-IDs only where they add context
 
 **Task creation**:
 For each task, call `TaskCreate` with:
 - `subject`: Imperative form (e.g., "Implement issue fetching for GitHub")
-- `description`: Detailed description including relevant requirement IDs, acceptance criteria, and implementation hints
+- `description`: Detailed description including implementation hints and relevant context, **ending with a `Satisfies: AC-N[, AC-M]` line** naming the AC(s) this task advances. Auto-advance uses these lines to check off criteria as tasks complete.
 - `activeForm`: Present continuous (e.g., "Implementing issue fetching")
+
+**AC coverage check** — decomposition is not complete until every AC is accounted for:
+
+```
+For each AC-N in DESIGN.md ## Acceptance Criteria:
+  If no created task's description contains "AC-N" in its Satisfies line:
+    Either create a task covering it,
+    or mark it explicitly deferred in DESIGN.md:
+      - [ ] **AC-N**: <criterion> _(deferred: <reason>)_
+```
+
+An uncovered, undeferred AC is a decomposition bug — it guarantees either a blocked completion gate or silent scope loss.
 
 **Coordinator sync**: For each task created via `TaskCreate`, also call `coord_create_task` with the task subject when coordinator env vars are set. Failures are non-blocking — warn and continue with native task tools.
 
@@ -358,6 +370,7 @@ PLAN.md includes standard documentation and demo acceptance criteria (added by p
 - Create a **demo task** with subject "Perform interactive walkthrough to validate deliverable" — the agent performs a live walkthrough of the delivered work using browser integration/MCP tools to confirm the deliverable is demonstrable.
 - Both tasks should have `addBlockedBy` set to all implementation task IDs, so they run after implementation is complete.
 - If the PLAN.md criteria already produced equivalent tasks during decomposition, do not create duplicates.
+- If DESIGN.md contains doc/demo ACs, give these tasks the matching `Satisfies: AC-N` line; otherwise they carry no Satisfies line (they serve the standard criteria, not the contract).
 
 <!-- IMPLEMENTED: REC-001 - Init-workspace consumes PLAN.md for task decomposition -->
 
