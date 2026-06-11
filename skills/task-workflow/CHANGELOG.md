@@ -17,7 +17,7 @@ All notable changes to the **task-workflow** skill will be documented in this fi
 ### Changed
 - init-workspace steps 7–12 renumbered to 8–13 (new step 7 inserted); cross-references updated in solution-search.md
 
-**Reasoning**: ACs previously existed only as an extraction hint flattened into prose Requirements — there was no explicit done-contract, the review gate approved implementation steps rather than outcomes, and auto-advance's completion check was purely mechanical (tasks + tests + PR) with nothing verifying the deliverable against criteria. Making the AC contract a first-class checkable artifact lets it drive decomposition, progress tracking, and the completion gate. Source: skills-ac workspace DESIGN.md (tooling epic).
+**Reasoning**: ACs previously existed only as an extraction hint flattened into prose Requirements — there was no explicit done-contract, the review gate approved implementation steps rather than outcomes, and auto-advance's completion check was purely mechanical (tasks + tests + PR) with nothing verifying the deliverable against criteria. Making the AC contract a first-class checkable artifact lets it drive decomposition, progress tracking, and the completion gate.
 
 ## [1.2.0] - 2026-02-15
 
