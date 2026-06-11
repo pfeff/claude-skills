@@ -437,6 +437,24 @@ Add to running tallies:
 
 The ledger is maintained in conversation context (not a file) and consulted when dispatching dependent tasks in step 2a.
 
+### 5a. Acceptance Criteria Check-Off
+
+After marking the task complete, update the AC contract in the workspace DESIGN.md.
+
+The completed task's description carries a `Satisfies: AC-N[, AC-M]` line (written by init-workspace decomposition). For each AC it names:
+
+1. **Gather the AC's task set**: via `TaskList` + `TaskGet`, find all tasks whose descriptions name this AC in their Satisfies line.
+2. **All completed?** If any tracing task is still pending/in-progress, the AC stays open — skip it.
+3. **Re-verify the criterion**: task completion is necessary but not sufficient. Confirm the criterion itself holds with concrete evidence — a passing test name, a command and its output, or direct file inspection. Do not check off on the strength of "its tasks are done" alone.
+4. **Flip the checkbox** in DESIGN.md: `- [ ] **AC-N**:` → `- [x] **AC-N**:` (Edit tool, surgical).
+5. **Record the evidence** in the running tallies (`ac_evidence` map: AC-ID → one-line evidence summary) for the completion summary. Evidence lives in the summary, not inline in DESIGN.md.
+
+If re-verification fails — all tracing tasks completed but the criterion does not hold — the decomposition missed something. Create a new task to close the gap (with the same `Satisfies: AC-N` line) and leave the box unchecked.
+
+Tasks with no Satisfies line (e.g., standard doc/demo tasks without matching ACs) skip this step.
+
+The workspace DESIGN.md lives in the workspace root (outside the repo worktrees), so the checkbox edit is durable on disk immediately — no commit involved. The checkbox state is the session-resumable progress record that step 7a's completion gate reads.
+
 ### 6. Check for More Tasks
 
 Increment turn counter:
