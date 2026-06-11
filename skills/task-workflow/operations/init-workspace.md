@@ -376,7 +376,7 @@ PLAN.md includes standard documentation and demo acceptance criteria (added by p
 
 ### 12. Display Summary and Review Gate
 
-Print a summary of everything that was initialized, then ask the user to approve the task list before auto-advance begins.
+Print a summary of everything that was initialized, then ask the user to approve. The AC list renders **above** the task list: the user approves the outcome contract ("what must be true when done") before the implementation plan ("how we'll get there").
 
 ```
 ## Workspace Initialized
@@ -389,11 +389,16 @@ Print a summary of everything that was initialized, then ask the user to approve
 
 **Requirements**: <N requirements extracted>
 
+**Acceptance Criteria**: <N criteria> (<ratified in interview | from issue | drafted>)
+- [ ] **AC-1**: <criterion>
+- [ ] **AC-2**: <criterion>
+...
+
 **Existing solutions**: <N relevant | none found>
 <solution summaries if any>
 
 **Tasks created**: <N tasks>
-<task list with subjects and dependencies>
+<task list with subjects, dependencies, and Satisfies: AC-N tracing>
 ```
 
 **Review gate**: After displaying the summary, ask the user to approve:
