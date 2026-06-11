@@ -192,22 +192,38 @@ Write an explicit, checkable done-contract to DESIGN.md before any task decompos
 
 ### 8. User Interview (Conditional)
 
-Only interview if DESIGN.md still has placeholder sections after issue enrichment.
+The interview leads with ratification of the AC contract; generic section questions run only for gaps that remain afterward.
 
-**Check each section**:
+**Part 1 — Ratify acceptance criteria**:
+
+Skip Part 1 only when step 7 extracted the ACs verbatim from an explicit "Acceptance Criteria" / "Definition of Done" section (extraction source 1) — those are already human-authored. For ACs derived from weaker sources (checkbox lists, must/should statements, drafted candidates), present the list for confirmation:
+
+```
+Display the drafted ## Acceptance Criteria list (IDs + text).
+
+AskUserQuestion: "These acceptance criteria define 'done' for this task. Do they capture it?"
+  Options:
+    - "Confirm" → ACs are ratified as-is
+    - "Amend" → user states additions/removals/rewording; apply to DESIGN.md, re-ask
+```
+
+The ratified contract is what task decomposition (step 11) and the completion gate verify against — getting it right here is cheaper than discovering a missing criterion at PR time.
+
+**Part 2 — Fill remaining gaps** (only sections still placeholder after Part 1):
+
 ```
 For each section in [Requirements, Architecture, Design Decisions]:
   If section content is still a placeholder:
     Ask targeted question(s) about that section
 ```
 
-**Interview questions by section**:
-
 | Section | Question |
 |---------|----------|
 | Requirements | "The issue didn't specify clear requirements. What are the key requirements for this task?" |
 | Architecture | "What components/systems does this change affect? Any architectural constraints?" |
 | Design Decisions | "Are there any design decisions or trade-offs already made for this task?" |
+
+Ratified ACs often resolve the Requirements gap on their own — only ask about Requirements when the ACs leave genuine context missing.
 
 Use AskUserQuestion with relevant options derived from the issue context when possible.
 
