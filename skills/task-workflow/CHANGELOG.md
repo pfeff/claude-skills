@@ -2,7 +2,22 @@
 
 All notable changes to the **task-workflow** skill will be documented in this file.
 
-## [1.2.0] - 2026-02-15
+## [1.3.0] - 2026-06-11
+
+### Added
+- Acceptance-criteria lifecycle driving the session end-to-end:
+  - init-workspace step 7 "Formalize Acceptance Criteria" — writes a checkable `## Acceptance Criteria` contract (`- [ ] **AC-N**` format) to DESIGN.md before task decomposition; idempotent (IDs never renumbered, boxes never reset)
+  - Interview leads with AC confirm/amend; generic section questions only for remaining gaps
+  - Task decomposition requires a `Satisfies: AC-N` line per task and an AC coverage check (every AC covered or explicitly deferred)
+  - Review gate displays the AC contract above the task list
+  - auto-advance step 5a checks off ACs with re-verification evidence as their tracing tasks complete
+  - auto-advance step 7a sub-step 0: grep-checkable AC gate (`grep -c '^- \[ \] \*\*AC-' DESIGN.md` must be 0) blocks PR creation; PR body carries the AC checklist; completion summary reports per-AC evidence
+- `## Acceptance Criteria` placeholder section in DESIGN.md.tmpl
+
+### Changed
+- init-workspace steps 7–12 renumbered to 8–13 (new step 7 inserted); cross-references updated in solution-search.md
+
+**Reasoning**: ACs previously existed only as an extraction hint flattened into prose Requirements — there was no explicit done-contract, the review gate approved implementation steps rather than outcomes, and auto-advance's completion check was purely mechanical (tasks + tests + PR) with nothing verifying the deliverable against criteria. Making the AC contract a first-class checkable artifact lets it drive decomposition, progress tracking, and the completion gate. Source: skills-ac workspace DESIGN.md (tooling epic).
 
 ### Added
 - Symlink resolution convention in Common Patterns — resolve `~/.claude/` paths via `realpath` before editing to avoid modifying shared symlink targets

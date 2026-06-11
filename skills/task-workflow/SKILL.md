@@ -129,7 +129,7 @@ Populates workspace with issue/ticket content, enriches CLAUDE.md and DESIGN.md,
 
 **Implementation**: Load `operations/init-workspace.md` for detailed steps.
 
-**Quick summary**: Auto-detects issue source (GitHub/Jira) from workspace files, fetches issue content, enriches CLAUDE.md and DESIGN.md with requirements, interviews user only when gaps exist, creates task list from DESIGN.md. Idempotent — safe to re-run.
+**Quick summary**: Auto-detects issue source (GitHub/Jira) from workspace files, fetches issue content, enriches CLAUDE.md and DESIGN.md with requirements, formalizes a checkable `## Acceptance Criteria` contract (AC-N checkboxes) that drives decomposition and the completion gate, interviews user (leading with AC confirm/amend) only when gaps exist, creates an AC-traced task list from DESIGN.md. Idempotent — safe to re-run.
 
 ### 5. Workspace Opening
 
