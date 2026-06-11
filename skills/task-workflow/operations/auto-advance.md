@@ -489,9 +489,11 @@ When all tasks are complete (no blocked tasks remaining):
 
 0. **Acceptance Criteria gate** — never open a PR over an open AC:
    ```bash
-   grep -c '^- \[ \] \*\*AC-' DESIGN.md   # workspace DESIGN.md; must return 0
+   grep -c '^- \[ \] \*\*AC-' DESIGN.md   # workspace DESIGN.md; must print 0
    ```
    Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) count as open only if still unchecked **and** undeferred.
+
+   The pattern anchors on column 0, so AC-format examples quoted inside DESIGN.md code blocks must be indented or they false-positive the gate. On a non-zero count, read the matching lines before acting — confirm they are real contract entries, not quoted examples.
 
    | Result | Action |
    |--------|--------|
