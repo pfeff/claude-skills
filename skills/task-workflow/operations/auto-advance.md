@@ -783,10 +783,12 @@ Committing...
   ghi9012 feat: register auto-advance in SKILL.md
 
 Task complete ✓
+  AC-3 checked off (evidence: SKILL.md registers operation; grep confirms)
 
+AC gate: 0 unchecked criteria ✓
 Committing remaining changes... (none)
 Checking for existing PR... (none found)
-Creating PR via /gh-pr-create...
+Creating PR via /gh-pr-create... (AC checklist included in body)
   ✓  https://github.com/pfeff/cursor-rules/pull/18
 Waiting for CI checks...
   CI: no checks configured
@@ -797,6 +799,11 @@ Waiting for CI checks...
   - Create auto-advance operation (abc1234)
   - Integrate into work session flow (def5678)
   - Update SKILL.md and permissions (ghi9012)
+
+**Acceptance criteria**: 3/3 checked
+  - [x] AC-1 — evidence: operation file exists and loads
+  - [x] AC-2 — evidence: init-workspace step 13 triggers the loop
+  - [x] AC-3 — evidence: SKILL.md registers operation; grep confirms
 
 **Commits**: 3 total
 **PR**: https://github.com/pfeff/cursor-rules/pull/18

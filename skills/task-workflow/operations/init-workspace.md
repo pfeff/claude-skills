@@ -467,15 +467,20 @@ Enriching DESIGN.md...
   Architecture: populated from issue technical context
   Design Decisions: 2 decisions from issue comments
 
+Formalizing acceptance criteria...
+  Source: explicit "Acceptance Criteria" section in issue body
+  4 criteria written to DESIGN.md (AC-1..AC-4)
+
 Searching existing solutions (qmd query, collection=work-notes)...
   No existing notes surfaced.
 
 Creating task list...
-  Task 1: Add Jira Ticket field to DESIGN.md template
-  Task 2: Write init-workspace operation doc
-  Task 3: Register init-workspace in SKILL.md
-  Task 4: Add allowed-prompts for gh and acli
-  Task 5: Test init-workspace on current workspace
+  Task 1: Add Jira Ticket field to DESIGN.md template (Satisfies: AC-1)
+  Task 2: Write init-workspace operation doc (Satisfies: AC-2)
+  Task 3: Register init-workspace in SKILL.md (Satisfies: AC-3)
+  Task 4: Add allowed-prompts for gh and acli (Satisfies: AC-3)
+  Task 5: Test init-workspace on current workspace (Satisfies: AC-4)
+  AC coverage: 4/4 criteria covered
 
 Next steps:
   - Review DESIGN.md for accuracy
@@ -504,6 +509,10 @@ Enriching DESIGN.md...
   Requirements: 3 requirements extracted
   Architecture: placeholder (insufficient context)
 
+Formalizing acceptance criteria...
+  Source: must/should statements in ticket description (no explicit AC section)
+  3 draft criteria written to DESIGN.md (AC-1..AC-3) — flagged for interview
+
 Searching existing solutions (qmd query, collection=work-notes)...
   Query: "Fix authentication timeout in API gateway. <description>"
   Top 3:
@@ -514,16 +523,21 @@ Searching existing solutions (qmd query, collection=work-notes)...
     3. qmd://work-notes/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
        Title: JWT exp clock-skew 401s on pipeline agents
 
-Interviewing for gaps...
+Interviewing...
+  Q: "These acceptance criteria define 'done' for this task. Do they capture it?"
+  A: Amend — add criterion about retry behavior
+  AC-4 added; contract ratified (4 criteria)
+
   Q: "What components does this change affect? Any architectural constraints?"
   A: (user provides answer)
 
   Architecture: updated from interview
 
 Creating task list...
-  Task 1: Investigate auth timeout root cause
-  Task 2: Implement fix in API gateway
-  Task 3: Add timeout regression test
+  Task 1: Investigate auth timeout root cause (Satisfies: AC-1)
+  Task 2: Implement fix in API gateway (Satisfies: AC-1, AC-2)
+  Task 3: Add timeout regression test (Satisfies: AC-3, AC-4)
+  AC coverage: 4/4 criteria covered
 
 Next steps:
   - Review DESIGN.md for accuracy
@@ -547,6 +561,7 @@ Enriching CLAUDE.md...
 
 Enriching DESIGN.md...
   Requirements: unchanged (non-placeholder content)
+  Acceptance Criteria: unchanged (4 criteria, 2 already checked off — preserved)
   Architecture: unchanged (non-placeholder content)
   Design Decisions: unchanged (non-placeholder content)
 
