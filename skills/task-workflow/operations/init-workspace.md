@@ -10,7 +10,7 @@ Bridges the gap between workspace scaffolding (`/create-workspace`) and implemen
 
 ## Coordinator Sync (Optional)
 
-If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_MISSION_ID` are set, task creation in step 10 will also create tasks in the coordinator. This mirrors the task list to the coordinator for visibility and persistence.
+If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_MISSION_ID` are set, task creation in step 11 will also create tasks in the coordinator. This mirrors the task list to the coordinator for visibility and persistence.
 
 ```bash
 source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
@@ -51,7 +51,7 @@ Priority order:
    - "What is the issue source?" → GitHub / Jira / None
    - If GitHub: "What is the issue reference?" (e.g., `org/repo#123`)
    - If Jira: "What is the ticket key?" (e.g., `PROJ-456`)
-   - If None: Skip to step 5 (user interview)
+   - If None: Skip to step 8 (user interview)
 
 ### 4. Fetch Issue Content
 
@@ -163,7 +163,34 @@ Format extracted requirements as a numbered list with IDs:
 - If issue comments contain decisions or trade-off discussions, summarize them
 - If no substantive discussion, leave as placeholder
 
-### 7. User Interview (Conditional)
+### 7. Formalize Acceptance Criteria
+
+Write an explicit, checkable done-contract to DESIGN.md before any task decomposition. This section is the single source of truth for "done" — task decomposition (step 11), the review gate (step 12), and auto-advance's completion gate all reference it by AC ID.
+
+**Extraction sources** (priority order — first source with substantive content wins; lower sources supplement only when higher ones are sparse):
+
+1. Explicit "Acceptance Criteria" / "Definition of Done" heading in the issue body
+2. Checkbox lists (`- [ ]`) anywhere in the issue body
+3. "must" / "shall" / "should" statements in the requirements text (step 6 extraction)
+4. User interview (step 8) — when the above yield insufficient content, draft 2–5 candidate ACs from the Requirements section and issue title; the interview presents them for confirmation
+
+**Format** — write a `## Acceptance Criteria` section to DESIGN.md, immediately after `## Requirements`:
+
+```markdown
+## Acceptance Criteria
+
+- [ ] **AC-1**: <criterion — a verifiable statement about the deliverable>
+- [ ] **AC-2**: <criterion>
+```
+
+**Writing rules**:
+- Each criterion is an observable outcome of the deliverable ("X exists / does Y when Z"), not an implementation step
+- IDs are stable: never renumber existing ACs on re-run; only append new ones
+- The bold `**AC-N**` IDs make the contract greppable — `grep '^- \[ \] \*\*AC-' DESIGN.md` lists open criteria
+
+**Idempotency**: same non-placeholder rule as Requirements/Architecture — if the section already exists with non-placeholder content, preserve it (manual edits win). Append genuinely new criteria derived from new issue content; never rewrite, reorder, or renumber existing ones, and never reset a checked box to unchecked.
+
+### 8. User Interview (Conditional)
 
 Only interview if DESIGN.md still has placeholder sections after issue enrichment.
 
@@ -186,7 +213,7 @@ Use AskUserQuestion with relevant options derived from the issue context when po
 
 After interview, update DESIGN.md with the responses.
 
-### 8. Sync Worktrees Against Origin
+### 9. Sync Worktrees Against Origin
 
 Update all repo worktrees in the workspace against origin before searching for solutions or creating tasks. Stale local state leads to duplicate work (e.g., creating tasks for files that already exist on main).
 
@@ -200,13 +227,13 @@ For each repo worktree in the workspace:
 
 <!-- IMPLEMENTED: REC-001 - Add repo sync step to init-workspace -->
 
-### 9. Search Existing Solutions
+### 10. Search Existing Solutions
 
 Run a QMD query against the configured vault collection for relevant prior notes before creating the task list. Per DD4, the Obsidian vault is the single retrieval source; `docs/solutions/` is no longer consulted.
 
 **See `references/solution-search.md`** for the full invocation, output-shape, and fail-open protocol — do not duplicate it here. The steps below are the operation-specific wiring (what inputs to pass, where to persist results).
 
-#### 9a. Refresh the index (best-effort)
+#### 10a. Refresh the index (best-effort)
 
 ```bash
 timeout 30 qmd update -c "$QMD_COLLECTION" 2>/dev/null || true
@@ -214,9 +241,9 @@ timeout 30 qmd update -c "$QMD_COLLECTION" 2>/dev/null || true
 
 Idempotent incremental reindex. Fail-open — a stale index is strictly better than blocking setup. `|| true` ensures a non-zero exit never propagates.
 
-#### 9b. Build the query
+#### 10b. Build the query
 
-Per DESIGN.md OQ #3, the query is the **issue/ticket title followed by the first paragraph of the enriched DESIGN.md** (which now contains the real requirements after steps 5–7), not the raw issue description.
+Per DESIGN.md OQ #3, the query is the **issue/ticket title followed by the first paragraph of the enriched DESIGN.md** (which now contains the real requirements after steps 5–8), not the raw issue description.
 
 ```bash
 # Extract the first non-empty paragraph after the H1 line in DESIGN.md.
@@ -238,21 +265,21 @@ query_text="$(printf '%s. %s' "$issue_title" "$first_para" | sanitize)"
 
 Assigning to a shell variable and passing `"$query_text"` (double-quoted) is injection-safe: the shell expands the variable into a single argument regardless of its contents. **Do not inline issue content directly into the `qmd query` command** — that is the unsafe form.
 
-#### 9c. Run the query
+#### 10c. Run the query
 
 ```bash
 timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION" > /tmp/qmd-prior.out 2>/tmp/qmd-prior.err \
   || qmd_status=$?
 ```
 
-#### 9d. Persist top-3 into DESIGN.md
+#### 10d. Persist top-3 into DESIGN.md
 
 Parse the first 3 `qmd://…` URIs (with their Title and Score lines) from `/tmp/qmd-prior.out` using the output-shape rules in `references/solution-search.md`. Then overwrite (not append) the `## Prior Context (QMD)` section of DESIGN.md with the results. If the section does not exist, insert it immediately before `## Requirements`.
 
 ```markdown
 ## Prior Context (QMD)
 
-<!-- Auto-generated by init-workspace step 9. Overwritten on every re-run. -->
+<!-- Auto-generated by init-workspace step 10. Overwritten on every re-run. -->
 
 Query: `<query_text truncated to 120 chars>` · Collection: `<QMD_COLLECTION>`
 
@@ -261,11 +288,11 @@ Query: `<query_text truncated to 120 chars>` · Collection: `<QMD_COLLECTION>`
 3. [<Title>](<qmd://... URI>) — score <pct>%
 ```
 
-Empty result set: write the section with a single line `_No prior notes surfaced._`. Fail-open case: write `_QMD skipped: <reason>._`. Either state is a first-class outcome — the section always exists after init-workspace, so `/finish` and the step-11 summary can rely on its presence.
+Empty result set: write the section with a single line `_No prior notes surfaced._`. Fail-open case: write `_QMD skipped: <reason>._`. Either state is a first-class outcome — the section always exists after init-workspace, so `/finish` and the step-12 summary can rely on its presence.
 
 **Idempotency**: re-running replaces the section contents in place. Never duplicate the block.
 
-### 10. Create Task List
+### 11. Create Task List
 
 Create implementation tasks from the best available planning artifact.
 
@@ -318,7 +345,7 @@ PLAN.md includes standard documentation and demo acceptance criteria (added by p
 
 <!-- IMPLEMENTED: REC-001 - Init-workspace consumes PLAN.md for task decomposition -->
 
-### 11. Display Summary and Review Gate
+### 12. Display Summary and Review Gate
 
 Print a summary of everything that was initialized, then ask the user to approve the task list before auto-advance begins.
 
@@ -345,14 +372,14 @@ Print a summary of everything that was initialized, then ask the user to approve
 ```
 AskUserQuestion: "Review the task list above. Ready to start auto-advance?"
   Options:
-    - "Start auto-advance" → proceed to step 12
+    - "Start auto-advance" → proceed to step 13
     - "Edit tasks first" → user modifies tasks via TaskUpdate/TaskCreate, then re-ask
     - "Stop here" → end init-workspace without entering auto-advance
 ```
 
-**Skip review gate when**: The workspace CLAUDE.md contains an `## Auto-Advance` section (indicates the user opted into autonomous mode at workspace creation). In this case, display the summary and proceed directly to step 12 without asking.
+**Skip review gate when**: The workspace CLAUDE.md contains an `## Auto-Advance` section (indicates the user opted into autonomous mode at workspace creation). In this case, display the summary and proceed directly to step 13 without asking.
 
-### 12. Trigger Auto-Advance
+### 13. Trigger Auto-Advance
 
 After approval (or auto-approval via Auto-Advance section), load and execute the auto-advance operation:
 
@@ -362,10 +389,10 @@ Read: skills/task-workflow/operations/auto-advance.md
 
 Execute the auto-advance operation. Its entry guard (step 1) handles all edge cases:
 - Fresh init with new tasks → enters loop
-- Re-run with partially complete tasks → skips (tasks already exist from step 10, auto-advance resumes from current state)
+- Re-run with partially complete tasks → skips (tasks already exist from step 11, auto-advance resumes from current state)
 - Re-run with all tasks complete → outputs summary and stops
 
-**Skip condition**: If step 10 was skipped because tasks already existed AND any task is already `completed`, do not trigger auto-advance. This prevents re-triggering the loop on idempotent re-runs of `/init-workspace` mid-session. The user can resume auto-advance by starting a new conversation in the work session.
+**Skip condition**: If step 11 was skipped because tasks already existed AND any task is already `completed`, do not trigger auto-advance. This prevents re-triggering the loop on idempotent re-runs of `/init-workspace` mid-session. The user can resume auto-advance by starting a new conversation in the work session.
 
 ## Idempotency
 
@@ -376,6 +403,7 @@ Re-running `/init-workspace` is safe:
 | Issue data changed | Re-fetches but only updates placeholder sections |
 | Manual edits in CLAUDE.md | Preserved (non-placeholder detection) |
 | Manual edits in DESIGN.md | Preserved (non-placeholder detection) |
+| Acceptance Criteria edited or checked off | Preserved — IDs never renumbered, boxes never reset; new criteria append only |
 | Tasks already exist | Skips task creation |
 | Solutions search | Always runs (read-only) |
 | New sections added manually | Preserved |
