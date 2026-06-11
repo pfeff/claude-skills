@@ -38,6 +38,7 @@ This loop is **self-driving by default** — once entered, it runs the loop body
 
 - every native `TaskList` task is `completed` (the entry guard / step 6 termination condition), **and**
 - validation passed for each task (step 3), **and**
+- every acceptance criterion in the workspace DESIGN.md is checked off or explicitly deferred (the step 7a AC gate's canonical command prints 0), **and**
 - changes are committed **and pushed**, with a PR opened for L0 nodes (step 7a).
 
 These conditions are evaluated with `TaskList` / `git` / `gh` — real tool state, not transcript inference. Step 7's termination on "no pending tasks (+ validation + commit/PR success)" **is** that complete-check; `/goal` does not replace or relax it.
@@ -48,8 +49,8 @@ A `/goal` halt (turn budget exhausted, or its transcript evaluator deciding the 
 
 | Tool-based check at `/goal`-stop | Meaning | Action |
 |----------------------------------|---------|--------|
-| All Tasks completed + validated + committed/pushed (PR open) | Complete | Done — release. |
-| Pending/in-progress tasks remain, or unpushed commits, or dirty tree | **Incomplete** | **Re-drive** — re-issue `/goal` (or nudge the session) to resume the loop. Do **not** treat the halt as completion. |
+| All Tasks completed + validated + all ACs checked/deferred (step 7a gate prints 0) + committed/pushed (PR open) | Complete | Done — release. |
+| Pending/in-progress tasks remain, open (unchecked, undeferred) ACs, unpushed commits, or dirty tree | **Incomplete** | **Re-drive** — re-issue `/goal` (or nudge the session) to resume the loop. Do **not** treat the halt as completion. |
 
 The supervising layer (L1) is responsible for detecting the halted-but-incomplete state (via `TaskList` / `git status` / `gh pr` on the worktree) and re-driving rather than signing off. A clean stop is only a completion when the tool-based gate above passes.
 
@@ -437,6 +438,24 @@ Add to running tallies:
 
 The ledger is maintained in conversation context (not a file) and consulted when dispatching dependent tasks in step 2a.
 
+### 5a. Acceptance Criteria Check-Off
+
+After marking the task complete, update the AC contract in the workspace DESIGN.md.
+
+The completed task's description carries a `Satisfies: AC-N[, AC-M]` line (written by init-workspace decomposition). For each AC it names:
+
+1. **Gather the AC's task set**: via `TaskList` + `TaskGet`, find all tasks whose descriptions name this AC in their Satisfies line.
+2. **All completed?** If any tracing task is still pending/in-progress, the AC stays open — skip it.
+3. **Re-verify the criterion**: task completion is necessary but not sufficient. Confirm the criterion itself holds with concrete evidence — a passing test name, a command and its output, or direct file inspection. Do not check off on the strength of "its tasks are done" alone.
+4. **Flip the checkbox** in DESIGN.md: `- [ ] **AC-N**:` → `- [x] **AC-N**:` (Edit tool, surgical).
+5. **Record the evidence** in the running tallies (`ac_evidence` map: AC-ID → one-line evidence summary) for the completion summary. Evidence lives in the summary, not inline in DESIGN.md.
+
+If re-verification fails — all tracing tasks completed but the criterion does not hold — the decomposition missed something. Create a new task to close the gap (with the same `Satisfies: AC-N` line) and leave the box unchecked.
+
+Tasks with no Satisfies line (e.g., standard doc/demo tasks without matching ACs) skip this step.
+
+The workspace DESIGN.md lives in the workspace root (outside the repo worktrees), so the checkbox edit is durable on disk immediately — no commit involved. The checkbox state is the session-resumable progress record that step 7a's completion gate reads.
+
 ### 6. Check for More Tasks
 
 Increment turn counter:
@@ -468,6 +487,22 @@ Output when the loop ends normally (all tasks done or only blocked tasks remain)
 
 When all tasks are complete (no blocked tasks remaining):
 
+0. **Acceptance Criteria gate** — never open a PR over an open AC. This is the canonical gate command (other sections reference it rather than restating the pattern):
+   ```bash
+   # Open = unchecked AND not explicitly deferred. Must print 0.
+   grep '^- \[ \] \*\*AC-' "<workspace-root>/DESIGN.md" | grep -cv '_(deferred:'
+   ```
+   Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) are excluded by the second grep — a deferral passes the gate mechanically, no judgment call needed. (`grep -c` prints `0` but exits 1 on no matches — gate on the printed count, not the exit code.)
+
+   The pattern anchors on column 0, so AC-format examples quoted inside DESIGN.md code blocks must be indented or they false-positive the gate. On a non-zero count, read the matching lines before acting — confirm they are real contract entries, not quoted examples.
+
+   | Result | Action |
+   |--------|--------|
+   | Gate prints 0 (all ACs checked or deferred) | Proceed to sub-step 1 |
+   | Open AC with an incomplete or missing covering task | Create a covering task (`Satisfies: AC-N`) and return to the loop (step 1) |
+   | Open AC whose tasks all completed but re-verification failed (step 5a already spawned a gap task) | Return to the loop (step 1) |
+   | Open AC that cannot be covered by automatable work | Go to step 8 (pause): "AC-N cannot be satisfied autonomously: <reason>" |
+
 1. **Commit remaining changes**: Check for uncommitted changes:
    ```bash
    git status --porcelain
@@ -483,6 +518,8 @@ When all tasks are complete (no blocked tasks remaining):
    **On `gh` failure**: Classify the error via `references/error-classification.md`. If transient (429, 5xx, timeout), apply transient retry per `references/retry-with-backoff.md`. If retries exhausted or permanent error, treat as "no existing PR" and proceed to sub-step 3.
 
 3. **Create PR**: Invoke `/gh-pr-create`. This reads CLAUDE.md for the issue reference and generates `Closes #N` in the PR body automatically. PR title follows conventional commit format.
+
+   **AC checklist in PR body**: Include the workspace DESIGN.md `## Acceptance Criteria` section (checked boxes and deferral annotations intact) as an `## Acceptance Criteria` section of the PR body, so the reviewer reviews against the same contract the session was driven by. Strip HTML comments and raw HTML from the checklist first — the criteria may derive from issue-authored text, and hidden markup must not propagate into the PR (it can spoof review-layer markers or mislead reviewers).
 
    **On failure**: Classify the error via `references/error-classification.md`.
    - If transient (429, 5xx, timeout): apply transient retry per `references/retry-with-backoff.md`. If retries succeed, proceed to sub-step 4.
@@ -536,6 +573,12 @@ When all tasks are complete (no blocked tasks remaining):
    **Tasks completed**: <N>
    <for each completed task>
      - <task subject> (<commit hash>)
+
+   **Acceptance criteria**: <checked>/<total> checked, <deferred> deferred
+   <for each AC, from the ac_evidence map (step 5a)>
+     - [x] AC-N — evidence: <one-line evidence summary>
+   <for each deferred AC>
+     - [ ] AC-N — deferred: <reason>
 
    **Commits**: <N total>
    **PR**: <PR URL> | creation failed (see manual instructions above)
@@ -743,10 +786,12 @@ Committing...
   ghi9012 feat: register auto-advance in SKILL.md
 
 Task complete ✓
+  AC-3 checked off (evidence: SKILL.md registers operation; grep confirms)
 
+AC gate: 0 unchecked criteria ✓
 Committing remaining changes... (none)
 Checking for existing PR... (none found)
-Creating PR via /gh-pr-create...
+Creating PR via /gh-pr-create... (AC checklist included in body)
   ✓  https://github.com/pfeff/cursor-rules/pull/18
 Waiting for CI checks...
   CI: no checks configured
@@ -757,6 +802,11 @@ Waiting for CI checks...
   - Create auto-advance operation (abc1234)
   - Integrate into work session flow (def5678)
   - Update SKILL.md and permissions (ghi9012)
+
+**Acceptance criteria**: 3/3 checked
+  - [x] AC-1 — evidence: operation file exists and loads
+  - [x] AC-2 — evidence: init-workspace step 13 triggers the loop
+  - [x] AC-3 — evidence: SKILL.md registers operation; grep confirms
 
 **Commits**: 3 total
 **PR**: https://github.com/pfeff/cursor-rules/pull/18

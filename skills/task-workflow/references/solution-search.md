@@ -1,6 +1,6 @@
 # Solution Search Reference
 
-QMD-based hybrid search over the Obsidian vault. Used by `init-workspace` (step 9) and available to any skill needing to surface prior notes.
+QMD-based hybrid search over the Obsidian vault. Used by `init-workspace` (step 10) and available to any skill needing to surface prior notes.
 
 Per DD4 (`DESIGN.md` in the qmd-retrieval workspace), the Obsidian vault is the single retrieval source. Per-repo `docs/solutions/` trees are no longer searched — they remain in place as read-only historical artifacts.
 
@@ -66,5 +66,5 @@ grep -oE 'qmd://[^/]+/[^: ]+' /tmp/qmd-prior.out | awk '!seen[$0]++' | head -3
 
 ## See Also
 
-- `operations/init-workspace.md` step 9 — the canonical caller (builds query, persists top-3 into DESIGN.md `## Prior Context (QMD)`).
+- `operations/init-workspace.md` step 10 — the canonical caller (builds query, persists top-3 into DESIGN.md `## Prior Context (QMD)`).
 - DD1 / DD4 in the qmd-retrieval DESIGN.md — rationale for local hybrid retrieval and vault-only retrieval.
