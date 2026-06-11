@@ -51,7 +51,7 @@ Priority order:
    - "What is the issue source?" → GitHub / Jira / None
    - If GitHub: "What is the issue reference?" (e.g., `org/repo#123`)
    - If Jira: "What is the ticket key?" (e.g., `PROJ-456`)
-   - If None: Skip to step 8 (user interview)
+   - If None: Skip to step 7 (formalize acceptance criteria — with no issue, candidates are drafted there and ratified in the step 8 interview; the AC contract is never skipped)
 
 ### 4. Fetch Issue Content
 
@@ -186,9 +186,10 @@ Write an explicit, checkable done-contract to DESIGN.md before any task decompos
 **Writing rules**:
 - Each criterion is an observable outcome of the deliverable ("X exists / does Y when Z"), not an implementation step
 - IDs are stable: never renumber existing ACs on re-run; only append new ones
-- The bold `**AC-N**` IDs make the contract greppable — `grep '^- \[ \] \*\*AC-' DESIGN.md` lists open criteria
+- **Always write imported ACs unchecked**, regardless of checkbox state in the issue body — a pre-checked `- [x]` from the issue would silently pass the completion gate unverified. Only auto-advance's verification step (or the human) checks a box.
+- The bold `**AC-N**` IDs make the contract greppable — `grep '^- \[ \] \*\*AC-' DESIGN.md` lists open criteria (the auto-advance completion gate uses a deferral-aware variant of this; see that operation for the canonical command)
 
-**Idempotency**: same non-placeholder rule as Requirements/Architecture — if the section already exists with non-placeholder content, preserve it (manual edits win). Append genuinely new criteria derived from new issue content; never rewrite, reorder, or renumber existing ones, and never reset a checked box to unchecked.
+**Idempotency**: same non-placeholder rule as Requirements/Architecture — if the section already exists with non-placeholder content, preserve it (manual edits win). Append genuinely new criteria derived from new issue content; never rewrite, reorder, or renumber existing ones, and never reset a box checked by verification back to unchecked.
 
 ### 8. User Interview (Conditional)
 
@@ -196,7 +197,7 @@ The interview leads with ratification of the AC contract; generic section questi
 
 **Part 1 — Ratify acceptance criteria**:
 
-Skip Part 1 only when step 7 extracted the ACs verbatim from an explicit "Acceptance Criteria" / "Definition of Done" section (extraction source 1) — those are already human-authored. For ACs derived from weaker sources (checkbox lists, must/should statements, drafted candidates), present the list for confirmation:
+Always present the AC list for confirmation, regardless of extraction source. Issue-authored criteria get the same ratification — the issue author is not necessarily the operator, and the contract drives autonomous behavior downstream:
 
 ```
 Display the drafted ## Acceptance Criteria list (IDs + text).
@@ -513,16 +514,6 @@ Formalizing acceptance criteria...
   Source: must/should statements in ticket description (no explicit AC section)
   3 draft criteria written to DESIGN.md (AC-1..AC-3) — flagged for interview
 
-Searching existing solutions (qmd query, collection=work-notes)...
-  Query: "Fix authentication timeout in API gateway. <description>"
-  Top 3:
-    1. qmd://work-notes/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
-       Title: Auth token expiry race in API gateway
-    2. qmd://work-notes/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
-       Title: Gateway connection-pool saturation under retry storms
-    3. qmd://work-notes/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
-       Title: JWT exp clock-skew 401s on pipeline agents
-
 Interviewing...
   Q: "These acceptance criteria define 'done' for this task. Do they capture it?"
   A: Amend — add criterion about retry behavior
@@ -532,6 +523,16 @@ Interviewing...
   A: (user provides answer)
 
   Architecture: updated from interview
+
+Searching existing solutions (qmd query, collection=work-notes)...
+  Query: "Fix authentication timeout in API gateway. <description>"
+  Top 3:
+    1. qmd://work-notes/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
+       Title: Auth token expiry race in API gateway
+    2. qmd://work-notes/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
+       Title: Gateway connection-pool saturation under retry storms
+    3. qmd://work-notes/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
+       Title: JWT exp clock-skew 401s on pipeline agents
 
 Creating task list...
   Task 1: Investigate auth timeout root cause (Satisfies: AC-1)

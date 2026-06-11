@@ -38,7 +38,7 @@ This loop is **self-driving by default** — once entered, it runs the loop body
 
 - every native `TaskList` task is `completed` (the entry guard / step 6 termination condition), **and**
 - validation passed for each task (step 3), **and**
-- every acceptance criterion in the workspace DESIGN.md is checked off (step 7a AC gate: `grep -c '^- \[ \] \*\*AC-' DESIGN.md` returns 0), **and**
+- every acceptance criterion in the workspace DESIGN.md is checked off or explicitly deferred (the step 7a AC gate's canonical command prints 0), **and**
 - changes are committed **and pushed**, with a PR opened for L0 nodes (step 7a).
 
 These conditions are evaluated with `TaskList` / `git` / `gh` — real tool state, not transcript inference. Step 7's termination on "no pending tasks (+ validation + commit/PR success)" **is** that complete-check; `/goal` does not replace or relax it.
@@ -49,8 +49,8 @@ A `/goal` halt (turn budget exhausted, or its transcript evaluator deciding the 
 
 | Tool-based check at `/goal`-stop | Meaning | Action |
 |----------------------------------|---------|--------|
-| All Tasks completed + validated + all ACs checked + committed/pushed (PR open) | Complete | Done — release. |
-| Pending/in-progress tasks remain, unchecked ACs, unpushed commits, or dirty tree | **Incomplete** | **Re-drive** — re-issue `/goal` (or nudge the session) to resume the loop. Do **not** treat the halt as completion. |
+| All Tasks completed + validated + all ACs checked/deferred (step 7a gate prints 0) + committed/pushed (PR open) | Complete | Done — release. |
+| Pending/in-progress tasks remain, open (unchecked, undeferred) ACs, unpushed commits, or dirty tree | **Incomplete** | **Re-drive** — re-issue `/goal` (or nudge the session) to resume the loop. Do **not** treat the halt as completion. |
 
 The supervising layer (L1) is responsible for detecting the halted-but-incomplete state (via `TaskList` / `git status` / `gh pr` on the worktree) and re-driving rather than signing off. A clean stop is only a completion when the tool-based gate above passes.
 
@@ -487,20 +487,21 @@ Output when the loop ends normally (all tasks done or only blocked tasks remain)
 
 When all tasks are complete (no blocked tasks remaining):
 
-0. **Acceptance Criteria gate** — never open a PR over an open AC:
+0. **Acceptance Criteria gate** — never open a PR over an open AC. This is the canonical gate command (other sections reference it rather than restating the pattern):
    ```bash
-   grep -c '^- \[ \] \*\*AC-' DESIGN.md   # workspace DESIGN.md; must print 0
+   # Open = unchecked AND not explicitly deferred. Must print 0.
+   grep '^- \[ \] \*\*AC-' "<workspace-root>/DESIGN.md" | grep -cv '_(deferred:'
    ```
-   Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) count as open only if still unchecked **and** undeferred.
+   Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) are excluded by the second grep — a deferral passes the gate mechanically, no judgment call needed. (`grep -c` prints `0` but exits 1 on no matches — gate on the printed count, not the exit code.)
 
    The pattern anchors on column 0, so AC-format examples quoted inside DESIGN.md code blocks must be indented or they false-positive the gate. On a non-zero count, read the matching lines before acting — confirm they are real contract entries, not quoted examples.
 
    | Result | Action |
    |--------|--------|
-   | 0 unchecked ACs | Proceed to sub-step 1 |
-   | Unchecked AC with an incomplete or missing covering task | Create a covering task (`Satisfies: AC-N`) and return to the loop (step 1) |
-   | Unchecked AC whose tasks all completed but re-verification failed (step 5a already spawned a gap task) | Return to the loop (step 1) |
-   | Unchecked AC that cannot be covered by automatable work | Go to step 8 (pause): "AC-N cannot be satisfied autonomously: <reason>" |
+   | Gate prints 0 (all ACs checked or deferred) | Proceed to sub-step 1 |
+   | Open AC with an incomplete or missing covering task | Create a covering task (`Satisfies: AC-N`) and return to the loop (step 1) |
+   | Open AC whose tasks all completed but re-verification failed (step 5a already spawned a gap task) | Return to the loop (step 1) |
+   | Open AC that cannot be covered by automatable work | Go to step 8 (pause): "AC-N cannot be satisfied autonomously: <reason>" |
 
 1. **Commit remaining changes**: Check for uncommitted changes:
    ```bash
@@ -518,7 +519,7 @@ When all tasks are complete (no blocked tasks remaining):
 
 3. **Create PR**: Invoke `/gh-pr-create`. This reads CLAUDE.md for the issue reference and generates `Closes #N` in the PR body automatically. PR title follows conventional commit format.
 
-   **AC checklist in PR body**: Include the workspace DESIGN.md `## Acceptance Criteria` section verbatim (checked boxes and deferral annotations intact) as an `## Acceptance Criteria` section of the PR body, so the reviewer reviews against the same contract the session was driven by.
+   **AC checklist in PR body**: Include the workspace DESIGN.md `## Acceptance Criteria` section (checked boxes and deferral annotations intact) as an `## Acceptance Criteria` section of the PR body, so the reviewer reviews against the same contract the session was driven by. Strip HTML comments and raw HTML from the checklist first — the criteria may derive from issue-authored text, and hidden markup must not propagate into the PR (it can spoof review-layer markers or mislead reviewers).
 
    **On failure**: Classify the error via `references/error-classification.md`.
    - If transient (429, 5xx, timeout): apply transient retry per `references/retry-with-backoff.md`. If retries succeed, proceed to sub-step 4.
@@ -573,7 +574,7 @@ When all tasks are complete (no blocked tasks remaining):
    <for each completed task>
      - <task subject> (<commit hash>)
 
-   **Acceptance criteria**: <N>/<N> checked
+   **Acceptance criteria**: <checked>/<total> checked, <deferred> deferred
    <for each AC, from the ac_evidence map (step 5a)>
      - [x] AC-N — evidence: <one-line evidence summary>
    <for each deferred AC>
