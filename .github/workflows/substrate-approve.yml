@@ -23,6 +23,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   approve:
+    # Explicit check-run name so the gate can exclude its OWN check below. The
+    # default check-run name is the job id ('approve'), which does NOT equal
+    # context.workflow ('substrate-approve') — relying on that mismatch made the
+    # gate treat its own in-progress run as a non-green check and skip forever.
+    name: substrate-approve-gate
     runs-on: ubuntu-latest
     steps:
       - name: Guard — skip cleanly if approver App is not configured
@@ -81,12 +86,15 @@ jobs:
             });
             if (!clean) { core.info('no CLEAN l2-review marker from expected reviewer on this SHA; skip'); return; }
 
-            // 2) Require every check-run on the head SHA to be successful (exclude this
-            //    gate's own run, if it ever produces one).
+            // 2) Require every check-run on the head SHA to be successful, excluding this
+            //    gate's OWN check-run (named via the job's `name:` above). Matching the
+            //    actual check-run name — not context.workflow — is what prevents the gate
+            //    from blocking on its own in-progress run.
+            const SELF_CHECK = 'substrate-approve-gate';
             const runs = await github.paginate(
               github.rest.checks.listForRef, {owner, repo, ref: head});
             const bad = runs.filter(c =>
-              c.name !== context.workflow &&
+              c.name !== SELF_CHECK &&
               !(c.status === 'completed' &&
                 ['success', 'neutral', 'skipped'].includes(c.conclusion)));
             if (bad.length) {
