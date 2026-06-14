@@ -1,0 +1,118 @@
+name: substrate-approve
+# Convert a CLEAN l2-review verdict into a counting APPROVE from a non-author identity.
+#
+# Why this exists: the l2-review verdict rides in a PR review of type COMMENT authored by
+# the PR author (doctrine forbids --request-changes on a self-PR). A self-authored COMMENT
+# review can never satisfy "Require approvals" branch protection. This workflow lets a
+# separate identity (the "@pfeff's Claude Code Worker" GitHub App) post the counting
+# APPROVE — but ONLY when the L2 chain is CLEAN and required checks are green. Protection
+# stays on and is genuinely satisfied; nothing is bypassed.
+#
+# Invokes no Claude — GitHub Actions + REST only. Off both the subscription and metered
+# pools; NOT a supervision-wake path.
+on:
+  pull_request_review:
+    types: [submitted, edited]   # the l2-review COMMENT lands here
+  check_suite:
+    types: [completed]           # catch the verdict-before-CI ordering
+permissions:
+  contents: read                 # the workflow's own GITHUB_TOKEN stays minimal;
+  pull-requests: read            # the APPROVE is posted with the App token, not this one
+concurrency:
+  group: substrate-approve-${{ github.event.pull_request.number || github.event.check_suite.pull_requests[0].number }}
+  cancel-in-progress: false
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — skip cleanly if approver App is not configured
+        id: guard
+        env:
+          APP_ID: ${{ secrets.APPROVER_APP_ID }}
+          APP_KEY: ${{ secrets.APPROVER_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_KEY" ]; then
+            echo "approver App secrets not fully set — gate not yet provisioned; skipping."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint App installation token
+        if: steps.guard.outputs.configured == 'true'
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APPROVER_APP_ID }}
+          private-key: ${{ secrets.APPROVER_APP_PRIVATE_KEY }}
+
+      - name: Evaluate gate and approve if CLEAN + green
+        if: steps.guard.outputs.configured == 'true'
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_REVIEWER: ${{ vars.L2_REVIEWER_LOGIN }}   # operator account that posts l2-review
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          script: |
+            // Fail closed: an unset/empty expected reviewer must NOT accept any author's
+            // marker. Without this guard `L2_REVIEWER_LOGIN` being unset would auto-approve
+            // on a CLEAN marker from anyone.
+            const expected = process.env.EXPECTED_REVIEWER;
+            if (!expected) { core.info('L2_REVIEWER_LOGIN not configured — fail closed; skip'); return; }
+
+            const {owner, repo} = context.repo;
+            const pr = context.payload.pull_request
+              || (context.payload.check_suite && context.payload.check_suite.pull_requests[0]);
+            if (!pr) { core.info('no PR in event; skip'); return; }
+            const number = pr.number;
+            const head = pr.head.sha;
+
+            // 1) Require a CLEAN, level-2 l2-review marker from the expected reviewer,
+            //    submitted against THIS head SHA. Binding to commit_id prevents a stale
+            //    CLEAN review on an earlier commit from approving a newer push.
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews, {owner, repo, pull_number: number});
+            const marker = /<!--\s*l2-review:metadata([\s\S]*?)-->/;
+            const clean = reviews.some(r => {
+              if (r.user?.login !== expected) return false;
+              if (r.commit_id !== head) return false;
+              const m = (r.body || '').match(marker);
+              return !!m && /verdict:\s*CLEAN\b/.test(m[1]) && /level:\s*2\b/.test(m[1]);
+            });
+            if (!clean) { core.info('no CLEAN l2-review marker from expected reviewer on this SHA; skip'); return; }
+
+            // 2) Require every check-run on the head SHA to be successful (exclude this
+            //    gate's own run, if it ever produces one).
+            const runs = await github.paginate(
+              github.rest.checks.listForRef, {owner, repo, ref: head});
+            const bad = runs.filter(c =>
+              c.name !== context.workflow &&
+              !(c.status === 'completed' &&
+                ['success', 'neutral', 'skipped'].includes(c.conclusion)));
+            if (bad.length) {
+              core.info(`checks not green: ${bad.map(c => c.name).join(', ')}; skip`);
+              return;
+            }
+
+            // 2b) Honor legacy commit statuses (Status API) too — check-runs do not include
+            //     them, so a required status context would otherwise be invisible. Guarded on
+            //     total_count so repos with no statuses (check-runs only) are not blocked.
+            const combined = (await github.rest.repos.getCombinedStatusForRef(
+              {owner, repo, ref: head})).data;
+            if (combined.total_count > 0 && combined.state !== 'success') {
+              core.info(`commit statuses not green: ${combined.state}; skip`);
+              return;
+            }
+
+            // 3) Idempotent: skip if this identity already approved this head SHA.
+            const me = (await github.rest.apps.getAuthenticated()).data.slug + '[bot]';
+            const already = reviews.some(r =>
+              r.user?.login === me && r.state === 'APPROVED' && r.commit_id === head);
+            if (already) { core.info('already approved this SHA; skip'); return; }
+
+            // 4) Approve as the App — the counting, non-author approval.
+            await github.rest.pulls.createReview({
+              owner, repo, pull_number: number, event: 'APPROVE',
+              body: 'Approved by substrate-approver: l2-review verdict CLEAN and required checks green. '
+                  + 'Earned approval (branch protection satisfied, not bypassed).'});
+            core.info(`approved PR #${number} @ ${head}`);
