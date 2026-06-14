@@ -56,6 +56,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           EXPECTED_REVIEWER: ${{ vars.L2_REVIEWER_LOGIN }}   # operator account that posts l2-review
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}        # the approver App's bot slug
         with:
           github-token: ${{ steps.app.outputs.token }}
           script: |
@@ -113,7 +114,10 @@ jobs:
             }
 
             // 3) Idempotent: skip if this identity already approved this head SHA.
-            const me = (await github.rest.apps.getAuthenticated()).data.slug + '[bot]';
+            //    Derive the bot login from the action's app-slug output — `apps.getAuthenticated`
+            //    requires JWT app-auth, but this client holds an installation token (it 401s
+            //    with "JSON web token could not be decoded").
+            const me = process.env.APP_SLUG + '[bot]';
             const already = reviews.some(r =>
               r.user?.login === me && r.state === 'APPROVED' && r.commit_id === head);
             if (already) { core.info('already approved this SHA; skip'); return; }
