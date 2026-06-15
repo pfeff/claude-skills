@@ -144,7 +144,14 @@ Replace placeholder sections with:
 
 ## Acceptance Criteria
 
-<node.acceptance_criteria as checkbox list>
+<node.acceptance_criteria as canonical checkbox list>
+
+Write each criterion in canonical form:
+  - [ ] **AC-N**: <criterion> _(verify: <method>)_
+where `_(verify: <method>)_` is an optional one-line what-to-check hint.
+PRESERVE any existing AC-N ids carried on the GOAL.md node — reuse them
+verbatim. Assign sequential ids (AC-1, AC-2, …) only when the node has none.
+This step is idempotent: re-running must not renumber or rewrite existing ids.
 
 ## Project Context
 

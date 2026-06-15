@@ -179,9 +179,11 @@ Write an explicit, checkable done-contract to DESIGN.md before any task decompos
 ```markdown
 ## Acceptance Criteria
 
-- [ ] **AC-1**: <criterion — a verifiable statement about the deliverable>
-- [ ] **AC-2**: <criterion>
+- [ ] **AC-1**: <criterion — a verifiable statement about the deliverable> _(verify: <method>)_
+- [ ] **AC-2**: <criterion> _(verify: <method>)_
 ```
+
+The `_(verify: <method>)_` suffix is an optional one-line what-to-check hint (e.g. `_(verify: test output)_`, `_(verify: curl the endpoint)_`, `_(verify: file exists + content audit)_`). Omit it when there is nothing useful to add.
 
 **Writing rules**:
 - Each criterion is an observable outcome of the deliverable ("X exists / does Y when Z"), not an implementation step
@@ -189,7 +191,7 @@ Write an explicit, checkable done-contract to DESIGN.md before any task decompos
 - **Always write imported ACs unchecked**, regardless of checkbox state in the issue body — a pre-checked `- [x]` from the issue would silently pass the completion gate unverified. Only auto-advance's verification step (or the human) checks a box.
 - The bold `**AC-N**` IDs make the contract greppable — `grep '^- \[ \] \*\*AC-' DESIGN.md` lists open criteria (the auto-advance completion gate uses a deferral-aware variant of this; see that operation for the canonical command)
 
-**Idempotency**: same non-placeholder rule as Requirements/Architecture — if the section already exists with non-placeholder content, preserve it (manual edits win). Append genuinely new criteria derived from new issue content; never rewrite, reorder, or renumber existing ones, and never reset a box checked by verification back to unchecked.
+**Idempotency**: same non-placeholder rule as Requirements/Architecture — if DESIGN.md already has an `## Acceptance Criteria` section with checkboxes in EITHER format (canonical `- [ ] **AC-N**: …` or legacy plain `- [ ] …`), preserve every existing box and its id verbatim (manual edits win). Only append genuinely new criteria derived from new issue content; never rewrite, reorder, renumber, or reformat existing ones, and never reset a box checked by verification back to unchecked. Do not retrofit legacy plain criteria into canonical form — leave them as found.
 
 ### 8. User Interview (Conditional)
 
