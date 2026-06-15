@@ -75,7 +75,7 @@ ${NODE_DESCRIPTION}
 
 ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
-> **Criteria format**: Each criterion must be specific enough for an LLM to judge pass/fail unambiguously. Use observable, verifiable statements (e.g., "endpoint returns 404 when resource not found") not vague directives (e.g., "improve error handling"). Criteria are evaluated post-completion by the parent session — see execute-tree step 4a.
+> **Criteria format**: Write each criterion in canonical form — `- [ ] **AC-N**: <criterion> _(verify: <method>)_`, where `_(verify: <method>)_` is an optional one-line what-to-check hint (e.g. `_(verify: test output)_`, `_(verify: curl the endpoint)_`). Preserve any AC-N ids carried on the node; assign sequential ids only when the node has none. Each criterion must be specific enough for an LLM to judge pass/fail unambiguously. Use observable, verifiable statements (e.g., "endpoint returns 404 when resource not found") not vague directives (e.g., "improve error handling"). Criteria are evaluated post-completion by the parent session — see execute-tree step 4a.
 
 ## Project Context
 

@@ -144,7 +144,14 @@ Replace placeholder sections with:
 
 ## Acceptance Criteria
 
-<node.acceptance_criteria as checkbox list>
+<node.acceptance_criteria as canonical checkbox list>
+
+Write each criterion in canonical form:
+  - [ ] **AC-N**: <criterion> _(verify: <method>)_
+where `_(verify: <method>)_` is an optional one-line what-to-check hint.
+PRESERVE any existing AC-N ids carried on the GOAL.md node — reuse them
+verbatim. Assign sequential ids (AC-1, AC-2, …) only when the node has none.
+This step is idempotent: re-running must not renumber or rewrite existing ids.
 
 ## Project Context
 
@@ -152,6 +159,24 @@ Replace placeholder sections with:
 - **Root objective**: <frontmatter.title>
 - **Integration branch**: <project_branch>
 ```
+
+### 8a. Warn on Empty Acceptance Criteria (Provisional)
+
+After seeding the node's AC into DESIGN.md, check that at least one checkable criterion landed. A node dispatched with an empty AC section should warn, not silently proceed. Count the total ACs in BOTH formats with the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count "<workspace_path>/DESIGN.md"
+```
+
+`ac-count` prints `<met> <total>`. If `<total>` is `0`, **WARN** the operator (recommend the node carry ≥1 checkable acceptance criterion) and **continue**. Do not block: an empty AC section must not halt or fail dispatch.
+
+```
+ACCEPTANCE CRITERIA WARNING: dispatched node has no checkable acceptance criteria.
+Recommend capturing ≥1 checkable AC on the GOAL.md node.
+Continuing — dispatch is not blocked.
+```
+
+**Provisional (DESIGN.md DD-6)** — warn-first by deliberate doctrine: preserving the dispatch flow (fleet-safety) wins over a hard refusal that is unvalidated in use. The upgrade-to-refuse criteria live in DD-6; do not promote this to a hard gate here.
 
 ### 9. Update GOAL.md
 
