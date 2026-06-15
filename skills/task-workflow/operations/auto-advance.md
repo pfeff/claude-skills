@@ -490,11 +490,11 @@ When all tasks are complete (no blocked tasks remaining):
 0. **Acceptance Criteria gate** — never open a PR over an open AC. This is the canonical gate command (other sections reference it rather than restating the pattern):
    ```bash
    # Open = unchecked AND not explicitly deferred. Must print 0.
-   grep '^- \[ \] \*\*AC-' "<workspace-root>/DESIGN.md" | grep -cv '_(deferred:'
+   ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count --open "<workspace-root>/DESIGN.md"
    ```
-   Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) are excluded by the second grep — a deferral passes the gate mechanically, no judgment call needed. (`grep -c` prints `0` but exits 1 on no matches — gate on the printed count, not the exit code.)
+   `ac-count` recognizes acceptance criteria in BOTH formats — the canonical task format (`- [ ] **AC-N (...)** ...`) and the plain goal-tree/node format (`- [ ] <criterion>` under an `## Acceptance Criteria` heading) — so the gate is no longer blind to node-format ACs. Deferred criteria (`_(deferred: <reason>)_` annotation from init-workspace decomposition) count as met, so a deferral passes the gate mechanically, no judgment call needed.
 
-   The pattern anchors on column 0, so AC-format examples quoted inside DESIGN.md code blocks must be indented or they false-positive the gate. On a non-zero count, read the matching lines before acting — confirm they are real contract entries, not quoted examples.
+   On a non-zero count, read the matching lines before acting — confirm they are real contract entries, not quoted examples (canonical `**AC-` examples quoted inside DESIGN.md code blocks count anywhere they appear; node-format lines count only under an Acceptance-Criteria heading).
 
    | Result | Action |
    |--------|--------|
