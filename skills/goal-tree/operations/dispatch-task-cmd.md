@@ -160,6 +160,24 @@ This step is idempotent: re-running must not renumber or rewrite existing ids.
 - **Integration branch**: <project_branch>
 ```
 
+### 8a. Warn on Empty Acceptance Criteria (Provisional)
+
+After seeding the node's AC into DESIGN.md, check that at least one checkable criterion landed. A node dispatched with an empty AC section should warn, not silently proceed. Count the total ACs in BOTH formats with the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count "<workspace_path>/DESIGN.md"
+```
+
+`ac-count` prints `<met> <total>`. If `<total>` is `0`, **WARN** the operator (recommend the node carry ≥1 checkable acceptance criterion) and **continue**. Do not block: an empty AC section must not halt or fail dispatch.
+
+```
+ACCEPTANCE CRITERIA WARNING: dispatched node has no checkable acceptance criteria.
+Recommend capturing ≥1 checkable AC on the GOAL.md node.
+Continuing — dispatch is not blocked.
+```
+
+**Provisional (DESIGN.md DD-6)** — warn-first by deliberate doctrine: preserving the dispatch flow (fleet-safety) wins over a hard refusal that is unvalidated in use. The upgrade-to-refuse criteria live in DD-6; do not promote this to a hard gate here.
+
 ### 9. Update GOAL.md
 
 Update the node in GOAL.md:

@@ -193,6 +193,24 @@ The `_(verify: <method>)_` suffix is an optional one-line what-to-check hint (e.
 
 **Idempotency**: same non-placeholder rule as Requirements/Architecture — if DESIGN.md already has an `## Acceptance Criteria` section with checkboxes in EITHER format (canonical `- [ ] **AC-N**: …` or legacy plain `- [ ] …`), preserve every existing box and its id verbatim (manual edits win). Only append genuinely new criteria derived from new issue content; never rewrite, reorder, renumber, or reformat existing ones, and never reset a box checked by verification back to unchecked. Do not retrofit legacy plain criteria into canonical form — leave them as found.
 
+### 7a. Warn on Empty Acceptance Criteria (Provisional)
+
+After formalizing the AC contract, check that DESIGN.md carries at least one checkable criterion. Count the total ACs in BOTH formats with the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count "<workspace-root>/DESIGN.md"
+```
+
+`ac-count` prints `<met> <total>`. If `<total>` is `0` — no checkable AC was captured — **WARN** the operator (recommend capturing ≥1 checkable acceptance criterion before proceeding) and **continue**. Do not block: an empty AC section must not halt or fail workspace initialization.
+
+```
+ACCEPTANCE CRITERIA WARNING: DESIGN.md has no checkable acceptance criteria.
+Recommend capturing ≥1 checkable AC (the step 8 interview is the natural place).
+Continuing — creation is not blocked.
+```
+
+**Provisional (DESIGN.md DD-6)** — this ships warn-first by deliberate doctrine: preserving the creation flow (fleet-safety) wins over a hard refusal that is unvalidated in use. The upgrade-to-refuse criteria live in DD-6; do not promote this to a hard gate here.
+
 ### 8. User Interview (Conditional)
 
 The interview leads with ratification of the AC contract; generic section questions run only for gaps that remain afterward.
