@@ -362,30 +362,27 @@ function check_for_pr(node_id, node_info):
   if pr_json is not empty and pr_json.state == "OPEN":
     pr_number = pr_json.number
 
-    # Load and execute the L1 review protocol
-    Load: operations/l1-review.md
+    # L1 review JUDGMENT: the doctrine-based /l1-review (3 axes; verdict
+    # CLEAN/NEEDS-WORK/BLOCKING; posts the <!-- l1-review:metadata --> marker
+    # that lN-lifecycle-doctrine complete-check requires). See lN-review-doctrine.
+    review_result = /l1-review pr_number   # owner/repo#N or branch also accepted
 
-    review_result = l1_review(
-      pr_number=pr_number,
-      repo=$REPO,
-      node_id=node_id,
-      tree_id=$TREE_ID,
-      workspace_path=node_info.workspace_path
-    )
-
-    if review_result.verdict == "APPROVE":
-      # Merge, deploy if needed, mark complete
-      # l1-review.md handles merge + deploy + coordinator update
+    if review_result.verdict == "CLEAN":
+      # Run the post-review merge action (merge + deploy + coordinator update).
+      Load: operations/l1-review.md   # deprecated review; retained merge action
+      # the merge action marks the coordinator node completed
       active_nodes.remove(node_id)
       completed_nodes.append(node)
 
       # Auto-continue: go to step 1 (select next ready nodes)
       break  # exit monitoring loop to re-enter main loop
 
-    elif review_result.verdict == "REJECT":
-      # l1-review.md handles PR comment + coordinator blocked status
-      # Child session should pick up feedback and retry
-      log("PR #$pr_number rejected for $NODE_ID — child should address feedback")
+    elif review_result.verdict in ("NEEDS-WORK", "BLOCKING"):
+      # /l1-review already posted its findings on the PR. The merge action's
+      # "On NEEDS-WORK / BLOCKING" path sets the coordinator node blocked.
+      Load: operations/l1-review.md
+      # Child session should pick up the /l1-review feedback and retry
+      log("PR #$pr_number $review_result.verdict for $NODE_ID — child should address /l1-review feedback")
 ```
 
 #### 4d. Stuck Detection
@@ -627,11 +624,23 @@ function escalate_with_failure_log(node, attempts):
 
 ### 5a. Spec-Driven Evaluation
 
-Evaluate each completed node against its acceptance criteria before advancing. This is the core quality gate — without it, the system can only check "did it finish?" not "did it do the right thing?"
+Evaluate each completed node before advancing. This is the post-review
+evaluation/retry/metrics handler.
+
+> **The review judgment is `/l1-review`, not this step.** Step 5a does **not** compute
+> its own review verdict. The single L1 review judgment is the 3-axis `/l1-review`
+> (`CLEAN`/`NEEDS-WORK`/`BLOCKING`; posts the `<!-- l1-review:metadata -->` marker —
+> the canonical L2-facing artifact). Step 5a *consumes* that verdict to drive the
+> re-dispatch/retry loop and to record goal-tree conformance metrics. The
+> per-criterion and standing-rules assessment below is the conformance evidence behind
+> `/l1-review` axis 1 and the input to `.metrics/evaluation.json` — it is a metrics
+> tally, not a second verdict.
 
 #### Review Step Population
 
-When a node enters evaluation, auto-populate the task list with the L1 review checklist. This ensures every review substep is tracked and none are skipped. Create the following tasks (if they don't already exist for this node):
+When a node enters evaluation, auto-populate the task list with the evaluation
+checklist so every substep is tracked. Create the following tasks (if they don't
+already exist for this node):
 
 ```
 TaskCreate("${NODE_ID}: Check prerequisites",
@@ -649,11 +658,11 @@ TaskCreate("${NODE_ID}: Standing rules assessment",
 TaskCreate("${NODE_ID}: Test verification",
   "Verify the agent actually tested — ran the script, executed the container, observed output. 'Reviewed control flow' or 'logic looks correct' is NOT testing. REJECT if untested.")
 
-TaskCreate("${NODE_ID}: Write evaluation.json",
-  "Write scalar metrics to .metrics/evaluation.json with criteria_passed, criteria_total, acceptance_rate, verdict, standing_rules array.")
+TaskCreate("${NODE_ID}: Run /l1-review for the verdict",
+  "Run /l1-review against the node's PR — this is the single review judgment (CLEAN/NEEDS-WORK/BLOCKING) and posts the <!-- l1-review:metadata --> marker that L2 reads. Use its verdict to drive the decision below.")
 
-TaskCreate("${NODE_ID}: Post evaluation summary",
-  "Post evaluation summary as PR comment. Record verdict and reasoning for L2 review.")
+TaskCreate("${NODE_ID}: Write evaluation.json",
+  "Write scalar metrics to .metrics/evaluation.json with criteria_passed, criteria_total, acceptance_rate, verdict (the /l1-review verdict), standing_rules array.")
 ```
 
 These tasks are sequential — each depends on the prior step completing. Skip task creation if review tasks for this node already exist (idempotency).
@@ -762,17 +771,28 @@ Key distinction: additions that violate a rule are failures; removals or migrati
 - **Criteria Fail**: <N>/<total>
 - **Rules Pass**: <N>/<total>
 - **Rules Fail**: <N>/<total>
-- **Overall**: ACCEPT / REJECT
+- **Review verdict**: from `/l1-review` (`CLEAN` / `NEEDS-WORK` / `BLOCKING`)
 ```
 
-4. **Decision**:
+The criteria/rules tallies above are conformance metrics (they populate
+`.metrics/evaluation.json` and inform `/l1-review` axis 1). The **verdict** that drives
+the decision is `/l1-review`'s, not a separate "Overall" computed here.
 
-| Overall | Action |
-|---------|--------|
-| All criteria AND rules pass | **ACCEPT** — write `--status completed`, add to `completed_nodes`, proceed to 5c |
-| Any criteria fail, retries remaining | **REJECT** — re-dispatch with feedback (see below) |
-| Any standing rule fails, retries remaining | **REJECT** — re-dispatch with standing rule feedback (same retry path) |
-| Any criteria or rule fail, no retries remaining | **FAIL** — mark node as failed, log evaluation |
+4. **Decision** — map the `/l1-review` verdict to the node-outcome retry action:
+
+| `/l1-review` verdict | Node action |
+|----------------------|-------------|
+| `CLEAN` | **accept** — write `--status completed`, add to `completed_nodes`, proceed to 5c |
+| `NEEDS-WORK` / `BLOCKING`, retries remaining | **re-dispatch** with the `/l1-review` findings as feedback (see below) |
+| `NEEDS-WORK` / `BLOCKING`, no retries remaining | **fail** — mark node as failed, log evaluation |
+
+> **Conformance reconciliation.** A failed acceptance criterion or violated standing
+> rule *is* an axis-1 conformance failure, so `/l1-review` returns `NEEDS-WORK`/`BLOCKING`
+> for it — axis 1 subsumes the criteria/standing-rules check (see `lN-review-doctrine`
+> axis 1). The criteria/rules tally above is the metrics record of that same conformance
+> evidence, **not** an independent gate; there is no `CLEAN`-verdict-but-failed-criterion
+> accept path. If the tally and the verdict ever disagree, the `/l1-review` verdict is
+> authoritative and the divergence is itself a finding to surface — never a silent accept.
 
 #### Accept Path
 
@@ -793,7 +813,9 @@ Then proceed to step 5c (commit) and subsequent steps for this node.
 
 #### Reject Path
 
-When evaluation rejects a node's output:
+When `/l1-review` returns `NEEDS-WORK`/`BLOCKING` and retries remain. `/l1-review` has
+already posted its findings on the PR; the feedback below is the goal-tree-local copy
+re-dispatched to the child (failed criteria + any `/l1-review` findings):
 
 1. **Build feedback prompt**: Append the failed criteria and reasoning to the workspace DESIGN.md:
 
@@ -886,7 +908,7 @@ The `evaluation.json` file contains:
 | `criteria_passed` | int | Number of acceptance criteria that passed |
 | `criteria_total` | int | Total acceptance criteria evaluated |
 | `acceptance_rate` | float | `criteria_passed / criteria_total` (0.0–1.0) |
-| `verdict` | string | `ACCEPT`, `REJECT`, or `FAIL` |
+| `verdict` | string | The `/l1-review` verdict: `CLEAN`, `NEEDS-WORK`, or `BLOCKING` |
 | `evaluated_at` | string | ISO 8601 timestamp of evaluation |
 | `standing_rules` | array | Per-rule outcomes: `[{name, status, reasoning}]`. Empty array when no standing rules are defined. |
 

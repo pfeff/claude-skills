@@ -3,7 +3,7 @@ name: lN-review-doctrine
 description: Shared doctrine reference for L{N}-review skills (l1-review, l2-review). Holds the 3-axis checklist (Conformance, Process, Objective Advancement), the work-type → required-verification map consumed by axis 2, the finding/verdict schema, and the self-PR posting caveat. This skill has no operations — it is reference content read by `/l1-review` and `/l2-review` at review time. Never inline this doctrine into the l1-review or l2-review skills themselves — operator-confirmed rules must persist in one place.
 allowed-tools:
   - Read
-version: 1.0.0
+version: 1.1.0
 ---
 
 # lN-review-doctrine — shared L{N}-review doctrine
@@ -64,6 +64,11 @@ Every L{N}-review walks these three axes, in order. Each axis returns one of
   FAIL; partial attempts with TODOs are UNCLEAR.
 - Are there obvious wrong-file / abandoned-WIP / leftover-debugging signatures?
   (e.g. `console.log`, `dbg!`, commented-out code unrelated to the task.)
+- **Project standing rules.** Project-wide architectural constraints (e.g. a project
+  `CLAUDE.md` `## Standing Rules` section) are conformance criteria too — assess the
+  diff against each. A violated standing rule is an axis-1 finding at the severity the
+  rule implies (a correctness/security rule → `blocking`; a convention → `warning`).
+  Rules carrying a `**Detector**:` hint may be grep-pre-filtered: no match → auto-pass.
 - **Minimality** (maintained surface is a cost): among ways to meet the objective,
   does the diff add the *least* surface (net lines, rules, files, branch points)?
   Three sub-checks, each a `surface-bloat` finding when it fails:
@@ -257,6 +262,30 @@ Compute the verdict from the per-axis results and severities:
 If the required verification step couldn't be evaluated (artifact missing, CI not
 yet finished), the reviewer cannot claim CLEAN — verdict is NEEDS-WORK with a
 finding requesting the evidence.
+
+### Single verdict vocabulary (legacy APPROVE/REJECT/ESCALATE is deprecated)
+
+`CLEAN` / `NEEDS-WORK` / `BLOCKING` is the **only** verdict vocabulary for an
+L{N}-review judgment, system-wide. There is exactly one judgment, and it lives here.
+
+A legacy L1 review — `goal-tree/operations/l1-review.md` — once emitted
+`APPROVE` / `REJECT` / `ESCALATE` from its own rubric. That review schema is
+**deprecated**: the goal-tree operation no longer judges PRs; it is retained only as a
+post-`CLEAN` *merge action* (merge / agent-coordinator deploy / coordinator update),
+and `goal-tree/operations/execute-tree.md` now invokes `/l1-review` for the judgment.
+The former vocabulary maps onto this doctrine's verdicts:
+
+| Deprecated verdict | Doctrine verdict |
+|--------------------|------------------|
+| `APPROVE` | `CLEAN` |
+| `REJECT` | `NEEDS-WORK` (or `BLOCKING` if any blocking finding) |
+| `ESCALATE` | `NEEDS-WORK` / `BLOCKING` with a red-CI axis-2 FAIL routed to operator |
+
+This mapping exists only to read historical artifacts; new reviews emit the doctrine
+vocabulary directly. The CLEAN marker the `/l1-review` executor posts (see "Posting
+protocol") is what `lN-lifecycle-doctrine` complete-check condition 4 gates
+`merged → complete` on — the deprecated direct-merge path posted no marker and so
+could never reach `complete`.
 
 ## Artifact format
 
@@ -495,5 +524,9 @@ versioned doctrine update.
   `pr-open → fixing → merged` states drive when an L{N}-review runs.
 - `l1-review` skill — executes this doctrine at N=1; `l2-review` skill — executes it
   at N=2.
+- `goal-tree/operations/l1-review.md` — **deprecated as a review**; retained only as
+  the post-`CLEAN` merge action (merge / agent-coordinator deploy / coordinator
+  update). The L1 review judgment is `/l1-review`, not that operation. See "Single
+  verdict vocabulary" above.
 - A per-line code-review skill (e.g. `review`) — L0's per-line review; its output is
   read by axis 2 of L{N}-review. Out of scope for changes here.
