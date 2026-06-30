@@ -518,6 +518,12 @@ this skill. Do not patch the rule inside `l1-review` or `l2-review` — those sk
 are pure executors of this doctrine. Doctrine edits land on a branch and ship as a
 versioned doctrine update.
 
+**Canonical home:** `pfeff/claude-skills` is the canonical home for this doctrine
+(operator decision, 2026-06-30 — co-located with the other `*-doctrine` skills;
+single doctrine home). The `pfeff/dotfiles` copy is a deployed pointer; until the
+de-fork lands, edits made only here do not change runtime — mirror to dotfiles, or
+land the de-fork that reduces the dotfiles copy to a pure pointer.
+
 ## See also
 
 - `lN-lifecycle-doctrine` — the parallel lifecycle doctrine; its
