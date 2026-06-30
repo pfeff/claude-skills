@@ -61,7 +61,41 @@ def has_fence(text: str) -> bool:
     return FENCE_START in text and FENCE_END in text
 
 
-# --- Behavioral contracts (implemented test-first by the per-skill tasks) -----
+# --- Capture predicate (SPEC §2.1, kb-capture task) --------------------------
+
+
+def is_eligible(
+    highlight_count: int,
+    notes_count: int,
+    has_capture_tag: bool,
+    work_relevant: bool,
+) -> bool:
+    """Capture-eligibility predicate (SPEC §2.1).
+
+    A Reader doc is captured iff **either**:
+      - Path B (tag override): ``has_capture_tag`` — captured unconditionally, no highlight
+        required, topic irrelevant (AC-1.4, AC-1.7). The operator's explicit "ingest this".
+      - Path A (default): it has ≥1 highlight *or note* (notes count as highlights)
+        **AND** is judged work-relevant (AC-1.1, AC-1.2, AC-1.3).
+
+    ``work_relevant`` is the caller-supplied result of the LLM relevance judgment scored
+    against WORK-DOMAINS.md; this function owns only the deterministic gate logic.
+    """
+    if has_capture_tag:
+        return True
+    return (highlight_count + notes_count) >= 1 and work_relevant
+
+
+def source_key(source: dict) -> str:
+    """Stable, filesystem-safe idempotency key for a captured Reader source, so re-capture
+    and re-compile are no-ops (INV-4, AC-1.6). Derived from the Reader document id, which is
+    the stable unique identity of the source. Raises KeyError if the source has no id."""
+    raw_id = source["id"]
+    safe = "".join(c if (c.isalnum() or c in "-_") else "-" for c in str(raw_id))
+    return f"readwise-{safe}"
+
+
+# --- Compile-task contracts (implemented test-first by the kb-compile task) ---
 
 
 def classify_zone(frontmatter: dict, path: str) -> Zone:
@@ -75,9 +109,3 @@ def append_in_fence(existing_text: str, body: str) -> str:
     leaving all text outside the fence byte-for-byte unchanged (INV-1, AC-2.3/AC-2.6).
     Implemented by the kb-compile task."""
     raise NotImplementedError("append_in_fence is implemented in the kb-compile task (SPEC §2.2)")
-
-
-def source_key(source: dict) -> str:
-    """Stable idempotency key for a captured source, so re-capture/re-compile are no-ops
-    (INV-4, AC-1.6/AC-2.2). Implemented by the kb-capture task."""
-    raise NotImplementedError("source_key is implemented in the kb-capture task (SPEC §2.1)")

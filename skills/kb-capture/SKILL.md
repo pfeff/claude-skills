@@ -18,8 +18,10 @@ Implements the capture / ingest stage of the LLM Knowledge Base workflow (SPEC �
 Eligible Readwise Reader documents land in the vault's `raw/` staging queue with their
 origin metadata and highlights/notes intact, ready for `/compile`.
 
-> **Scaffold:** behavior is not yet implemented. The eligibility predicate, raw/ write,
-> and idempotency are built in the kb-capture implementation task, TDD against AC-1.1…AC-1.7.
+> **Status:** the deterministic core is implemented and unit-tested in `kb-core`
+> (`is_eligible`, `source_key` — AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and `raw/`
+> write are agent-orchestrated per `operations/capture.md` (Readwise MCP + `obsidian-notes`
+> CLI); a live end-to-end run is exercised by the demo task.
 
 ## Capture-eligibility predicate (SPEC §2.1)
 
