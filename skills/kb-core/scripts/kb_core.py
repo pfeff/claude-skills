@@ -95,17 +95,47 @@ def source_key(source: dict) -> str:
     return f"readwise-{safe}"
 
 
-# --- Compile-task contracts (implemented test-first by the kb-compile task) ---
+# --- Zone classification + fenced append (SPEC §1/§2.2, kb-compile task) ------
+
+
+def _tag_list(frontmatter: dict) -> list:
+    """Normalize a note's frontmatter tags to a list of strings (tags may be a scalar)."""
+    tags = frontmatter.get("tags", [])
+    if isinstance(tags, str):
+        return [tags]
+    return list(tags)
+
+
+def _under(path: str, subtree: str) -> bool:
+    """True iff ``path`` is inside ``subtree`` (e.g. "Keywords") at any depth."""
+    norm = path.replace("\\", "/")
+    return norm.startswith(f"{subtree}/") or f"/{subtree}/" in norm
 
 
 def classify_zone(frontmatter: dict, path: str) -> Zone:
-    """Classify a note into its edit-rule Zone (INV-2: marker-authoritative, subtree as
-    the organizational default). Implemented by the compile/lint tasks (SPEC §1)."""
-    raise NotImplementedError("classify_zone is implemented in the kb-compile task (SPEC §1)")
+    """Classify a note into its edit-rule Zone (INV-2: marker-authoritative, subtree as the
+    organizational default). Edit-rule is a separate axis from provenance: a Keywords/ note
+    that also carries ``generated_note`` (provenance) is still Shared (append-only) — so the
+    Shared check precedes the Derived check (SPEC §1)."""
+    tags = _tag_list(frontmatter)
+    if KEYWORD_TAG in tags or _under(path, "Keywords"):
+        return Zone.SHARED
+    if GENERATED_TAG in tags or _under(path, "Generated"):
+        return Zone.DERIVED
+    return Zone.HUMAN
 
 
 def append_in_fence(existing_text: str, body: str) -> str:
     """Return ``existing_text`` with ``body`` appended inside the kb:generated fence,
-    leaving all text outside the fence byte-for-byte unchanged (INV-1, AC-2.3/AC-2.6).
-    Implemented by the kb-compile task."""
-    raise NotImplementedError("append_in_fence is implemented in the kb-compile task (SPEC §2.2)")
+    leaving all text *outside* the fence byte-for-byte unchanged (INV-1, AC-2.3/AC-2.6).
+
+    If the note already has a fence, ``body`` is inserted just before the closing marker
+    (existing fenced content kept); otherwise a single new fence is appended after the
+    existing prose. Never rewrites or duplicates human prose."""
+    if FENCE_START in existing_text and FENCE_END in existing_text:
+        idx = existing_text.rindex(FENCE_END)
+        before, after = existing_text[:idx], existing_text[idx:]
+        sep = "" if before.endswith("\n") else "\n"
+        return f"{before}{sep}{body}\n{after}"
+    sep = "\n" if existing_text.endswith("\n") else "\n\n"
+    return f"{existing_text}{sep}{fence_wrap(body)}"

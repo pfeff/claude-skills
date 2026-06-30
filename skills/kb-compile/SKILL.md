@@ -19,10 +19,11 @@ The core new behavior of the LLM Knowledge Base workflow (SPEC §2.2). Increment
 compiles un-compiled sources from the vault's `raw/` queue, **writing to two zones under
 two different edit rules** (the load-bearing interaction with SPEC §1).
 
-> **Scaffold:** behavior is not yet implemented. The two-zone write, fenced append,
-> backlinks, MOC maintenance, and incrementality are built in the kb-compile task, TDD
-> against AC-2.1…AC-2.6 and AC-3.1 — especially the adversarial AC-2.4 (Human zone
-> untouched) and AC-2.6 (fence-only append).
+> **Status:** the load-bearing zone/fence primitives are implemented and unit-tested in
+> `kb-core` (`classify_zone`, `append_in_fence`, `fence_wrap` — AC-2.3/2.5/2.6). The
+> two-zone write, backlinks, MOC maintenance, and incrementality are agent-orchestrated per
+> `operations/compile.md` (guarded by those primitives); the adversarial AC-2.4 (Human zone
+> untouched) and a full end-to-end run are verified by the demo task.
 
 ## Billing posture
 

@@ -107,20 +107,88 @@ class TestSourceKey(unittest.TestCase):
             source_key({})
 
 
-class TestBehavioralContractsDeferred(unittest.TestCase):
-    """Compile-task functions remain NotImplementedError until implemented test-first."""
+class TestClassifyZone(unittest.TestCase):
+    """SPEC §1 zone classification: marker-authoritative, subtree as the default.
+    Edit-rule (zone) is a separate axis from provenance (AC-2.5)."""
 
-    def test_classify_zone_deferred(self):
-        from kb_core import classify_zone
+    def test_generated_tag_is_derived(self):
+        from kb_core import classify_zone, Zone
 
-        with self.assertRaises(NotImplementedError):
-            classify_zone({}, "some/path.md")
+        self.assertEqual(classify_zone({"tags": ["generated_note"]}, "anywhere/note.md"), Zone.DERIVED)
 
-    def test_append_in_fence_deferred(self):
+    def test_generated_subtree_default_is_derived(self):
+        from kb_core import classify_zone, Zone
+
+        self.assertEqual(classify_zone({}, "Generated/summary.md"), Zone.DERIVED)
+
+    def test_keyword_tag_is_shared(self):
+        from kb_core import classify_zone, Zone
+
+        self.assertEqual(classify_zone({"tags": ["keyword"]}, "anywhere/dns.md"), Zone.SHARED)
+
+    def test_keywords_subtree_default_is_shared(self):
+        from kb_core import classify_zone, Zone
+
+        self.assertEqual(classify_zone({}, "Keywords/dns.md"), Zone.SHARED)
+
+    def test_llm_created_keyword_note_is_shared_not_derived(self):
+        # Carries generated_note for provenance yet lives in Keywords/ → Shared edit rule.
+        from kb_core import classify_zone, Zone
+
+        fm = {"tags": ["keyword", "generated_note"]}
+        self.assertEqual(classify_zone(fm, "Keywords/agents.md"), Zone.SHARED)
+
+    def test_plain_human_note_is_human(self):
+        from kb_core import classify_zone, Zone
+
+        self.assertEqual(classify_zone({"tags": ["meeting"]}, "Journal/2026-06-30.md"), Zone.HUMAN)
+
+    def test_tags_as_scalar_string(self):
+        from kb_core import classify_zone, Zone
+
+        self.assertEqual(classify_zone({"tags": "generated_note"}, "x.md"), Zone.DERIVED)
+
+
+class TestAppendInFence(unittest.TestCase):
+    """SPEC §2.2 fenced append: add inside the fence, leave outside byte-for-byte unchanged
+    (AC-2.3, AC-2.6)."""
+
+    def test_creates_fence_when_absent(self):
+        from kb_core import append_in_fence, has_fence, FENCE_START
+
+        existing = "# DNS\n\nHuman prose about DNS.\n"
+        result = append_in_fence(existing, "generated detail")
+        self.assertTrue(has_fence(result))
+        self.assertTrue(result.startswith(existing))  # existing bytes preserved as a prefix
+        start = result.index(FENCE_START)
+        self.assertIn("generated detail", result[start:])  # body lives in the fenced region
+        self.assertNotIn("generated detail", result[:start])  # nothing leaked above the fence
+
+    def test_appends_into_existing_fence_preserving_outside(self):
+        from kb_core import append_in_fence, fence_wrap, FENCE_START, FENCE_END
+
+        existing = "# Agents\n\nHuman prose.\n\n" + fence_wrap("first gen") + "\n\nTail human prose.\n"
+        result = append_in_fence(existing, "second gen")
+
+        s = result.index(FENCE_START)
+        e = result.rindex(FENCE_END)
+        inner = result[s:e]
+        self.assertIn("first gen", inner)
+        self.assertIn("second gen", inner)
+        # text before the fence is byte-for-byte unchanged
+        self.assertEqual(result[:s], existing[: existing.index(FENCE_START)])
+        # text from FENCE_END onward (the human tail) is byte-for-byte unchanged
+        self.assertEqual(result[e:], existing[existing.rindex(FENCE_END):])
+
+    def test_human_prose_unchanged_no_duplicate_fence(self):
         from kb_core import append_in_fence
 
-        with self.assertRaises(NotImplementedError):
-            append_in_fence("text", "body")
+        existing = "Concept prose.\n\n<!-- kb:generated start -->\nold\n<!-- kb:generated end -->\n"
+        result = append_in_fence(existing, "new")
+        # exactly one fence (no duplicate region created)
+        self.assertEqual(result.count("<!-- kb:generated start -->"), 1)
+        self.assertEqual(result.count("<!-- kb:generated end -->"), 1)
+        self.assertIn("Concept prose.", result)
 
 
 if __name__ == "__main__":
