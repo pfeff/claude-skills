@@ -5,3 +5,7 @@
 # Contains private machine hostnames; must never be committed. Template:
 # scripts/.private-tokens.example
 scripts/.private-tokens
+
+# Python test/byte-compile artifacts (skills/*/scripts test harnesses).
+__pycache__/
+*.pyc
