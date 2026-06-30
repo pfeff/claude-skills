@@ -232,10 +232,19 @@ The ratified contract is what task decomposition (step 11) and the completion ga
 
 **Part 2 — Fill remaining gaps** (only sections still placeholder after Part 1):
 
+When core spec sections are still placeholders after Part 1 — i.e. the workspace has **no real spec** (Requirements, Architecture, and/or Design Decisions remain placeholder text, or DESIGN.md/spec carries unfilled placeholders) — engage the **operator interview** rather than asking ad-hoc one-off questions. A missing spec is exactly the trigger the operator-interview flow exists to serve.
+
 ```
-For each section in [Requirements, Architecture, Design Decisions]:
-  If section content is still a placeholder:
-    Ask targeted question(s) about that section
+After Part 1, detect placeholder sections:
+  placeholders = [s for s in [Requirements, Architecture, Design Decisions]
+                  if s is still placeholder text]
+
+If placeholders is non-empty (spec is missing/incomplete):
+  Run the operator interview, scoped to the placeholder sections:
+    - Invoke /operator-interview <task-headline> (or apply operator-interview-doctrine
+      inline), binding the interview to the placeholder sections below.
+  The doctrine governs how to ask (informed-interview, ask-vs-default, response rules);
+  these sections are the phase-specific binding.
 ```
 
 | Section | Question |
@@ -246,7 +255,7 @@ For each section in [Requirements, Architecture, Design Decisions]:
 
 Ratified ACs often resolve the Requirements gap on their own — only ask about Requirements when the ACs leave genuine context missing.
 
-Use AskUserQuestion with relevant options derived from the issue context when possible.
+The question templates above are the dimension bindings; defer to the doctrine for posture and round count. Use AskUserQuestion with relevant options derived from the issue context when possible.
 
 After interview, update DESIGN.md with the responses.
 
