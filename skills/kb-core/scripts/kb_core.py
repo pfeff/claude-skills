@@ -139,3 +139,22 @@ def append_in_fence(existing_text: str, body: str) -> str:
         return f"{before}{sep}{body}\n{after}"
     sep = "\n" if existing_text.endswith("\n") else "\n\n"
     return f"{existing_text}{sep}{fence_wrap(body)}"
+
+
+# --- Lint guards (SPEC §2.6, kb-lint task) -----------------------------------
+
+
+def is_autofix_allowed(frontmatter: dict, path: str) -> bool:
+    """True iff a lint auto-fix may write to this note (AC-6.2). Auto-fix is confined to the
+    Derived zone; Shared and Human findings are surfaced as proposals only (INV-1)."""
+    return classify_zone(frontmatter, path) == Zone.DERIVED
+
+
+def find_orphans(adjacency: dict) -> list:
+    """Return the notes that have no inbound backlinks (AC-6.3 input), sorted. ``adjacency``
+    maps each note name to the list of notes it links TO; an orphan is a note that never
+    appears as a link target."""
+    linked_to = set()
+    for targets in adjacency.values():
+        linked_to.update(targets)
+    return sorted(note for note in adjacency if note not in linked_to)

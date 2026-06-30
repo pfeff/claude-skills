@@ -3,9 +3,10 @@
 Report-only health check over the Derived zone (reading Shared for connection candidates)
 (SPEC §2.6).
 
-**Scaffold:** this operation defines the contract; the steps below are implemented in the
-kb-lint task, TDD against AC-6.1…AC-6.3. Until then it is a specification, not a runnable
-procedure.
+The safety-critical deterministic core is implemented and unit-tested in `kb_core`
+(`is_autofix_allowed` — the INV-1 write boundary, AC-6.2; `find_orphans` — AC-6.3 input).
+Findings generation (inconsistencies, missing data, connection candidates) is
+agent-orchestrated here; a live run on the real vault is exercised by the demo task.
 
 ## Billing guard
 
@@ -16,14 +17,15 @@ Interactive `/lint` only — no scheduled pass (SPEC §6).
 1. **Read the Derived zone** (and Shared concept notes, for connection candidates).
 2. **Detect findings:**
    - Inconsistent / contradictory data across Derived notes.
-   - Orphan notes (no backlinks).
+   - Orphan notes (no backlinks) — `kb_core.find_orphans(adjacency)` over the Derived/Shared link graph.
    - Missing data a web search could impute (use `WebSearch`).
    - Candidate new connections / articles (≥1 actionable on a non-trivial vault, AC-6.3).
 3. **Emit a findings report.**
 4. **Apply fixes within the write boundary** (INV-1):
-   - Auto-fix is allowed **only** in the Derived zone and must be reversible.
-   - Human/Shared findings are surfaced as **proposals only** — never edited.
-   - Use `kb_core.classify_zone` to enforce the boundary before any write.
+   - Before ANY write, gate on `kb_core.is_autofix_allowed(frontmatter, path)` — it returns
+     True only for Derived-zone notes. Auto-fix must be reversible.
+   - Human/Shared findings (where the guard returns False) are surfaced as **proposals
+     only** — never edited.
 
 ## Acceptance Criteria (SPEC §2.6)
 

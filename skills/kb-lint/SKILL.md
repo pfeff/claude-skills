@@ -18,8 +18,10 @@ On-demand health check over the LLM Knowledge Base (SPEC §2.6). Reports issues;
 operator applies them. The only autonomous writes allowed are reversible fixes confined to
 the Derived zone — Human and Shared findings are surfaced as proposals only (INV-1).
 
-> **Scaffold:** behavior is not yet implemented. The findings pass is built in the kb-lint
-> task, TDD against AC-6.1…AC-6.3.
+> **Status:** the safety-critical write boundary is implemented and unit-tested in `kb-core`
+> (`is_autofix_allowed` — auto-fix confined to Derived, AC-6.2; `find_orphans` — AC-6.3
+> input). The findings pass is agent-orchestrated per `operations/lint.md`; a live run is
+> verified by the demo task.
 
 ## Billing posture
 
@@ -48,7 +50,7 @@ pass; same rationale as `/compile` (SPEC §6, CLAUDE.md billing guard).
 
 ## Integration Points
 
-- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`classify_zone` for the INV-1 write guard).
+- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`is_autofix_allowed` for the INV-1 write guard, `find_orphans` for orphan detection).
 - **QMD** — the vault search CLI, for connection-candidate discovery.
 - **obsidian-notes skill / host config** — vault path resolution; reads (and Derived-only fixes).
 - **kb-compile** — produces the Derived/Shared content this skill audits.

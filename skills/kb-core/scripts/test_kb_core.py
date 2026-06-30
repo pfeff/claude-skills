@@ -191,5 +191,33 @@ class TestAppendInFence(unittest.TestCase):
         self.assertIn("Concept prose.", result)
 
 
+class TestLintGuards(unittest.TestCase):
+    """SPEC §2.6 lint write-boundary (AC-6.2): auto-fix allowed only in Derived; everything
+    else is a proposal. Plus orphan detection (AC-6.3 input)."""
+
+    def test_autofix_allowed_only_in_derived(self):
+        from kb_core import is_autofix_allowed
+
+        self.assertTrue(is_autofix_allowed({"tags": ["generated_note"]}, "Generated/x.md"))
+        self.assertFalse(is_autofix_allowed({"tags": ["keyword"]}, "Keywords/x.md"))  # Shared
+        self.assertFalse(is_autofix_allowed({}, "Journal/x.md"))  # Human
+
+    def test_find_orphans_returns_notes_with_no_backlinks(self):
+        from kb_core import find_orphans
+
+        # A links to B; A has no inbound link → orphan. B is linked → not.
+        self.assertEqual(find_orphans({"A": ["B"], "B": []}), ["A"])
+
+    def test_find_orphans_none_when_all_linked(self):
+        from kb_core import find_orphans
+
+        self.assertEqual(find_orphans({"A": ["B"], "B": ["A"]}), [])
+
+    def test_find_orphans_lone_note(self):
+        from kb_core import find_orphans
+
+        self.assertEqual(find_orphans({"A": []}), ["A"])
+
+
 if __name__ == "__main__":
     unittest.main()
