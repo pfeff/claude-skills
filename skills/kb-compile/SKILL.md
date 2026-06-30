@@ -1,6 +1,6 @@
 ---
 name: kb-compile
-description: "Compile staged knowledge-base sources into the vault: one Derived summary note per source (Generated/, free edit) plus Shared concept notes (Keywords/, append-only inside the kb:generated fence), with backlinks and index/MOC notes. Incremental and idempotent; never rewrites human prose and never touches the Human zone. Operator-invoked via /compile. Use when turning raw/ sources into linked, queryable knowledge."
+description: "Compile staged knowledge-base sources into the vault: one Derived summary note per source (Generated/, free edit) plus Shared concept notes (Keywords/, append-only inside the kb:generated fence), with backlinks and index/MOC notes. Incremental and idempotent; never rewrites human prose and never touches the Human zone. Operator-invoked via /kb-compile. Use when turning raw/ sources into linked, queryable knowledge."
 argument-hint: "[blank to compile all uncompiled raw/ sources]"
 allowed-tools:
   - Read
@@ -19,15 +19,16 @@ The core new behavior of the LLM Knowledge Base workflow (SPEC §2.2). Increment
 compiles un-compiled sources from the vault's `raw/` queue, **writing to two zones under
 two different edit rules** (the load-bearing interaction with SPEC §1).
 
-> **Status:** the load-bearing zone/fence primitives are implemented and unit-tested in
-> `kb-core` (`classify_zone`, `append_in_fence`, `fence_wrap` — AC-2.3/2.5/2.6). The
-> two-zone write, backlinks, MOC maintenance, and incrementality are agent-orchestrated per
-> `operations/compile.md` (guarded by those primitives); the adversarial AC-2.4 (Human zone
-> untouched) and a full end-to-end run are verified by the demo task.
+> **Status:** complete. The load-bearing zone/fence primitives are implemented and
+> unit-tested in `kb-core` (`classify_zone`, `append_in_fence`, `fence_wrap` — AC-2.3/2.5/2.6).
+> The two-zone write, backlinks, MOC maintenance, and incrementality are agent-orchestrated
+> per `operations/compile.md` (guarded by those primitives), and the full flow — including
+> the adversarial AC-2.4 Human-zone non-mutation check — was verified end-to-end against a
+> live vault.
 
 ## Billing posture
 
-`/compile` is **operator-invoked and interactive** → subscription billing pool. It must
+`/kb-compile` is **operator-invoked and interactive** → subscription billing pool. It must
 **never** be wired to cron, `claude -p`, or the Agent SDK (that moves the workflow to the
 metered pool; requires operator sign-off). See SPEC §6 and the CLAUDE.md billing guard.
 
@@ -45,7 +46,7 @@ no-op (AC-2.2). Every written note carries its zone marker (INV-2) and `sources:
 ## Invocation
 
 ```
-/compile               # compile all uncompiled raw/ sources
+/kb-compile               # compile all uncompiled raw/ sources
 ```
 
 ## Execution

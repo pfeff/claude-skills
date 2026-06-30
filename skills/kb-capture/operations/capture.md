@@ -33,7 +33,9 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
    metadata and highlights/notes unmodified (AC-1.1). Schema below.
 5. **Zone safety** — the only write target is `raw/<key>.md`. Never write to or under
    `Generated/`, `Keywords/`, or any Human note (AC-1.5). `raw/` is a staging area, not one
-   of the three edit-rule zones.
+   of the three edit-rule zones. **A source's own Reader tags go in the `reader_tags` key,
+   never in `tags`** — so captured content can never inject a `generated_note`/`keyword`
+   zone marker (the marker that authorizes LLM writes is compiler-owned only; SPEC §1, INV-2).
 
 ## raw/ artifact schema
 

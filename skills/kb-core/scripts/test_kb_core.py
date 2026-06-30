@@ -148,6 +148,15 @@ class TestClassifyZone(unittest.TestCase):
 
         self.assertEqual(classify_zone({"tags": "generated_note"}, "x.md"), Zone.DERIVED)
 
+    def test_tags_none_does_not_crash(self):
+        # An empty `tags:` key parses to None in Obsidian frontmatter — the INV-1 guard
+        # must not crash on it.
+        from kb_core import classify_zone, is_autofix_allowed, Zone
+
+        self.assertEqual(classify_zone({"tags": None}, "Generated/x.md"), Zone.DERIVED)
+        self.assertEqual(classify_zone({"tags": None}, "Journal/x.md"), Zone.HUMAN)
+        self.assertFalse(is_autofix_allowed({"tags": None}, "Journal/x.md"))
+
 
 class TestAppendInFence(unittest.TestCase):
     """SPEC §2.2 fenced append: add inside the fence, leave outside byte-for-byte unchanged
@@ -189,6 +198,16 @@ class TestAppendInFence(unittest.TestCase):
         self.assertEqual(result.count("<!-- kb:generated start -->"), 1)
         self.assertEqual(result.count("<!-- kb:generated end -->"), 1)
         self.assertIn("Concept prose.", result)
+
+    def test_half_fence_raises(self):
+        # A note with only one marker is corrupt; appending must fail loudly, not append a
+        # second fence and compound the corruption.
+        from kb_core import append_in_fence
+
+        with self.assertRaises(ValueError):
+            append_in_fence("prose\n<!-- kb:generated start -->\ndangling\n", "x")
+        with self.assertRaises(ValueError):
+            append_in_fence("prose\n<!-- kb:generated end -->\n", "x")
 
 
 class TestLintGuards(unittest.TestCase):

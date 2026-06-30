@@ -1,4 +1,4 @@
-# /compile — Compile KB sources into Derived + Shared notes
+# /kb-compile — Compile KB sources into Derived + Shared notes
 
 Compile un-compiled `raw/` sources into Derived summaries and Shared concept notes
 (SPEC §1 + §2.2). Operator-invoked and interactive (subscription billing pool) — never

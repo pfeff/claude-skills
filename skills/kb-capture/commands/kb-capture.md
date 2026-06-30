@@ -1,7 +1,7 @@
 # /kb-capture — Stage Reader sources into the KB raw/ queue
 
 Capture work-relevant Readwise Reader documents into the vault's `raw/` staging queue for
-later `/compile` (SPEC §2.1).
+later `/kb-compile` (SPEC §2.1).
 
 ## Procedure
 

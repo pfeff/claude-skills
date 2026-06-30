@@ -10,7 +10,7 @@ guarded by those primitives. A live end-to-end run is exercised by the demo task
 
 ## Billing guard
 
-Interactive `/compile` only — never invoke from cron / `claude -p` / Agent SDK (SPEC §6).
+Interactive `/kb-compile` only — never invoke from cron / `claude -p` / Agent SDK (SPEC §6).
 
 ## Incrementality / idempotency (AC-2.2)
 

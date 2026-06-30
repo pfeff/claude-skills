@@ -1,6 +1,6 @@
 ---
 name: kb-capture
-description: "Capture / ingest bridge for the LLM Knowledge Base. Stages work-relevant Readwise Reader documents into the vault's raw/ queue for later /compile. A doc is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag (unconditional override). Capture never mutates the Derived/Shared/Human zones and is idempotent. Use when ingesting Reader sources into the knowledge base."
+description: "Capture / ingest bridge for the LLM Knowledge Base. Stages work-relevant Readwise Reader documents into the vault's raw/ queue for later /kb-compile. A doc is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag (unconditional override). Capture never mutates the Derived/Shared/Human zones and is idempotent. Use when ingesting Reader sources into the knowledge base."
 argument-hint: "[blank for full inbox sweep, or a Reader doc id/url]"
 allowed-tools:
   - Read
@@ -16,12 +16,12 @@ version: 0.1.0
 
 Implements the capture / ingest stage of the LLM Knowledge Base workflow (SPEC §2.1).
 Eligible Readwise Reader documents land in the vault's `raw/` staging queue with their
-origin metadata and highlights/notes intact, ready for `/compile`.
+origin metadata and highlights/notes intact, ready for `/kb-compile`.
 
-> **Status:** the deterministic core is implemented and unit-tested in `kb-core`
+> **Status:** complete. The deterministic core is implemented and unit-tested in `kb-core`
 > (`is_eligible`, `source_key` — AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and `raw/`
 > write are agent-orchestrated per `operations/capture.md` (Readwise MCP + `obsidian-notes`
-> CLI); a live end-to-end run is exercised by the demo task.
+> CLI), and the full capture→compile→lint flow was verified end-to-end against a live vault.
 
 ## Capture-eligibility predicate (SPEC §2.1)
 

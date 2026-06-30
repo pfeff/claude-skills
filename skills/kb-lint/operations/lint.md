@@ -10,7 +10,7 @@ agent-orchestrated here; a live run on the real vault is exercised by the demo t
 
 ## Billing guard
 
-Interactive `/lint` only — no scheduled pass (SPEC §6).
+Interactive `/kb-lint` only — no scheduled pass (SPEC §6).
 
 ## Steps (to implement)
 

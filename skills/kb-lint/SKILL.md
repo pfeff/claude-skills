@@ -1,6 +1,6 @@
 ---
 name: kb-lint
-description: "Report-only health check over the knowledge base's Derived zone (reading Shared concept notes for connection candidates). Surfaces inconsistent/contradictory data, orphan notes, missing data web search could impute, and candidate new connections. Findings are report-only — any auto-fix is confined to Derived and reversible; Human/Shared issues are proposals only. Operator-invoked via /lint. Use to audit KB health after compiling."
+description: "Report-only health check over the knowledge base's Derived zone (reading Shared concept notes for connection candidates). Surfaces inconsistent/contradictory data, orphan notes, missing data web search could impute, and candidate new connections. Findings are report-only — any auto-fix is confined to Derived and reversible; Human/Shared issues are proposals only. Operator-invoked via /kb-lint. Use to audit KB health after compiling."
 argument-hint: "[blank to lint the whole Derived zone]"
 allowed-tools:
   - Read
@@ -18,15 +18,15 @@ On-demand health check over the LLM Knowledge Base (SPEC §2.6). Reports issues;
 operator applies them. The only autonomous writes allowed are reversible fixes confined to
 the Derived zone — Human and Shared findings are surfaced as proposals only (INV-1).
 
-> **Status:** the safety-critical write boundary is implemented and unit-tested in `kb-core`
-> (`is_autofix_allowed` — auto-fix confined to Derived, AC-6.2; `find_orphans` — AC-6.3
-> input). The findings pass is agent-orchestrated per `operations/lint.md`; a live run is
-> verified by the demo task.
+> **Status:** complete. The safety-critical write boundary is implemented and unit-tested in
+> `kb-core` (`is_autofix_allowed` — auto-fix confined to Derived, AC-6.2; `find_orphans` —
+> AC-6.3 input). The findings pass is agent-orchestrated per `operations/lint.md`, and a
+> report-only run was verified end-to-end against a live vault.
 
 ## Billing posture
 
-`/lint` is **operator-invoked and interactive** → subscription billing pool. No scheduled
-pass; same rationale as `/compile` (SPEC §6, CLAUDE.md billing guard).
+`/kb-lint` is **operator-invoked and interactive** → subscription billing pool. No scheduled
+pass; same rationale as `/kb-compile` (SPEC §6, CLAUDE.md billing guard).
 
 ## What it reports (SPEC §2.6)
 
@@ -39,7 +39,7 @@ pass; same rationale as `/compile` (SPEC §6, CLAUDE.md billing guard).
 ## Invocation
 
 ```
-/lint                  # health-check the Derived zone
+/kb-lint                  # health-check the Derived zone
 ```
 
 ## Execution

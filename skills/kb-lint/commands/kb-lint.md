@@ -1,4 +1,4 @@
-# /lint — Health-check the knowledge base
+# /kb-lint — Health-check the knowledge base
 
 Report-only health check over the KB's Derived zone (SPEC §2.6). Operator-invoked and
 interactive (subscription billing pool) — no scheduled pass.

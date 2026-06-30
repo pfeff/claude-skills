@@ -5,11 +5,10 @@ Holds the load-bearing authorship-boundary primitives from SPEC §1 in ONE place
 three skills cannot drift on the non-destruction invariant (INV-1). Zone classification,
 the Shared append-fence, and provenance helpers live here.
 
-Scaffold status: constants and the pure fence string-helpers are implemented (SPEC §1 is
-locked). Behavioral functions that require design choices deferred to the per-skill tasks
-(zone classification from frontmatter, fenced append into an existing note, idempotency
-keys) are declared with their contracts and raise NotImplementedError until those tasks
-implement them test-first.
+All primitives are implemented and unit-tested (see `test_kb_core.py`): the SPEC §1
+constants and fence helpers, the capture predicate and idempotency key (SPEC §2.1), zone
+classification and fenced append (SPEC §1/§2.2), and the lint write-guard and orphan
+detector (SPEC §2.6).
 
 No vault I/O happens in this module — callers pass note text / frontmatter in and get
 values out, which keeps the primitives unit-testable without touching a real vault.
@@ -99,8 +98,10 @@ def source_key(source: dict) -> str:
 
 
 def _tag_list(frontmatter: dict) -> list:
-    """Normalize a note's frontmatter tags to a list of strings (tags may be a scalar)."""
-    tags = frontmatter.get("tags", [])
+    """Normalize a note's frontmatter tags to a list of strings. Tags may be a scalar
+    string, or an empty `tags:` key that parses to None (common in Obsidian) — both are
+    handled so the INV-1 write-guard never crashes on real frontmatter."""
+    tags = frontmatter.get("tags") or []
     if isinstance(tags, str):
         return [tags]
     return list(tags)
@@ -131,8 +132,14 @@ def append_in_fence(existing_text: str, body: str) -> str:
 
     If the note already has a fence, ``body`` is inserted just before the closing marker
     (existing fenced content kept); otherwise a single new fence is appended after the
-    existing prose. Never rewrites or duplicates human prose."""
-    if FENCE_START in existing_text and FENCE_END in existing_text:
+    existing prose. Never rewrites or duplicates human prose.
+
+    Raises ValueError on a malformed half-fence (exactly one marker present) rather than
+    appending a second fence and compounding the corruption — compile fails loudly."""
+    has_start, has_end = FENCE_START in existing_text, FENCE_END in existing_text
+    if has_start != has_end:
+        raise ValueError("malformed kb:generated fence: exactly one marker present")
+    if has_fence(existing_text):
         idx = existing_text.rindex(FENCE_END)
         before, after = existing_text[:idx], existing_text[idx:]
         sep = "" if before.endswith("\n") else "\n"

@@ -27,10 +27,10 @@ and kb-lint:
 
 ## Status
 
-Scaffold: constants and the pure fence string-helpers are implemented; the behavioral
-functions (`classify_zone`, `append_in_fence`, `source_key`) are declared with their
-contracts and raise `NotImplementedError` until the per-skill tasks implement them
-test-first.
+All primitives are implemented and unit-tested — constants, fence helpers, the capture
+predicate (`is_eligible`, `source_key`), zone classification and fenced append
+(`classify_zone`, `append_in_fence`), and the lint guards (`is_autofix_allowed`,
+`find_orphans`).
 
 ## Tests
 
