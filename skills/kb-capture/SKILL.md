@@ -1,6 +1,6 @@
 ---
 name: kb-capture
-description: "Capture / ingest bridge for the LLM Knowledge Base. Stages work-relevant Readwise Reader documents into the vault's raw/ queue for later /kb-compile. A doc is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag (unconditional override). Capture never mutates the Derived/Shared/Human zones and is idempotent. Use when ingesting Reader sources into the knowledge base."
+description: "Capture / ingest bridge for the LLM Knowledge Base. Stages work-relevant Readwise Reader documents into the vault's raw/ queue for later /kb-compile. A doc is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag (unconditional override). Capture writes only under raw/ (never off-limits zones) and is idempotent. Use when ingesting Reader sources into the knowledge base."
 argument-hint: "[blank for full inbox sweep, or a Reader doc id/url]"
 allowed-tools:
   - Read
@@ -56,7 +56,7 @@ unmodified. Re-capturing the same source is a no-op (keyed via `kb_core.source_k
 ## Integration Points
 
 - **Readwise Reader** — source documents (MCP `reader_*` tools / export API).
-- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `source_key`, zone guard).
+- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
 - **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
 - **kb-compile** — consumes the `raw/` queue this skill fills.

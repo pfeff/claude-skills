@@ -1,9 +1,8 @@
-"""Tests for kb_core.py — the shared authorship-boundary primitives (SPEC §1).
+"""Tests for kb_core.py — the shared KB primitives (SPEC v2).
 
-Scaffold-level coverage: the locked SPEC §1 constants and the pure fence string-helpers.
-Behavioral functions (classify_zone, append_in_fence, source_key) are covered test-first
-by the kb-capture / kb-compile tasks; here we only assert they exist and signal their
-not-yet-implemented contract, so the harness is green without pre-empting that work.
+v2 model: no folder-zones, no fence. The deterministic primitives are the capture predicate,
+the idempotency key, the off-limits write-guard, the KB-ownership check (for lint auto-fix),
+concept-slug dedup, and orphan detection.
 
 Run: python3 -m unittest test_kb_core   (from this scripts/ directory)
 """
@@ -11,45 +10,8 @@ Run: python3 -m unittest test_kb_core   (from this scripts/ directory)
 import unittest
 
 
-class TestFenceConstants(unittest.TestCase):
-    def test_fence_markers_are_html_comments(self):
-        from kb_core import FENCE_START, FENCE_END
-
-        # HTML comments render invisibly in Obsidian and are machine-detectable (SPEC §1).
-        self.assertTrue(FENCE_START.startswith("<!--") and FENCE_START.endswith("-->"))
-        self.assertTrue(FENCE_END.startswith("<!--") and FENCE_END.endswith("-->"))
-        self.assertIn("kb:generated", FENCE_START)
-        self.assertIn("kb:generated", FENCE_END)
-
-    def test_zone_values(self):
-        from kb_core import Zone
-
-        self.assertEqual({z.value for z in Zone}, {"derived", "shared", "human"})
-
-
-class TestFenceHelpers(unittest.TestCase):
-    def test_fence_wrap_encloses_body(self):
-        from kb_core import fence_wrap, FENCE_START, FENCE_END
-
-        wrapped = fence_wrap("hello")
-        self.assertTrue(wrapped.startswith(FENCE_START))
-        self.assertTrue(wrapped.endswith(FENCE_END))
-        self.assertIn("hello", wrapped)
-
-    def test_has_fence_detects_both_markers(self):
-        from kb_core import fence_wrap, has_fence
-
-        self.assertTrue(has_fence("prose\n" + fence_wrap("x") + "\nmore"))
-        self.assertFalse(has_fence("just human prose, no markers"))
-
-
 class TestCaptureEligibility(unittest.TestCase):
-    """SPEC §2.1 capture-eligibility predicate (AC-1.1…AC-1.7).
-
-    is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant) -> bool
-    - Path A: (highlights + notes >= 1) AND work_relevant
-    - Path B: has_capture_tag -> True unconditionally (overrides path A)
-    """
+    """SPEC §2.1 capture-eligibility predicate (AC-1.1…AC-1.7)."""
 
     def test_highlighted_relevant_is_captured(self):  # AC-1.1
         from kb_core import is_eligible
@@ -69,8 +31,8 @@ class TestCaptureEligibility(unittest.TestCase):
     def test_irrelevant_skipped_unless_tagged(self):  # AC-1.4
         from kb_core import is_eligible
 
-        self.assertFalse(is_eligible(5, 0, False, False))  # relevant gate fails
-        self.assertTrue(is_eligible(5, 0, True, False))  # tag override wins
+        self.assertFalse(is_eligible(5, 0, False, False))
+        self.assertTrue(is_eligible(5, 0, True, False))
 
     def test_tagged_with_zero_highlights_and_notes_captured(self):  # AC-1.7
         from kb_core import is_eligible
@@ -96,7 +58,6 @@ class TestSourceKey(unittest.TestCase):
 
         key = source_key({"id": "abc/123 weird:id"})
         self.assertTrue(key.startswith("readwise-"))
-        # safe for use in a filename: no path separators or shell-hostile chars
         for ch in "/\\: ":
             self.assertNotIn(ch, key)
 
@@ -107,132 +68,85 @@ class TestSourceKey(unittest.TestCase):
             source_key({})
 
 
-class TestClassifyZone(unittest.TestCase):
-    """SPEC §1 zone classification: marker-authoritative, subtree as the default.
-    Edit-rule (zone) is a separate axis from provenance (AC-2.5)."""
+class TestWriteBoundary(unittest.TestCase):
+    """SPEC v2 §1 INV-1: the KB never writes the off-limits subtrees (AC-1.5/2.4/6.1)."""
 
-    def test_generated_tag_is_derived(self):
-        from kb_core import classify_zone, Zone
+    def test_off_limits_are_not_writable(self):
+        from kb_core import is_writable
 
-        self.assertEqual(classify_zone({"tags": ["generated_note"]}, "anywhere/note.md"), Zone.DERIVED)
+        self.assertFalse(is_writable("DevOps Documentation/22_CICD/x.md"))
+        self.assertFalse(is_writable("Confluence/imported/y.md"))
 
-    def test_generated_subtree_default_is_derived(self):
-        from kb_core import classify_zone, Zone
+    def test_kb_locations_are_writable(self):
+        from kb_core import is_writable
 
-        self.assertEqual(classify_zone({}, "Generated/summary.md"), Zone.DERIVED)
+        for p in ("raw/readwise-abc.md", "Notes/2026/07/z.md", "Keywords/AWS.md", "index.md"):
+            self.assertTrue(is_writable(p), p)
 
-    def test_keyword_tag_is_shared(self):
-        from kb_core import classify_zone, Zone
 
-        self.assertEqual(classify_zone({"tags": ["keyword"]}, "anywhere/dns.md"), Zone.SHARED)
+class TestKbOwnership(unittest.TestCase):
+    """SPEC §2.6 AC-6.2: lint auto-fix is confined to KB-authored notes."""
 
-    def test_keywords_subtree_default_is_shared(self):
-        from kb_core import classify_zone, Zone
+    def test_raw_is_kb_owned(self):
+        from kb_core import is_kb_owned
 
-        self.assertEqual(classify_zone({}, "Keywords/dns.md"), Zone.SHARED)
+        self.assertTrue(is_kb_owned({}, "raw/readwise-abc.md"))
 
-    def test_llm_created_keyword_note_is_shared_not_derived(self):
-        # Carries generated_note for provenance yet lives in Keywords/ → Shared edit rule.
-        from kb_core import classify_zone, Zone
+    def test_kb_project_is_owned(self):
+        from kb_core import is_kb_owned
 
-        fm = {"tags": ["keyword", "generated_note"]}
-        self.assertEqual(classify_zone(fm, "Keywords/agents.md"), Zone.SHARED)
+        self.assertTrue(is_kb_owned({"project": "knowledge-base"}, "Notes/2026/07/s.md"))
 
-    def test_plain_human_note_is_human(self):
-        from kb_core import classify_zone, Zone
+    def test_kb_tag_is_owned(self):
+        from kb_core import is_kb_owned
 
-        self.assertEqual(classify_zone({"tags": ["meeting"]}, "Journal/2026-06-30.md"), Zone.HUMAN)
+        self.assertTrue(is_kb_owned({"tags": ["kb", "aws"]}, "Notes/2026/07/s.md"))
 
-    def test_tags_as_scalar_string(self):
-        from kb_core import classify_zone, Zone
+    def test_ordinary_note_is_not_owned(self):
+        from kb_core import is_kb_owned
 
-        self.assertEqual(classify_zone({"tags": "generated_note"}, "x.md"), Zone.DERIVED)
+        self.assertFalse(is_kb_owned({"type": "session-journal"}, "Notes/2026/07/j.md"))
 
     def test_tags_none_does_not_crash(self):
-        # An empty `tags:` key parses to None in Obsidian frontmatter — the INV-1 guard
-        # must not crash on it.
-        from kb_core import classify_zone, is_autofix_allowed, Zone
+        # An empty `tags:` key parses to None in Obsidian frontmatter.
+        from kb_core import is_kb_owned
 
-        self.assertEqual(classify_zone({"tags": None}, "Generated/x.md"), Zone.DERIVED)
-        self.assertEqual(classify_zone({"tags": None}, "Journal/x.md"), Zone.HUMAN)
-        self.assertFalse(is_autofix_allowed({"tags": None}, "Journal/x.md"))
+        self.assertFalse(is_kb_owned({"tags": None}, "Notes/2026/07/j.md"))
 
 
-class TestAppendInFence(unittest.TestCase):
-    """SPEC §2.2 fenced append: add inside the fence, leave outside byte-for-byte unchanged
-    (AC-2.3, AC-2.6)."""
+class TestConceptSlug(unittest.TestCase):
+    """SPEC §2.2 AC-2.3: stable slug so re-compile updates the concept in place, not duplicates."""
 
-    def test_creates_fence_when_absent(self):
-        from kb_core import append_in_fence, has_fence, FENCE_START
+    def test_normalizes_title(self):
+        from kb_core import concept_slug
 
-        existing = "# DNS\n\nHuman prose about DNS.\n"
-        result = append_in_fence(existing, "generated detail")
-        self.assertTrue(has_fence(result))
-        self.assertTrue(result.startswith(existing))  # existing bytes preserved as a prefix
-        start = result.index(FENCE_START)
-        self.assertIn("generated detail", result[start:])  # body lives in the fenced region
-        self.assertNotIn("generated detail", result[:start])  # nothing leaked above the fence
+        self.assertEqual(concept_slug("LLM Knowledge Base"), "llm-knowledge-base")
 
-    def test_appends_into_existing_fence_preserving_outside(self):
-        from kb_core import append_in_fence, fence_wrap, FENCE_START, FENCE_END
+    def test_stable_across_whitespace_and_punctuation(self):
+        from kb_core import concept_slug
 
-        existing = "# Agents\n\nHuman prose.\n\n" + fence_wrap("first gen") + "\n\nTail human prose.\n"
-        result = append_in_fence(existing, "second gen")
+        self.assertEqual(concept_slug("  Knowledge Base: Linting!  "), "knowledge-base-linting")
 
-        s = result.index(FENCE_START)
-        e = result.rindex(FENCE_END)
-        inner = result[s:e]
-        self.assertIn("first gen", inner)
-        self.assertIn("second gen", inner)
-        # text before the fence is byte-for-byte unchanged
-        self.assertEqual(result[:s], existing[: existing.index(FENCE_START)])
-        # text from FENCE_END onward (the human tail) is byte-for-byte unchanged
-        self.assertEqual(result[e:], existing[existing.rindex(FENCE_END):])
+    def test_same_title_same_slug(self):
+        from kb_core import concept_slug
 
-    def test_human_prose_unchanged_no_duplicate_fence(self):
-        from kb_core import append_in_fence
-
-        existing = "Concept prose.\n\n<!-- kb:generated start -->\nold\n<!-- kb:generated end -->\n"
-        result = append_in_fence(existing, "new")
-        # exactly one fence (no duplicate region created)
-        self.assertEqual(result.count("<!-- kb:generated start -->"), 1)
-        self.assertEqual(result.count("<!-- kb:generated end -->"), 1)
-        self.assertIn("Concept prose.", result)
-
-    def test_half_fence_raises(self):
-        # A note with only one marker is corrupt; appending must fail loudly, not append a
-        # second fence and compound the corruption.
-        from kb_core import append_in_fence
-
-        with self.assertRaises(ValueError):
-            append_in_fence("prose\n<!-- kb:generated start -->\ndangling\n", "x")
-        with self.assertRaises(ValueError):
-            append_in_fence("prose\n<!-- kb:generated end -->\n", "x")
+        self.assertEqual(concept_slug("Dev-Stacks"), concept_slug("dev  stacks"))
 
 
-class TestLintGuards(unittest.TestCase):
-    """SPEC §2.6 lint write-boundary (AC-6.2): auto-fix allowed only in Derived; everything
-    else is a proposal. Plus orphan detection (AC-6.3 input)."""
+class TestFindOrphans(unittest.TestCase):
+    """SPEC §2.6 AC-6.3 input: notes with no inbound backlinks."""
 
-    def test_autofix_allowed_only_in_derived(self):
-        from kb_core import is_autofix_allowed
-
-        self.assertTrue(is_autofix_allowed({"tags": ["generated_note"]}, "Generated/x.md"))
-        self.assertFalse(is_autofix_allowed({"tags": ["keyword"]}, "Keywords/x.md"))  # Shared
-        self.assertFalse(is_autofix_allowed({}, "Journal/x.md"))  # Human
-
-    def test_find_orphans_returns_notes_with_no_backlinks(self):
+    def test_returns_notes_with_no_backlinks(self):
         from kb_core import find_orphans
 
-        # A links to B; A has no inbound link → orphan. B is linked → not.
         self.assertEqual(find_orphans({"A": ["B"], "B": []}), ["A"])
 
-    def test_find_orphans_none_when_all_linked(self):
+    def test_none_when_all_linked(self):
         from kb_core import find_orphans
 
         self.assertEqual(find_orphans({"A": ["B"], "B": ["A"]}), [])
 
-    def test_find_orphans_lone_note(self):
+    def test_lone_note(self):
         from kb_core import find_orphans
 
         self.assertEqual(find_orphans({"A": []}), ["A"])

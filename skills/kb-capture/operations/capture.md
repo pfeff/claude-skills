@@ -31,11 +31,11 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
    is a no-op (AC-1.6).
 4. **Write the raw artifact** via the `obsidian-notes` skill (`create`), preserving origin
    metadata and highlights/notes unmodified (AC-1.1). Schema below.
-5. **Zone safety** — the only write target is `raw/<key>.md`. Never write to or under
-   `Generated/`, `Keywords/`, or any Human note (AC-1.5). `raw/` is a staging area, not one
-   of the three edit-rule zones. **A source's own Reader tags go in the `reader_tags` key,
-   never in `tags`** — so captured content can never inject a `generated_note`/`keyword`
-   zone marker (the marker that authorizes LLM writes is compiler-owned only; SPEC §1, INV-2).
+5. **Write boundary** — the only write target is `raw/<key>.md`; capture writes nowhere else
+   (AC-1.5). `raw/` is a verbatim staging area, the only KB-specific folder. **A source's own
+   Reader tags go in the `reader_tags` key, never in `tags`** — so captured content can never
+   inject the `kb` capture tag or `project: knowledge-base` routing and be mistaken for
+   KB-authored output (INV-2).
 
 ## raw/ artifact schema
 
@@ -67,8 +67,9 @@ tags: [kb-raw]
 <note text, verbatim>
 ```
 
-- `type: kb-raw` / `tags: [kb-raw]` mark this as the staging queue — deliberately **not**
-  `generated_note` or `keyword`, so it is never mistaken for a Derived or Shared note.
+- `type: kb-raw` marks this as the staging queue — deliberately not a compiled-note type
+  (`reference`/`zettel`) and carrying no `project: knowledge-base` routing, so it is never
+  mistaken for compiled KB output.
 - Highlights and notes are copied **verbatim** (AC-1.1) — capture does not summarize.
 
 ## Acceptance Criteria (SPEC §2.1)

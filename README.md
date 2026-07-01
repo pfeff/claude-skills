@@ -23,7 +23,7 @@ claude --plugin-dir /path/to/claude-skills
 | **review** | `/claude-skills:review` | Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. |
 | **ci-feedback-loop** | `/claude-skills:ci-feedback-loop` | Monitor PR check status after push, auto-diagnose CI failures, attempt fixes, and escalate when unable to resolve. |
 | **planning-workflow** | `/claude-skills:planning-workflow` | Structured planning that validates the problem, reconciles DESIGN.md, searches past solutions, calibrates research depth, analyzes edge cases via SpecFlow, and generates living plans with checkable criteria. |
-| **kb** (capture/compile/lint) | `/kb-capture` · `/kb-compile` · `/kb-lint` | LLM Knowledge Base over an Obsidian vault: capture Readwise Reader sources to `raw/`, compile into Derived summaries + Shared concept notes (append-only HTML-comment fence), and lint for health. Marker-authoritative three-zone authorship boundary; shared logic in `kb-core`. Interactive-only (subscription billing). |
+| **kb** (capture/compile/lint) | `/kb-capture` · `/kb-compile` · `/kb-lint` | LLM Knowledge Base over an Obsidian vault: capture Readwise Reader sources to `raw/`, compile into `type:`-routed summary + concept notes in `Notes/` (cross-linked to `Keywords/`, surfaced via a KB MOC), and lint for health. Bounded writes (git-reviewed, no fence); shared logic in `kb-core`. Interactive-only (subscription billing). |
 
 ## Attribution
 

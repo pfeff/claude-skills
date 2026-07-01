@@ -1,7 +1,7 @@
 ---
 name: kb-lint
-description: "Report-only health check over the knowledge base's Derived zone (reading Shared concept notes for connection candidates). Surfaces inconsistent/contradictory data, orphan notes, missing data web search could impute, and candidate new connections. Findings are report-only — any auto-fix is confined to Derived and reversible; Human/Shared issues are proposals only. Operator-invoked via /kb-lint. Use to audit KB health after compiling."
-argument-hint: "[blank to lint the whole Derived zone]"
+description: "Report-only health check over the LLM Knowledge Base notes (reading the wider vault for connection candidates). Surfaces inconsistent/contradictory data, orphan notes, missing data web search could impute, and candidate new connections. Findings are report-only — any auto-fix is confined to KB-owned notes and reversible (git); off-limits and non-KB notes are proposals only. Operator-invoked via /kb-lint. Use to audit KB health after compiling."
+argument-hint: "[blank to lint the whole KB]"
 allowed-tools:
   - Read
   - Edit
@@ -9,28 +9,27 @@ allowed-tools:
   - Grep
   - Glob
   - WebSearch
-version: 0.1.0
+version: 0.2.0
 ---
 
 # KB Lint
 
-On-demand health check over the LLM Knowledge Base (SPEC §2.6). Reports issues; the
-operator applies them. The only autonomous writes allowed are reversible fixes confined to
-the Derived zone — Human and Shared findings are surfaced as proposals only (INV-1).
+On-demand health check over the LLM Knowledge Base (SPEC v2 §2.6). Reports issues; the
+operator applies them. The only autonomous writes allowed are reversible fixes to KB-owned
+notes; findings on off-limits zones or non-KB notes are surfaced as proposals only (INV-1).
 
-> **Status:** complete. The safety-critical write boundary is implemented and unit-tested in
-> `kb-core` (`is_autofix_allowed` — auto-fix confined to Derived, AC-6.2; `find_orphans` —
-> AC-6.3 input). The findings pass is agent-orchestrated per `operations/lint.md`, and a
-> report-only run was verified end-to-end against a live vault.
+> **Status:** the deterministic guards are implemented and unit-tested in `kb-core`
+> (`is_kb_owned` — auto-fix confined to KB notes, AC-6.2; `is_writable` — off-limits floor;
+> `find_orphans` — AC-6.3 input). The findings pass is agent-orchestrated per `operations/lint.md`.
 
 ## Billing posture
 
 `/kb-lint` is **operator-invoked and interactive** → subscription billing pool. No scheduled
-pass; same rationale as `/kb-compile` (SPEC §6, CLAUDE.md billing guard).
+pass; same rationale as `/kb-compile` (SPEC v2 §6, CLAUDE.md billing guard).
 
-## What it reports (SPEC §2.6)
+## What it reports (SPEC v2 §2.6)
 
-- Inconsistent / contradictory data across Derived notes.
+- Inconsistent / contradictory data across KB notes.
 - Orphan notes (no backlinks).
 - Missing data that a web search could impute.
 - Candidate new connections / articles (must surface ≥1 actionable candidate on a
@@ -39,23 +38,23 @@ pass; same rationale as `/kb-compile` (SPEC §6, CLAUDE.md billing guard).
 ## Invocation
 
 ```
-/kb-lint                  # health-check the Derived zone
+/kb-lint                  # health-check the KB notes
 ```
 
 ## Execution
 
 1. Load the operation: `Read(${CLAUDE_PLUGIN_ROOT}/skills/kb-lint/operations/lint.md)`
 2. Execute it.
-3. Emit the findings report; apply only reversible Derived-zone auto-fixes, surface the rest as proposals.
+3. Emit the findings report; apply only reversible fixes to KB-owned notes, surface the rest as proposals.
 
 ## Integration Points
 
-- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`is_autofix_allowed` for the INV-1 write guard, `find_orphans` for orphan detection).
+- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`is_kb_owned` + `is_writable` for the write guard, `find_orphans` for orphan detection).
 - **QMD** — the vault search CLI, for connection-candidate discovery.
-- **obsidian-notes skill / host config** — vault path resolution; reads (and Derived-only fixes).
-- **kb-compile** — produces the Derived/Shared content this skill audits.
+- **obsidian-notes skill / host config** — vault path resolution; reads and KB-owned fixes.
+- **kb-compile** — produces the KB notes this skill audits.
 
 ## See Also
 
-- `SPEC.md` §2.6 (lint contract) — workspace.
+- `SPEC.md` v2 §2.6 (lint contract) — workspace.
 - `skills/kb-compile`.
