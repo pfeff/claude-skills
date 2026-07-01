@@ -129,6 +129,21 @@ On explicit sign-off, promote via `property:set`:
 Only then does the spec confer build authority. Build and dispatch consumers gate on
 `status: signed-off`.
 
+### 11. Re-sign on material change
+
+When editing an already `signed-off` spec, apply the doctrine's re-sign rule. A
+**material change** — any edit to the Decisions, Requirements, or Acceptance Criteria
+sections — revokes sign-off. At the moment the change is written, reset the
+frontmatter via `property:set`:
+
+- `status=draft` (`type=text`)
+- clear `signed_off` (`property:set signed_off= type=date`, i.e. empty value)
+
+Then re-run the protocol from playback (step 8) → explicit sign-off (step 10) before
+the spec regains build authority. Non-material edits (typo/formatting fixes, added
+traceability links, prose that changes no decision/requirement/criterion) do not
+trigger re-sign; when unsure, treat the change as material and re-sign.
+
 ## Output
 
 The spec note path and its final `status`. On sign-off, `status: signed-off` with

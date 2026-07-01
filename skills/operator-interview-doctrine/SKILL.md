@@ -34,7 +34,9 @@ signed-off spec.
 
 A spec is authority-bearing only when the operator has **signed off**. Build and
 dispatch are gated on frontmatter `status: signed-off`; a `draft` spec confers no
-build authority.
+build authority. Sign-off binds to the spec **as signed** — a material change to a
+signed-off spec revokes that authority until the operator re-signs (see the sign-off
+protocol's re-sign rule).
 
 ---
 
@@ -165,8 +167,8 @@ the `obsidian-notes` skill. The schema:
 | Field | Value |
 |-------|-------|
 | note type / tag | `spec` (tag `#spec`) |
-| `status` | `draft` during the interview → `signed-off` after operator sign-off |
-| `signed_off` | the sign-off date (set when `status` becomes `signed-off`) |
+| `status` | `draft` during the interview → `signed-off` after operator sign-off → back to `draft` on a material change (re-sign) |
+| `signed_off` | the sign-off date (set when `status` becomes `signed-off`; cleared when a material change resets `status` to `draft`) |
 | `supersedes` | wiki-link to a prior spec this one replaces, when applicable |
 
 ### Body sections
@@ -204,6 +206,16 @@ Match its shape.
    `signed_off: <date>`. Only then does the spec confer build authority.
 4. **Gate.** Build and dispatch consumers read `status` from frontmatter and proceed
    only on `signed-off`. A `draft` spec is not a build authorization.
+5. **Re-sign on material change.** Sign-off binds to the spec as it read when signed.
+   A **material change** — any edit to **Decisions**, **Requirements**, or
+   **Acceptance Criteria** — to a `signed-off` spec revokes sign-off: reset
+   frontmatter `status: draft` and clear `signed_off` at the moment the change is
+   written, then run the protocol again from playback (step 1) before the spec
+   regains build authority. Non-material edits — typo/formatting fixes, added
+   traceability links, clarifying prose that changes no decision, requirement, or
+   criterion — do **not** trigger re-sign. When unsure whether a change is material,
+   treat it as material and re-sign; the cost of an unnecessary re-sign is one
+   confirmation, the cost of a missed one is a build against an unratified spec.
 
 ---
 
