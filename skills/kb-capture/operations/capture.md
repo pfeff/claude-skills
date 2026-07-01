@@ -9,14 +9,27 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
 
 ## Inputs
 
-- Optional: a specific Reader doc id/url. Blank → sweep the Reader inbox (`location="new"`).
+- Optional: a specific Reader doc id/url. Blank → **sweep highlighted sources** (step 1).
 
 ## Steps
 
-1. **Enumerate candidate Reader docs** — the named doc, or the inbox sweep set, via the
-   Readwise MCP `reader_*` tools (e.g. `reader_list_documents` / `reader_get_document_details`).
-   For each, gather: `id`, `url` (`source_url`), `title`, `author`, `created_at`, the doc's
-   tags, and its highlights + notes.
+1. **Enumerate candidate sources.** The operator's keepers are **highlighted, then
+   archived** — so the primary signal is *highlighted sources*, not the inbox. A freshly
+   saved, unhighlighted, untagged doc is exactly what the highlight gate is meant to exclude,
+   so **do not default to `location="new"`.** Enumerate, in priority order:
+   - **(primary) Highlighted sources** — `readwise_list_highlights` (the Readwise highlights
+     library), grouped by `book_id`. Every highlighted source is a candidate. Gather
+     `book_id`, `book_title`, `book_author`, `book_source_url`, `book_category`, `book_tags`,
+     and each highlight's `text`/`note`/`highlighted_at`. Page from most-recent and **bound the
+     window** (e.g. last N pages, or `highlighted_at_gt` a date) unless asked to go deeper —
+     the library can hold tens of thousands of highlights. Key: `source_key = readwise-<book_id>`.
+   - **(override) `kb`-tagged Reader docs** — `reader_list_documents(tag=["kb"])`, any
+     location; captured unconditionally (Path B). Key: `source_key = readwise-<reader_id>`.
+   - **(named input)** — if an id/url was passed, resolve just that source
+     (`reader_get_document_details` + `reader_get_document_highlights`, or `readwise_list_highlights(book_id=…)`).
+
+   Large highlight pages can exceed the response limit and be saved to a file — page through
+   with `jq`/a script rather than loading the whole payload into context.
 2. **Evaluate eligibility** per source (SPEC §2.1) using
    `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py`:
    - `has_capture_tag` = the `kb` tag (`kb_core.CAPTURE_TAG`) is present on the doc.
@@ -26,9 +39,12 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
      one non-deterministic input; everything else is mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
    - Record the deciding gate for skipped docs (for the report).
-3. **Idempotency guard** — compute `key = kb_core.source_key(source)`. The raw artifact path
-   is `raw/<key>.md`. If it already exists (probe with `obsidian-notes` `read`), skip — re-capture
-   is a no-op (AC-1.6).
+3. **Idempotency guard** — compute `key = kb_core.source_key(source)` (pass the Readwise
+   `book_id` for highlighted sources, or the Reader `id` for tagged/named docs). The raw
+   artifact path is `raw/<key>.md`. If it already exists (probe with `obsidian-notes` `read`),
+   skip — re-capture is a no-op (AC-1.6). **Dedup:** a source reachable both as a highlighted
+   book and a Reader doc must be captured once — prefer the `book_id` key when it has highlights,
+   so the two paths don't produce two `raw/` notes for the same source.
 4. **Write the raw artifact** via the `obsidian-notes` skill (`create`), preserving origin
    metadata and highlights/notes unmodified (AC-1.1). Schema below.
 5. **Write boundary** — the only write target is `raw/<key>.md`; capture writes nowhere else
@@ -46,10 +62,11 @@ hardcoded). One note per source, filename `raw/<source_key>.md`:
 ---
 type: kb-raw
 source_key: readwise-<id>
-reader_id: <id>
+readwise_book_id: <book id>   # highlighted sources  (OR: reader_id: <id> for tagged/named docs)
 url: <source_url>
 title: <title>
 author: <author>
+category: <category>
 captured: <ISO-8601 date>
 reader_tags: [<tag>, ...]
 tags: [kb-raw]
