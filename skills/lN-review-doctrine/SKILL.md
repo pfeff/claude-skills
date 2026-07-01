@@ -3,7 +3,7 @@ name: lN-review-doctrine
 description: Shared doctrine reference for L{N}-review skills (l1-review, l2-review). Holds the 3-axis checklist (Conformance, Process, Objective Advancement), the work-type → required-verification map consumed by axis 2, the finding/verdict schema, and the self-PR posting caveat. This skill has no operations — it is reference content read by `/l1-review` and `/l2-review` at review time. Never inline this doctrine into the l1-review or l2-review skills themselves — operator-confirmed rules must persist in one place.
 allowed-tools:
   - Read
-version: 1.1.0
+version: 1.2.0
 ---
 
 # lN-review-doctrine — shared L{N}-review doctrine
@@ -26,6 +26,15 @@ consumes its output artifact (`.claude/reviews/latest.md`) as evidence for axis 
 L{N}-review **always evaluates against L{N}'s parent objective**, not L{N-1}'s
 task description. This is the recursive lever; see axis 3 below for what to read to
 determine L{N}'s objective.
+
+L{N}-review **runs in an independent context window**. The grader must be a fresh
+verifier — a separate context (a sub-agent, or a clean session) that receives only
+the work product (the PR/diff and its posted artifacts) plus L{N}'s parent
+objective — **not** the reasoning trace or conversation that produced the work.
+Self-critique in the authoring context is not a valid L{N}-review: an author grading
+its own output in the same context rationalizes the choices it already made and
+cannot see them as an outside reader would. A verifier sub-agent outperforms
+self-critique precisely because grading happens in an independent context window.
 
 ---
 
