@@ -63,6 +63,14 @@ L{N-1}?
 - Are there obvious wrong-file / abandoned-WIP / leftover-debugging
   signatures? (e.g. `console.log`, `dbg!`, commented-out code
   unrelated to the task.)
+- **Project standing rules.** Project-wide architectural
+  constraints (e.g. a project `CLAUDE.md` `## Standing Rules`
+  section) are conformance criteria too — assess the diff against
+  each. A violated standing rule is an axis-1 finding at the
+  severity the rule implies (a correctness/security rule →
+  `blocking`; a convention → `warning`). Rules carrying a
+  `**Detector**:` hint may be grep-pre-filtered: no match →
+  auto-pass.
 - **Minimality** (maintained surface is a cost — see the "Surface
   cost axis" in the steward `DESIGN.md`): among ways to meet the
   objective, does the diff add the *least* surface (net lines,

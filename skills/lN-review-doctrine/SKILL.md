@@ -47,6 +47,8 @@ doctrine-drift failure mode this split exists to prevent.
 
 ## See also
 
+- `lN-lifecycle-doctrine` — the parallel lifecycle doctrine; its
+  `pr-open → fixing → merged` states drive when an L{N}-review runs.
 - `l1-review` skill — executes this doctrine at N=1.
 - `l2-review` skill — executes this doctrine at N=2.
 - `mbp/review` (plugin) — L0's per-line review skill; its output
