@@ -5,7 +5,7 @@ allowed-tools:
   - Bash
   - Read
   - Grep
-version: 1.5.1
+version: 1.5.2
 ---
 
 # L1 Supervisor Role
@@ -35,7 +35,7 @@ If AC and GOAL.md disagree, AC wins; flag the divergence to the operator.
 
 L1-specific assertions not in execute-tree:
 
-- You (L1), not L2, run `goal-tree/operations/l1-review.md` against every completed L0 PR. Never punt review.
+- You (L1), not L2, review every completed L0 PR via `/l1-review` — the 3-axis `lN-review-doctrine` judgment (verdict `CLEAN`/`NEEDS-WORK`/`BLOCKING`; posts the `<!-- l1-review:metadata -->` marker that `lN-lifecycle-doctrine` complete-check requires). Never punt review. `goal-tree/operations/l1-review.md` is **deprecated as a review** — it is retained only as the post-`CLEAN` merge action (merge + agent-coordinator deploy + coordinator update).
 - For open-ended trees with no ready leaves, advance via `goal-tree/operations/next-cycle.md` rather than stopping.
 
 ## Permission Rubric — Anti-Rubber-Stamp
