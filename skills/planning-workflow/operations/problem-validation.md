@@ -2,6 +2,14 @@
 
 Before planning implementation, validate the problem statement. Ensures we understand who we're building for, what pain exists, how things work today, and what success looks like.
 
+## Elicitation Doctrine (source of truth)
+
+The funnel, ask-vs-default rule, and interview wording used by this phase are **not defined here**. They live in the `operator-interview-doctrine` skill — the single source of truth for interview logic. This phase is a thin caller: it reads the doctrine and applies it to the four validation dimensions (user, pain, current workflow, success criteria).
+
+**Load the doctrine** (`operator-interview-doctrine`) before running the gap-assessment and interview steps below. Apply, from the doctrine: the **Question taxonomy** (context-free questions first, then funnel, neutral non-leading wording), the **Ask-vs-default rule** (reversibility-gated; `[NEEDS CLARIFICATION]` for unknowns), the **Stop conditions**, and the **AskUserQuestion usage rules**. Do not re-derive or duplicate those rules in this file. The dimension set this phase elicits (user / pain / current workflow / success criteria), and the coverage tiers used to assess them, are the phase-specific binding.
+
+For an explicit, standalone operator interview outside the planning pipeline, use the `/operator-interview <topic>` command, which runs the same doctrine.
+
 ## Parameters
 
 - `task_description` (required): Issue title, description, requirements, and any available context
@@ -33,7 +41,7 @@ Produce the output using the same format as step 6 (Compile output), with Valida
 
 ### 1. Assess coverage
 
-Scan the task description for evidence of each dimension:
+Scan the task description for evidence of each dimension (this coverage scan is the phase-specific binding the doctrine's funnel narrows toward):
 
 | Dimension | Signal |
 |-----------|--------|
@@ -42,14 +50,11 @@ Scan the task description for evidence of each dimension:
 | **Current workflow** | Description of how things work today, existing process, or status quo |
 | **Success criteria** | Definition of done, desired outcome, measurable improvement |
 
-For each dimension, classify as:
-- **Covered**: Task description explicitly addresses it
-- **Implied**: Enough context to infer a reasonable answer
-- **Missing**: Not addressed or too vague to infer
+Classify each dimension as **Covered** (explicitly addressed), **Implied** (enough context to infer), or **Missing** (not addressed or too vague). These coverage tiers are phase-local; the doctrine governs *how* to ask once a gap is found.
 
 ### 2. Extract validated answers
 
-For dimensions classified as Covered or Implied, extract the answer directly:
+For dimensions the doctrine classifies as Covered or Implied, extract the answer directly:
 
 ```
 User: <who is affected and in what context>
@@ -58,27 +63,13 @@ Current workflow: <how things work today>
 Success criteria: <what "done" looks like>
 ```
 
-For Implied dimensions, state the inference and flag it for confirmation in step 3.
+For Implied dimensions, state the inference and flag it for confirmation in step 3, applying the doctrine's ask-vs-default rule (reversibility-gated).
 
 ### 3. Interview for gaps
 
-If any dimension is Missing, or if inferences need confirmation, use AskUserQuestion.
+If any dimension is Missing, or an inference needs confirmation, run the interview using the doctrine's **Question taxonomy** (context-free first, then funnel, neutral wording), **Ask-vs-default rule**, **Stop conditions**, and **AskUserQuestion usage rules**. Bind the interview to the four dimensions above; the doctrine governs *how* to ask and when to stop.
 
-**Interview approach** (follow the informed-interview pattern):
-- Propose answers where possible — don't ask open-ended questions when you can offer informed options
-- Reference specifics from the task description to show understanding
-- Keep it to one round of questions covering all gaps at once
-
-**Question templates by dimension**:
-
-| Dimension | Question |
-|-----------|----------|
-| User | "Who primarily uses this? I see <context> — is this for <role A> or <role B>?" |
-| Pain | "What's the core pain? The issue mentions <symptom> — is the real problem <hypothesis>?" |
-| Current workflow | "How does this work today? I'm guessing <inference> — is that right, or is there a step I'm missing?" |
-| Success criteria | "How will we know this worked? I'd suggest <proposed criteria> — does that capture it?" |
-
-If all dimensions are Covered with no inferences, skip the interview entirely.
+If the doctrine's ask-vs-default and stop conditions warrant no questions (all dimensions Covered with no inferences), skip the interview entirely.
 
 ### 4. Classify task type
 
@@ -152,38 +143,9 @@ Produce a section for the plan:
 
 ## Response Rules
 
-These rules apply during gap assessment (step 1) and interview (step 3). They do NOT apply during collaborative phases like solution search or plan generation.
+Interview wording and posture during gap assessment (step 1) and the interview (step 3) follow the doctrine's **Question taxonomy → Neutral, non-leading wording** and **AskUserQuestion usage rules** (every option carries a recommended default; ≤4 questions, ≤4 options). Apply them from the `operator-interview-doctrine` skill; do not duplicate them here.
 
-### Banned Phrases
-
-Never use these when assessing gaps or interviewing:
-
-- "That makes sense" → evaluate whether the answer is specific enough: "That's too vague — who specifically?"
-- "I can work with that" → if the answer leaves a dimension ambiguous, push for specifics
-- "Thanks, that's helpful" → assess whether the answer actually fills the gap, and say if it doesn't
-- "That's a reasonable approach" → check if the answer describes a real workflow or a hypothetical: "Is that how it works today, or how you want it to work?"
-- "I understand" → if you need more detail, say so: "I need a concrete example — can you describe the last time this happened?"
-
-### Response Posture
-
-- Propose specific answers, don't ask open-ended questions. "Is the user a platform engineer who runs deployments?" not "Who is the user?"
-- Push back on vague pain statements. "Everyone is frustrated" is not a pain statement — demand specifics: who, what breaks, how often.
-- Reject non-answers. If the user says "it's just generally slow," ask for a number: "How slow? 2 seconds? 20 seconds? Do you have metrics?"
-- One round maximum, but make it count. Every question should propose an answer the user can confirm or correct.
-
-### BAD/GOOD Examples
-
-**Pattern 1: Vague user**
-- BAD: User says "developers use it." Agent: "Great, so the user is developers. Moving on to pain."
-- GOOD: User says "developers use it." Agent: "Which developers? Backend engineers running deployments? Frontend engineers debugging builds? The rules for each are different — I need to know which workflow we're optimizing."
-
-**Pattern 2: Missing pain**
-- BAD: Task says "improve the dashboard." Agent infers: "Pain: the dashboard could be better." (Proceeds without asking.)
-- GOOD: Task says "improve the dashboard." Agent: "What's broken about the dashboard? Is it slow to load, showing wrong data, missing key metrics, or something else? 'Improve' isn't actionable without a specific failure mode."
-
-**Pattern 3: Accepting vague success criteria**
-- BAD: User says "it should be faster." Agent: "Success criteria: improved performance."
-- GOOD: User says "it should be faster." Agent: "Faster than what? What's the current load time, and what's the target? Without a number, we can't verify success. If you don't have metrics, the first task should be adding instrumentation."
+**Phase-specific scope** (the only binding this file adds): these rules apply during gap assessment and interview only. They do NOT apply during collaborative phases like solution search or plan generation.
 
 ## Output
 
@@ -277,6 +239,6 @@ Assessment:
 
 ## Tips
 
-- Bias toward extracting answers from the task description rather than interviewing — unnecessary questions slow down planning
-- One round of questions maximum — if answers are still unclear, note the ambiguity and let downstream phases surface it
-- This phase is about validating the *problem*, not discussing *solutions* — resist the urge to propose implementations
+- Bias toward extracting answers from the task description rather than interviewing — unnecessary questions slow down planning (the doctrine's ask-vs-default rule and stop conditions encode this).
+- This phase is about validating the *problem*, not discussing *solutions* — resist the urge to propose implementations.
+- For when to stop asking and interview posture, defer to the doctrine's Stop conditions and Question taxonomy; do not restate those rules here.

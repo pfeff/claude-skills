@@ -99,6 +99,20 @@ AskUserQuestion:
 
 If only one ready node, skip selection and use it directly.
 
+### 5a. Signed-off Spec Gate
+
+Dispatch is GATED on a signed-off spec note existing for the selected node. Before creating a workspace, verify the node's spec note carries frontmatter `status: signed-off`:
+
+- Locate the spec note for the node (the Obsidian spec note produced via `/operator-interview` / the obsidian-notes skill for this node, referenced from the node body or project docs).
+- Check its frontmatter `status`. If it is not `signed-off` (e.g. `draft`, or no spec note exists), **do not dispatch**. Report and stop:
+
+  ```
+  Dispatch blocked: node <node.id> has no signed-off spec (status: <status|missing>).
+  Run /operator-interview <node.title> to produce a spec, set status: signed-off, then re-run /dispatch-task.
+  ```
+
+- Only when `status: signed-off` is confirmed, proceed to step 6.
+
 ### 6. Check for Existing Workspace
 
 Before creating a workspace, check if one already exists:
@@ -216,6 +230,7 @@ Next steps:
 |-------|----------|
 | GOAL.md not found | "No GOAL.md found in <path>. This command requires a goal-tree project." |
 | GOAL.md parse error | "Failed to parse GOAL.md: <error>. Check format against references/goal-md-format.md." |
+| Spec not signed off | "Dispatch blocked: node has no signed-off spec (status: <status\|missing>). Run /operator-interview, set status: signed-off, then re-run." Stop without creating a workspace. |
 | No ready nodes | Display appropriate message based on tree state (blocked, complete, dependencies) |
 | create-workspace.sh fails | "Workspace creation failed (exit <code>): <stderr>. Check script output above." |
 | Workspace already exists | Skip creation, show attach instructions |

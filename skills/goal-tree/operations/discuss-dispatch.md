@@ -151,6 +151,18 @@ Use the Edit tool for surgical updates. Do not rewrite DESIGN.md from scratch.
 
 When the operator signals readiness ("ready", "hand it off", "spec is done", "go ahead"):
 
+**Signed-off spec gate (before handoff).** Dispatch to a child session is GATED on a signed-off spec note existing. Before outputting attach instructions, verify the spec note for this work carries frontmatter `status: signed-off`:
+
+- Locate the spec note (the Obsidian spec note produced via the obsidian-notes skill, or the workspace DESIGN.md when that is the spec of record).
+- Check its frontmatter `status`. If it is not `signed-off` (e.g. still `draft`), **do not hand off**. Report:
+
+  ```
+  Dispatch blocked: spec is not signed off (status: <status>).
+  Run /operator-interview to complete the spec, set status: signed-off, then say "ready" again.
+  ```
+
+- Only when `status: signed-off` is confirmed, proceed with the handoff steps below.
+
 1. Summarize DESIGN.md state — list sections and their completeness
 2. Output attach instructions:
 

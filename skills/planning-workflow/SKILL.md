@@ -54,7 +54,9 @@ The planning workflow runs these phases in order:
 
 **Implementation**: Load `operations/problem-validation.md`
 
-**Quick summary**: Scans the task description for four dimensions (user, pain, current workflow, success criteria). Extracts what's covered, infers what's implied, and interviews the user for anything missing. Then classifies the task as document/plan vs. code implementation using keyword heuristics (with confidence fallback to user). For document tasks, presents an interactive content gate — "Content is correct" proceeds; "Needs revision" stops the workflow. Produces a "Problem Validation" section that grounds all downstream phases.
+**Quick summary**: Scans the task description for four dimensions (user, pain, current workflow, success criteria). The elicitation logic (question taxonomy/funnel, ask-vs-default rule, stop conditions, AskUserQuestion rules) is sourced from the `operator-interview-doctrine` skill — this phase is a thin caller that binds the doctrine to the four dimensions. Extracts what's covered, infers what's implied, and interviews the user for anything missing. Then classifies the task as document/plan vs. code implementation using keyword heuristics (with confidence fallback to user). For document tasks, presents an interactive content gate — "Content is correct" proceeds; "Needs revision" stops the workflow. Produces a "Problem Validation" section that grounds all downstream phases.
+
+**Explicit entry point**: For a standalone operator interview outside the planning pipeline, use the `/operator-interview <topic>` command, which runs the same `operator-interview-doctrine`.
 
 ### 2. DESIGN.md Reconciliation
 
