@@ -34,8 +34,8 @@ Gather these before starting the verification procedure:
 | Input | How to obtain |
 |-------|---------------|
 | Diff of the job's changes | `git diff HEAD` (uncommitted) or `git diff <base>...<branch>` |
-| Task context | Read the task description in priority order: `DESIGN.md` in the workspace → `PLAN.md` → dispatch prompt → PR description |
-| Acceptance criteria | Extract from the task context above |
+| Task context | **PRIMARY**: `.claude/task-context.md` in the worktree (four-field format — see `references/task-context.md`). **FALLBACK** (first hit): `DESIGN.md` in the workspace → `PLAN.md` → dispatch prompt → PR description. |
+| Acceptance criteria | Extract from `.claude/task-context.md` "Acceptance test" field if present; otherwise from the fallback task context above. |
 | Repo root | Working directory or `--worktree <path>` if operating remotely |
 
 ## Procedure
@@ -109,14 +109,35 @@ Run the repo's `/review` skill against the diff to collect L0 per-line
 code-level findings (security, simplicity, architecture, correctness). This
 is evidence for Axis 2 — do not duplicate the review logic here.
 
-For a branch:
+For a committed branch (the typical case for a completed job):
 ```
 /claude-skills:review <branch-or-PR>
 ```
 
-For uncommitted working-tree changes, use the degraded inline path (the review
-skill handles this when the diff is passed without a PR number). Read the
-resulting `.claude/reviews/latest.md` after the run.
+For **uncommitted working-tree changes** (code files present in `$DIFF` from
+Step 1): do NOT invoke `/claude-skills:review` with no arguments — that skill
+runs `git diff $BASE...HEAD` which diffs committed branch history and will see
+no uncommitted changes. Instead, perform the review inline:
+
+1. Use `$DIFF` captured in Step 1 (already contains all uncommitted changes).
+2. Apply the condensed security / correctness / data-loss checklist from
+   `../review/operations/run-review.md` (the same checklist used in
+   degraded-mode) directly against `$DIFF`.
+3. Write the result to `.claude/reviews/latest.md` yourself using the exact
+   frontmatter format from `../review/SKILL.md`:
+   ```yaml
+   ---
+   target: working-tree
+   timestamp: <ISO 8601 UTC>
+   agents: 1
+   degraded: true
+   blocking: <count>
+   advisory: <count>
+   verdict: BLOCKING | CLEAN
+   ---
+   ```
+
+Read `.claude/reviews/latest.md` after writing it (same as the branch case).
 
 Store the review verdict (`CLEAN` / `BLOCKING`) in `evidence.review_verdict`.
 If the review produces a `BLOCKING` verdict, that is a blocking finding in
@@ -132,6 +153,9 @@ Using the definitions from `../lN-review-doctrine/SKILL.md`:
 #### Axis 1 — Conformance
 
 Does the diff match the task the job was given?
+
+Read acceptance criteria from `.claude/task-context.md` "Acceptance test" field
+if present; otherwise fall back to DESIGN.md / PLAN.md / dispatch prompt.
 
 - Is every named acceptance criterion attempted?
 - Is the diff within scope (no out-of-scope files touched)?
@@ -158,9 +182,12 @@ artifact).
 Does the change make forward progress on the operator's objective?
 
 Read the objective from (first hit wins):
-1. `GOAL.md` in the workspace.
-2. Project `CLAUDE.md` Objective / Task section.
-3. Dispatch prompt / task description.
+1. `.claude/task-context.md` "Objective" field in the worktree — **when this is
+   present, Axis 3 MUST evaluate to `pass` or `fail`; it may not degrade to
+   `warn` solely on absence of context**.
+2. `GOAL.md` in the workspace.
+3. Project `CLAUDE.md` Objective / Task section.
+4. Dispatch prompt / task description.
 
 Checks:
 - Does the work product close or advance acceptance criteria of the parent
@@ -171,8 +198,9 @@ Checks:
 
 Verdict: `pass` if forward progress + no local-optimum failures. `fail` if
 it regresses the parent objective or introduces a known-bad local optimum.
-`warn` when the objective is unreadable — surface as ambiguity, never
-collapse to `pass`.
+`warn` only when the objective is unreadable from ALL sources above — surface
+as ambiguity, never collapse to `pass`. When `.claude/task-context.md` is
+present, `warn` is not an acceptable verdict for this axis.
 
 ### Step 5 — Compute overall verdict and write annotation
 
@@ -208,6 +236,7 @@ frontmatter) and then stop. Do not open PRs, merge, or take further action.
 ## References
 
 - `references/annotation-schema.md` — the annotation file format
-- `references/acceptance-demo.md` — acceptance test results (two sample runs)
+- `references/acceptance-demo.md` — acceptance test results (four sample runs, including code changes)
+- `references/task-context.md` — task-context convention: four-field format, file location, fallback order
 - `../lN-review-doctrine/SKILL.md` — 3-axis doctrine and verification map
 - `../review/SKILL.md` — the `/review` skill this composes for code-level findings

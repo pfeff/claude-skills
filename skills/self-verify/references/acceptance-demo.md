@@ -127,13 +127,198 @@ checks, not eyeball inspection.
 
 ---
 
+---
+
+## Sample 3 — Clean Code Change
+
+### Change description
+
+Created `_test-code-good.py` at worktree root: a small Python utility module
+with `compute_sum`, `compute_average` (empty-list guard → 0.0), and `find_max`
+(empty-list guard → ValueError). Deliberately clean — no unguarded divisions,
+no shell calls, no secrets.
+
+**Task context**: "Create a clean Python sample to exercise self-verify's /review
+code-path with no defects."
+
+### Step 3 — inline review (uncommitted change)
+
+Because the file is an uncommitted working-tree addition, `/claude-skills:review`
+with no arguments would run `git diff $BASE...HEAD` and see nothing. The updated
+SKILL.md Step 3 instructs the job to apply the inline review checklist against
+`$DIFF` directly. The checklist from `../review/operations/run-review.md`
+(degraded-mode inline) was applied:
+
+| Axis | Finding |
+|------|---------|
+| Security | No user input, no shell invocation, no credentials. No issues. |
+| Correctness | Empty-list guards on both division-using functions. All paths handled. |
+| Data loss | No destructive operations. |
+| Simplicity | Three small functions, no YAGNI. |
+| Architecture | No structural concerns. |
+
+Result written to `.claude/reviews/latest.md`:
+
+```
+---
+target: working-tree (_test-code-good.py)
+timestamp: 2026-07-01T19:00:00Z
+agents: 1
+degraded: true
+blocking: 0
+advisory: 0
+verdict: CLEAN
+---
+
+No issues found across 1 agent.
+```
+
+### Annotation produced
+
+```
+verdict: pass
+axes:
+  conformance: pass
+  process:     pass
+  objective:   pass
+evidence:
+  review_verdict: CLEAN
+  review_artifact: .claude/reviews/latest.md
+blocking: 0
+warning: 0
+```
+
+**PASS** — 0 blocking and 0 advisory finding(s).
+
+- Axis 1 (Conformance): PASS — task criterion (add clean code sample) attempted; diff within scope.
+- Axis 2 (Process): PASS — inline review ran; verdict CLEAN; no skipped hooks.
+- Axis 3 (Objective-Advancement): PASS — clean utility module with proper empty-list guards advances the acceptance-test objective.
+
+`evidence.review_verdict: CLEAN` — NOT `n/a`. The /review code-path produced a real verdict.
+
+---
+
+## Sample 4 — Defective Code Change
+
+### Change description
+
+Created `_test-code-defect.py` at worktree root: a Python module with two
+intentional defects:
+
+1. `compute_average` (line 14): `sum(numbers) / len(numbers)` with no empty-list
+   guard → `ZeroDivisionError` when `numbers == []`. Correctness failure.
+2. `run_command` (line 20): `subprocess.run(f"echo {user_input}", shell=True, ...)`
+   — unsanitized `user_input` interpolated into a shell command via f-string.
+   Command injection vulnerability (e.g. `user_input="foo; rm -rf /"`).
+
+**Task context**: "Create a defective Python sample to exercise self-verify's /review
+code-path with real blocking defects."
+
+### Step 3 — inline review (uncommitted change)
+
+Same inline path as Sample 3. Checklist applied against `$DIFF`:
+
+| Axis | Finding |
+|------|---------|
+| Security — Critical | **`_test-code-defect.py:20`** — `subprocess.run(f"echo {user_input}", shell=True, ...)`: unsanitized `user_input` is interpolated into a shell command via f-string. An attacker controlling `user_input` can execute arbitrary shell commands. **BLOCKING** (security vulnerability). |
+| Correctness — Critical | **`_test-code-defect.py:14`** — `sum(numbers) / len(numbers)` raises `ZeroDivisionError` when `numbers` is empty. No guard present. **BLOCKING** (correctness failure). |
+| Data loss / Simplicity / Architecture | No additional findings. |
+
+Result written to `.claude/reviews/latest.md`:
+
+```
+---
+target: working-tree (_test-code-defect.py)
+timestamp: 2026-07-01T19:05:00Z
+agents: 1
+degraded: true
+blocking: 2
+advisory: 0
+verdict: BLOCKING
+---
+
+## Review Summary
+
+**Target**: working-tree (_test-code-defect.py)
+**Agents**: 1
+**Verdict**: BLOCKING — 2 issue(s) must be resolved
+
+> **Degraded-mode review** — inline path (uncommitted working-tree change).
+
+### Blocking
+
+- **_test-code-defect.py:20** — [security] _command-injection_ — `run_command`
+  passes unsanitized `user_input` into `subprocess.run(shell=True, ...)` via
+  f-string. An attacker can execute arbitrary shell commands. Use a list
+  argument with `shell=False`.
+- **_test-code-defect.py:14** — [correctness] _unguarded-division_ —
+  `sum(numbers) / len(numbers)` raises ZeroDivisionError when `numbers` is
+  empty. Add an empty-list guard before dividing.
+```
+
+### Annotation produced
+
+```
+verdict: fail
+axes:
+  conformance: pass
+  process:     fail
+  objective:   warn
+evidence:
+  review_verdict: BLOCKING
+  review_artifact: .claude/reviews/latest.md
+blocking: 2
+warning: 0
+```
+
+**FAIL** — 2 blocking and 0 advisory finding(s).
+
+- Axis 1 (Conformance): PASS — task criterion (add defective code sample) attempted.
+- Axis 2 (Process): **FAIL** — `/review` verdict is BLOCKING; two blocking findings:
+  ```
+  - axis: 2
+    severity: blocking
+    category: security-vulnerability
+    location: _test-code-defect.py:20
+    evidence: Command injection via shell=True + f-string interpolation of user_input.
+    recommendation: Use subprocess list form with shell=False.
+  - axis: 2
+    severity: blocking
+    category: correctness-failure
+    location: _test-code-defect.py:14
+    evidence: ZeroDivisionError when numbers is empty — no guard.
+    recommendation: Add `if not numbers: return 0.0` before dividing.
+  ```
+- Axis 3 (Objective-Advancement): WARN — axis 2 blocking failures mean the
+  code is non-functional/insecure; cannot confirm objective advancement of a
+  change that fails code review.
+
+`evidence.review_verdict: BLOCKING` — NOT `n/a`. The /review code-path produced a real verdict.
+
+**Outcome**: both defects caught. The command-injection vulnerability (blocking, security) and the correctness failure (blocking) are correctly identified and labeled.
+
+---
+
 ## False-green risk assessment
 
-The current procedure has one bounded false-green risk: if a `DESIGN.md`/task
-context is absent or vague, Axis 1 (Conformance) and Axis 3 (Objective
-Advancement) degrade to `warn` rather than `fail`. The "never collapse UNCLEAR
-to pass" invariant from lN-review-doctrine is the guard — the skill produces
-`warn` not `pass` in this case. A human operator reading a `warn` verdict must
-still evaluate the ambiguous axes before accepting the work.
+The current procedure has one bounded false-green risk: if `.claude/task-context.md`
+is absent AND no DESIGN.md/PLAN.md/dispatch-prompt is reachable, Axis 1
+(Conformance) and Axis 3 (Objective Advancement) degrade to `warn` rather than
+`fail`. The "never collapse UNCLEAR to pass" invariant from lN-review-doctrine
+is the guard — the skill produces `warn` not `pass` in this case. A human
+operator reading a `warn` verdict must still evaluate the ambiguous axes before
+accepting the work.
 
-No false-green was produced in either sample run.
+When `.claude/task-context.md` IS present, Axis 3 may not degrade to `warn` — it
+evaluates to `pass` or `fail`. This closes the primary false-green path for
+dispatched jobs.
+
+**`/review` code-path false-green risk**: the inline path (Sample 3/4) applies
+the condensed checklist from `run-review.md`. Coverage is narrower than the
+full 4-agent multi-agent run; subtle architecture or simplicity issues in small
+diffs may be missed. However, the checklist reliably catches the BLOCKING tier
+(security vulnerabilities, correctness failures, data-loss risks), which is the
+primary purpose of this axis. Multi-agent review remains available for branch/PR
+cases.
+
+No false-green was produced in any of the four sample runs.
