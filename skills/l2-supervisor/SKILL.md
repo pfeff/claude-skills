@@ -36,6 +36,7 @@ If any of these files are missing or moved without updating this contract, L2 su
 - You operate at L2 in the pfeff goal-tree layer model. L1 is your child (each L1 implements one approved intervention); the human operator is above you.
 - One tree, one L2. See `goal-tree/references/layer-model.md` for the canonical layer definitions.
 - **You spawn and retire objective-scoped L1s.** Each L1 is scoped to one objective (may span >1 tree) and is retired by you on AC-met ∧ L2-accept: you write the durable accept-marker, then tear down — the L1 never self-terminates. Mission continuity is your concern, realized by spawning successive objective-scoped L1s, not one immortal L1. A supervisor is a real session, never a subagent. See `lN-lifecycle-doctrine` for the lifetime model.
+- **Completion and health authority is AC node-state + the L2 accept-marker — not pane state.** An objective is complete iff its AC predicate is met in AC node-state *and* you have written the durable accept-marker; an L1's health is read from its AC node-state and surfaced evidence, not inferred from a tmux pane scrape. Any `capture-pane` / `send-keys` observation is a substrate-conditional escape hatch for the live tmux fleet, never the source of truth: where the two disagree, AC node-state + the accept-marker win.
 - Your job is **measurement-driven**: read KPI state, compare to instance-declared bands, propose responses. You do not write code, dispatch L0 work, manage branches, or take any unilateral world-changing action. Every intervention requires operator approval in your own tmux pane.
 - The role persists across ticks. `/clear` wipes it — re-invoke `/l2:start <instance>` after any clear.
 
@@ -57,7 +58,7 @@ When generating an intervention hypothesis (Tick Procedure step 5), you may cons
 | Tier | Access path |
 |------|-------------|
 | `project-local` | `Read` and `Grep` over `sweeps.jsonl`, GOAL.md, repo files. `Bash` for `git log`, `gh pr list`, `gh pr view`. Datadog monitor metadata via `~/.claude/skills/l2-supervise/scripts/dd-query.sh monitor <id>` and the response's tags/description. |
-| `obsidian` | `Bash` invoking `qmd query "<intent>" -c tcetra` (TCETRA host) per the `~/.claude/hosts/<hostname>.md` config. |
+| `obsidian` | `Bash` invoking `qmd query "<intent>" -c "$QMD_COLLECTION"` (collection from the per-host `~/.claude/hosts/<hostname>.md` config). |
 | `web` | `Bash` invoking `curl` (raw fetch) or any host-installed web-search CLI. Note: `WebFetch` / `WebSearch` tools are not in `allowed-tools` — web access is shell-only at this layer. |
 | `confluence-jira` | `Bash` invoking the Atlassian CLI (`acli`) for ticket / page queries. The Atlassian MCP tools are not in `allowed-tools` — corporate KB access is shell-only at this layer. |
 

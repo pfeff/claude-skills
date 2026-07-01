@@ -222,7 +222,7 @@ Node workspaces are already cleaned in step 2. The integration branch remains on
   - api-service: https://github.com/pfeff/api-service/pull/45
   - web-app: https://github.com/pfeff/web-app/pull/12
 
-**Guardian issue**: https://github.com/pfeff/api-service/issues/40 (updated)
+**Guardian issue**: https://github.com/<owner>/<repo>/issues/40 (updated)
 
 **Dispatch summary**: subagent: 4, inline: 1, skipped: 1
 **Total commits**: 8

@@ -22,7 +22,7 @@ be extended.
 | Shell | `*.sh`, `*.bash`, files with `#!/.../sh` | `shellcheck`, repo test runner if `bats`/`shunit2` present | |
 | YAML / CI workflows | `.github/workflows/*.yml`, `*.yaml`, `*.yml` | `yamllint` (if configured), `actionlint` for workflow files | Workflow changes additionally require axis-3 attention to verify the workflow runs at least once green on this PR. |
 | Markdown / docs only | `*.md` only (no code files in diff) | `markdownlint` if configured; otherwise no required verification | Pure-doc PRs pass axis 2 by default; axis 1 (conformance) and axis 3 (objective) still apply. |
-| Claude skills / commands | `claude/skills/**`, `claude/commands/**` | See [Doctrine-class PR sub-checklist](#doctrine-class-pr-sub-checklist) below — there is no equivalent of `terraform validate` for skill markdown, so axis 2 substitutes a concrete manual list. | Doctrine-only skills (no `operations/` directory — pure reference) require every item; executor skills (have `operations/`) require items 1, 3, 4. |
+| Claude skills / commands | `claude/skills/**`, `claude/commands/**` | See [Doctrine-class PR sub-checklist](#doctrine-class-pr-sub-checklist) below — there is no equivalent of `terraform validate` for skill markdown, so axis 2 substitutes a concrete manual list. | Doctrine-only skills (no `operations/` directory — pure reference) require every item; executor skills (have `operations/`) require items 1, 3, 4. Item 6 (mechanical host-agnosticism) applies to **any** PR touching published content, both kinds. |
 | Claude workflows | `claude/workflows/*.js`, `.claude/workflows/*.js` | `node --check <file>` (JS syntax parse) for each changed workflow file, AND meta-shape validation — see [Workflow-class PR sub-checklist](#workflow-class-pr-sub-checklist) below. | Analogous to the Claude-skills doctrine-class row: there is no runtime test for a workflow script in review, so axis 2 substitutes parse + meta-shape as the static gate. |
 | Mixed (multiple patterns) | Multiple rows match | Union of required steps from every matched row | All required steps must be green. A red Go test and a green TF plan in the same PR is FAIL. |
 
@@ -82,11 +82,34 @@ any item emits an axis-2 finding at the listed severity (per
    own the rules; executor skills must point at the doctrine,
    not copy it. Duplicate paragraphs between a consumer and its
    doctrine source are a warning.
+6. **Host-agnosticism verified mechanically** (correctness —
+   **blocking** on a published surface) — Published content
+   (skills, commands, docs) must carry no host-specific or
+   private-instance leak. **Do NOT credit host-agnosticism on
+   inspection alone** — eyeballing misses leaks at scale. Verify
+   by *running a tool*:
+   - Prefer the repo's host-agnostic guardrail when present —
+     `sh scripts/check-host-agnostic.sh` — and require a clean
+     (exit 0) result.
+   - Otherwise, run an inline grep over the diff's published trees
+     for the three leak classes: absolute home paths (`/Users/`,
+     `/home/<name>`); private machine hostnames (sourced from a
+     host-local blocklist / `~/.claude/hosts/` basenames — **never
+     hardcode a private hostname into this doctrine**, that is
+     itself a leak); and private-repo slugs / private-instance
+     path segments. ANY hit is a finding, blocking for a published
+     surface.
+   - Once the repo's host-agnostic CI check is configured (a
+     workflow that invokes the guardrail), require it **green** on
+     the PR — treat a missing or red host-agnostic check as a gap
+     (axis-2 finding, UNCLEAR → NEEDS-WORK rather than a silent
+     PASS).
 
-Item 1 is the load-bearing one for cross-skill contracts; the
-others are loading/coherence checks. Running the five together
-takes a few minutes of grepping and is the actual content of
-axis 2 for doctrine-class PRs.
+Item 1 is the load-bearing one for cross-skill contracts; item 6
+is the load-bearing one against host/private leaks (mechanical,
+never eyeballed); the others are loading/coherence checks. Running
+them together takes a few minutes of grepping and is the actual
+content of axis 2 for doctrine-class PRs.
 
 ## Workflow-class PR sub-checklist
 

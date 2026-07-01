@@ -10,7 +10,7 @@ Bridges the gap between workspace scaffolding (`/create-workspace`) and implemen
 
 ## Coordinator Sync (Optional)
 
-If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_MISSION_ID` are set, task creation in step 10 will also create tasks in the coordinator. This mirrors the task list to the coordinator for visibility and persistence.
+If `COORDINATOR_URL`, `COORDINATOR_TOKEN`, and `COORDINATOR_MISSION_ID` are set, task creation in step 11 will also create tasks in the coordinator. This mirrors the task list to the coordinator for visibility and persistence.
 
 ```bash
 source ${CLAUDE_PLUGIN_ROOT}/skills/goal-tree/scripts/coord-helpers.sh
@@ -51,7 +51,7 @@ Priority order:
    - "What is the issue source?" → GitHub / Jira / None
    - If GitHub: "What is the issue reference?" (e.g., `org/repo#123`)
    - If Jira: "What is the ticket key?" (e.g., `PROJ-456`)
-   - If None: Skip to step 5 (user interview)
+   - If None: Skip to step 7 (formalize acceptance criteria — with no issue, candidates are drafted there and ratified in the step 8 interview; the AC contract is never skipped)
 
 ### 4. Fetch Issue Content
 
@@ -163,18 +163,89 @@ Format extracted requirements as a numbered list with IDs:
 - If issue comments contain decisions or trade-off discussions, summarize them
 - If no substantive discussion, leave as placeholder
 
-### 7. User Interview (Conditional)
+### 7. Formalize Acceptance Criteria
 
-Only interview if DESIGN.md still has placeholder sections after issue enrichment.
+Write an explicit, checkable done-contract to DESIGN.md before any task decomposition. This section is the single source of truth for "done" — task decomposition (step 11), the review gate (step 12), and auto-advance's completion gate all reference it by AC ID.
 
-**Check each section**:
+**Extraction sources** (priority order — first source with substantive content wins; lower sources supplement only when higher ones are sparse):
+
+1. Explicit "Acceptance Criteria" / "Definition of Done" heading in the issue body
+2. Checkbox lists (`- [ ]`) anywhere in the issue body
+3. "must" / "shall" / "should" statements in the requirements text (step 6 extraction)
+4. User interview (step 8) — when the above yield insufficient content, draft 2–5 candidate ACs from the Requirements section and issue title; the interview presents them for confirmation
+
+**Format** — write a `## Acceptance Criteria` section to DESIGN.md, immediately after `## Requirements`:
+
+```markdown
+## Acceptance Criteria
+
+- [ ] **AC-1**: <criterion — a verifiable statement about the deliverable> _(verify: <method>)_
+- [ ] **AC-2**: <criterion> _(verify: <method>)_
 ```
-For each section in [Requirements, Architecture, Design Decisions]:
-  If section content is still a placeholder:
-    Ask targeted question(s) about that section
+
+The `_(verify: <method>)_` suffix is an optional one-line what-to-check hint (e.g. `_(verify: test output)_`, `_(verify: curl the endpoint)_`, `_(verify: file exists + content audit)_`). Omit it when there is nothing useful to add.
+
+**Writing rules**:
+- Each criterion is an observable outcome of the deliverable ("X exists / does Y when Z"), not an implementation step
+- IDs are stable: never renumber existing ACs on re-run; only append new ones
+- **Always write imported ACs unchecked**, regardless of checkbox state in the issue body — a pre-checked `- [x]` from the issue would silently pass the completion gate unverified. Only auto-advance's verification step (or the human) checks a box.
+- The bold `**AC-N**` IDs make the contract greppable — `grep '^- \[ \] \*\*AC-' DESIGN.md` lists open criteria (the auto-advance completion gate uses a deferral-aware variant of this; see that operation for the canonical command)
+
+**Idempotency**: same non-placeholder rule as Requirements/Architecture — if DESIGN.md already has an `## Acceptance Criteria` section with checkboxes in EITHER format (canonical `- [ ] **AC-N**: …` or legacy plain `- [ ] …`), preserve every existing box and its id verbatim (manual edits win). Only append genuinely new criteria derived from new issue content; never rewrite, reorder, renumber, or reformat existing ones, and never reset a box checked by verification back to unchecked. Do not retrofit legacy plain criteria into canonical form — leave them as found.
+
+### 7a. Warn on Empty Acceptance Criteria (Provisional)
+
+After formalizing the AC contract, check that DESIGN.md carries at least one checkable criterion. Count the total ACs in BOTH formats with the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count "<workspace-root>/DESIGN.md"
 ```
 
-**Interview questions by section**:
+`ac-count` prints `<met> <total>`. If `<total>` is `0` — no checkable AC was captured — **WARN** the operator (recommend capturing ≥1 checkable acceptance criterion before proceeding) and **continue**. Do not block: an empty AC section must not halt or fail workspace initialization.
+
+```
+ACCEPTANCE CRITERIA WARNING: DESIGN.md has no checkable acceptance criteria.
+Recommend capturing ≥1 checkable AC (the step 8 interview is the natural place).
+Continuing — creation is not blocked.
+```
+
+**Provisional (DESIGN.md DD-6)** — this ships warn-first by deliberate doctrine: preserving the creation flow (fleet-safety) wins over a hard refusal that is unvalidated in use. The upgrade-to-refuse criteria live in DD-6; do not promote this to a hard gate here.
+
+### 8. User Interview (Conditional)
+
+The interview leads with ratification of the AC contract; generic section questions run only for gaps that remain afterward.
+
+**Part 1 — Ratify acceptance criteria**:
+
+Always present the AC list for confirmation, regardless of extraction source. Issue-authored criteria get the same ratification — the issue author is not necessarily the operator, and the contract drives autonomous behavior downstream:
+
+```
+Display the drafted ## Acceptance Criteria list (IDs + text).
+
+AskUserQuestion: "These acceptance criteria define 'done' for this task. Do they capture it?"
+  Options:
+    - "Confirm" → ACs are ratified as-is
+    - "Amend" → user states additions/removals/rewording; apply to DESIGN.md, re-ask
+```
+
+The ratified contract is what task decomposition (step 11) and the completion gate verify against — getting it right here is cheaper than discovering a missing criterion at PR time.
+
+**Part 2 — Fill remaining gaps** (only sections still placeholder after Part 1):
+
+When core spec sections are still placeholders after Part 1 — i.e. the workspace has **no real spec** (Requirements, Architecture, and/or Design Decisions remain placeholder text, or DESIGN.md/spec carries unfilled placeholders) — engage the **operator interview** rather than asking ad-hoc one-off questions. A missing spec is exactly the trigger the operator-interview flow exists to serve.
+
+```
+After Part 1, detect placeholder sections:
+  placeholders = [s for s in [Requirements, Architecture, Design Decisions]
+                  if s is still placeholder text]
+
+If placeholders is non-empty (spec is missing/incomplete):
+  Run the operator interview, scoped to the placeholder sections:
+    - Invoke /operator-interview <task-headline> (or apply operator-interview-doctrine
+      inline), binding the interview to the placeholder sections below.
+  The doctrine governs how to ask (informed-interview, ask-vs-default, response rules);
+  these sections are the phase-specific binding.
+```
 
 | Section | Question |
 |---------|----------|
@@ -182,11 +253,13 @@ For each section in [Requirements, Architecture, Design Decisions]:
 | Architecture | "What components/systems does this change affect? Any architectural constraints?" |
 | Design Decisions | "Are there any design decisions or trade-offs already made for this task?" |
 
-Use AskUserQuestion with relevant options derived from the issue context when possible.
+Ratified ACs often resolve the Requirements gap on their own — only ask about Requirements when the ACs leave genuine context missing.
+
+The question templates above are the dimension bindings; defer to the doctrine for posture and round count. Use AskUserQuestion with relevant options derived from the issue context when possible.
 
 After interview, update DESIGN.md with the responses.
 
-### 8. Sync Worktrees Against Origin
+### 9. Sync Worktrees Against Origin
 
 Update all repo worktrees in the workspace against origin before searching for solutions or creating tasks. Stale local state leads to duplicate work (e.g., creating tasks for files that already exist on main).
 
@@ -200,13 +273,13 @@ For each repo worktree in the workspace:
 
 <!-- IMPLEMENTED: REC-001 - Add repo sync step to init-workspace -->
 
-### 9. Search Existing Solutions
+### 10. Search Existing Solutions
 
 Run a QMD query against the configured vault collection for relevant prior notes before creating the task list. Per DD4, the Obsidian vault is the single retrieval source; `docs/solutions/` is no longer consulted.
 
 **See `references/solution-search.md`** for the full invocation, output-shape, and fail-open protocol — do not duplicate it here. The steps below are the operation-specific wiring (what inputs to pass, where to persist results).
 
-#### 9a. Refresh the index (best-effort)
+#### 10a. Refresh the index (best-effort)
 
 ```bash
 timeout 30 qmd update -c "$QMD_COLLECTION" 2>/dev/null || true
@@ -214,9 +287,9 @@ timeout 30 qmd update -c "$QMD_COLLECTION" 2>/dev/null || true
 
 Idempotent incremental reindex. Fail-open — a stale index is strictly better than blocking setup. `|| true` ensures a non-zero exit never propagates.
 
-#### 9b. Build the query
+#### 10b. Build the query
 
-Per DESIGN.md OQ #3, the query is the **issue/ticket title followed by the first paragraph of the enriched DESIGN.md** (which now contains the real requirements after steps 5–7), not the raw issue description.
+Per DESIGN.md OQ #3, the query is the **issue/ticket title followed by the first paragraph of the enriched DESIGN.md** (which now contains the real requirements after steps 5–8), not the raw issue description.
 
 ```bash
 # Extract the first non-empty paragraph after the H1 line in DESIGN.md.
@@ -238,21 +311,21 @@ query_text="$(printf '%s. %s' "$issue_title" "$first_para" | sanitize)"
 
 Assigning to a shell variable and passing `"$query_text"` (double-quoted) is injection-safe: the shell expands the variable into a single argument regardless of its contents. **Do not inline issue content directly into the `qmd query` command** — that is the unsafe form.
 
-#### 9c. Run the query
+#### 10c. Run the query
 
 ```bash
 timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION" > /tmp/qmd-prior.out 2>/tmp/qmd-prior.err \
   || qmd_status=$?
 ```
 
-#### 9d. Persist top-3 into DESIGN.md
+#### 10d. Persist top-3 into DESIGN.md
 
 Parse the first 3 `qmd://…` URIs (with their Title and Score lines) from `/tmp/qmd-prior.out` using the output-shape rules in `references/solution-search.md`. Then overwrite (not append) the `## Prior Context (QMD)` section of DESIGN.md with the results. If the section does not exist, insert it immediately before `## Requirements`.
 
 ```markdown
 ## Prior Context (QMD)
 
-<!-- Auto-generated by init-workspace step 9. Overwritten on every re-run. -->
+<!-- Auto-generated by init-workspace step 10. Overwritten on every re-run. -->
 
 Query: `<query_text truncated to 120 chars>` · Collection: `<QMD_COLLECTION>`
 
@@ -261,13 +334,13 @@ Query: `<query_text truncated to 120 chars>` · Collection: `<QMD_COLLECTION>`
 3. [<Title>](<qmd://... URI>) — score <pct>%
 ```
 
-Empty result set: write the section with a single line `_No prior notes surfaced._`. Fail-open case: write `_QMD skipped: <reason>._`. Either state is a first-class outcome — the section always exists after init-workspace, so `/finish` and the step-11 summary can rely on its presence.
+Empty result set: write the section with a single line `_No prior notes surfaced._`. Fail-open case: write `_QMD skipped: <reason>._`. Either state is a first-class outcome — the section always exists after init-workspace, so `/finish` and the step-12 summary can rely on its presence.
 
 **Idempotency**: re-running replaces the section contents in place. Never duplicate the block.
 
-### 10. Create Task List
+### 11. Create Task List
 
-Create implementation tasks from the best available planning artifact.
+Create implementation tasks that collectively satisfy the `## Acceptance Criteria` contract in DESIGN.md. ACs define *what must be true when done*; tasks define *how to get there* — every task traces to the AC(s) it advances, and every AC must be covered.
 
 **Before creating tasks**:
 1. Call `TaskList` to check for existing tasks
@@ -276,8 +349,8 @@ Create implementation tasks from the best available planning artifact.
 
 **Select decomposition source** (first match wins):
 
-1. **PLAN.md** — If a `PLAN.md` exists in the workspace root (produced by `/claude-skills:planning-workflow`), use it as the primary source. PLAN.md contains refined acceptance criteria, edge case analysis, and checkable items that produce higher-quality task decomposition than raw requirements.
-2. **DESIGN.md** — Fallback when no PLAN.md exists. Read the Requirements section and decompose from there.
+1. **PLAN.md** — If a `PLAN.md` exists in the workspace root (produced by `/claude-skills:planning-workflow`), use it as the primary source for implementation phases and edge cases. The DESIGN.md AC section remains the done-contract; reconcile PLAN.md's checkable items against it.
+2. **DESIGN.md** — Fallback when no PLAN.md exists. Decompose from the `## Acceptance Criteria` section, consulting Requirements for context (per design: Requirements are the "why", ACs are the contract).
 
 ```
 Check for PLAN.md:
@@ -286,24 +359,36 @@ Check for PLAN.md:
 If PLAN.md exists:
   Read PLAN.md
   Extract tasks from checkable criteria ([ ] items) and implementation phases
-  Cross-reference with DESIGN.md requirements for traceability (R-IDs)
+  Map each task to the DESIGN.md AC(s) it advances
 
 If no PLAN.md:
-  Read DESIGN.md Requirements section
-  For each requirement, determine the implementation steps
+  Read DESIGN.md ## Acceptance Criteria (contract) and ## Requirements (context)
+  For each AC, determine the implementation steps that make it true
   Group related steps into coherent tasks
 ```
 
 **Decomposition approach** (applies to both sources):
 - Group related steps into coherent tasks
 - Order tasks by dependency (earlier tasks should enable later ones)
-- Include requirement IDs (from DESIGN.md) in task descriptions for traceability
+- Trace every task to the AC(s) it advances; include R-IDs only where they add context
 
 **Task creation**:
 For each task, call `TaskCreate` with:
 - `subject`: Imperative form (e.g., "Implement issue fetching for GitHub")
-- `description`: Detailed description including relevant requirement IDs, acceptance criteria, and implementation hints
+- `description`: Detailed description including implementation hints and relevant context, **ending with a `Satisfies: AC-N[, AC-M]` line** naming the AC(s) this task advances. Auto-advance uses these lines to check off criteria as tasks complete.
 - `activeForm`: Present continuous (e.g., "Implementing issue fetching")
+
+**AC coverage check** — decomposition is not complete until every AC is accounted for:
+
+```
+For each AC-N in DESIGN.md ## Acceptance Criteria:
+  If no created task's description contains "AC-N" in its Satisfies line:
+    Either create a task covering it,
+    or mark it explicitly deferred in DESIGN.md:
+      - [ ] **AC-N**: <criterion> _(deferred: <reason>)_
+```
+
+An uncovered, undeferred AC is a decomposition bug — it guarantees either a blocked completion gate or silent scope loss.
 
 **Coordinator sync**: For each task created via `TaskCreate`, also call `coord_create_task` with the task subject when coordinator env vars are set. Failures are non-blocking — warn and continue with native task tools.
 
@@ -315,12 +400,13 @@ PLAN.md includes standard documentation and demo acceptance criteria (added by p
 - Create a **demo task** with subject "Perform interactive walkthrough to validate deliverable" — the agent performs a live walkthrough of the delivered work using browser integration/MCP tools to confirm the deliverable is demonstrable.
 - Both tasks should have `addBlockedBy` set to all implementation task IDs, so they run after implementation is complete.
 - If the PLAN.md criteria already produced equivalent tasks during decomposition, do not create duplicates.
+- If DESIGN.md contains doc/demo ACs, give these tasks the matching `Satisfies: AC-N` line; otherwise they carry no Satisfies line (they serve the standard criteria, not the contract).
 
 <!-- IMPLEMENTED: REC-001 - Init-workspace consumes PLAN.md for task decomposition -->
 
-### 11. Display Summary and Review Gate
+### 12. Display Summary and Review Gate
 
-Print a summary of everything that was initialized, then ask the user to approve the task list before auto-advance begins.
+Print a summary of everything that was initialized, then ask the user to approve. The AC list renders **above** the task list: the user approves the outcome contract ("what must be true when done") before the implementation plan ("how we'll get there").
 
 ```
 ## Workspace Initialized
@@ -333,11 +419,16 @@ Print a summary of everything that was initialized, then ask the user to approve
 
 **Requirements**: <N requirements extracted>
 
+**Acceptance Criteria**: <N criteria> (<ratified in interview | from issue | drafted>)
+- [ ] **AC-1**: <criterion>
+- [ ] **AC-2**: <criterion>
+...
+
 **Existing solutions**: <N relevant | none found>
 <solution summaries if any>
 
 **Tasks created**: <N tasks>
-<task list with subjects and dependencies>
+<task list with subjects, dependencies, and Satisfies: AC-N tracing>
 ```
 
 **Review gate**: After displaying the summary, ask the user to approve:
@@ -345,14 +436,14 @@ Print a summary of everything that was initialized, then ask the user to approve
 ```
 AskUserQuestion: "Review the task list above. Ready to start auto-advance?"
   Options:
-    - "Start auto-advance" → proceed to step 12
+    - "Start auto-advance" → proceed to step 13
     - "Edit tasks first" → user modifies tasks via TaskUpdate/TaskCreate, then re-ask
     - "Stop here" → end init-workspace without entering auto-advance
 ```
 
-**Skip review gate when**: The workspace CLAUDE.md contains an `## Auto-Advance` section (indicates the user opted into autonomous mode at workspace creation). In this case, display the summary and proceed directly to step 12 without asking.
+**Skip review gate when**: The workspace CLAUDE.md contains an `## Auto-Advance` section (indicates the user opted into autonomous mode at workspace creation). In this case, display the summary and proceed directly to step 13 without asking.
 
-### 12. Trigger Auto-Advance
+### 13. Trigger Auto-Advance
 
 After approval (or auto-approval via Auto-Advance section), load and execute the auto-advance operation:
 
@@ -362,10 +453,10 @@ Read: skills/task-workflow/operations/auto-advance.md
 
 Execute the auto-advance operation. Its entry guard (step 1) handles all edge cases:
 - Fresh init with new tasks → enters loop
-- Re-run with partially complete tasks → skips (tasks already exist from step 10, auto-advance resumes from current state)
+- Re-run with partially complete tasks → skips (tasks already exist from step 11, auto-advance resumes from current state)
 - Re-run with all tasks complete → outputs summary and stops
 
-**Skip condition**: If step 10 was skipped because tasks already existed AND any task is already `completed`, do not trigger auto-advance. This prevents re-triggering the loop on idempotent re-runs of `/init-workspace` mid-session. The user can resume auto-advance by starting a new conversation in the work session.
+**Skip condition**: If step 11 was skipped because tasks already existed AND any task is already `completed`, do not trigger auto-advance. This prevents re-triggering the loop on idempotent re-runs of `/init-workspace` mid-session. The user can resume auto-advance by starting a new conversation in the work session.
 
 ## Idempotency
 
@@ -376,6 +467,7 @@ Re-running `/init-workspace` is safe:
 | Issue data changed | Re-fetches but only updates placeholder sections |
 | Manual edits in CLAUDE.md | Preserved (non-placeholder detection) |
 | Manual edits in DESIGN.md | Preserved (non-placeholder detection) |
+| Acceptance Criteria edited or checked off | Preserved — IDs never renumbered, boxes never reset; new criteria append only |
 | Tasks already exist | Skips task creation |
 | Solutions search | Always runs (read-only) |
 | New sections added manually | Preserved |
@@ -405,15 +497,20 @@ Enriching DESIGN.md...
   Architecture: populated from issue technical context
   Design Decisions: 2 decisions from issue comments
 
-Searching existing solutions (qmd query, collection=tcetra)...
+Formalizing acceptance criteria...
+  Source: explicit "Acceptance Criteria" section in issue body
+  4 criteria written to DESIGN.md (AC-1..AC-4)
+
+Searching existing solutions (qmd query, collection=$QMD_COLLECTION)...
   No existing notes surfaced.
 
 Creating task list...
-  Task 1: Add Jira Ticket field to DESIGN.md template
-  Task 2: Write init-workspace operation doc
-  Task 3: Register init-workspace in SKILL.md
-  Task 4: Add allowed-prompts for gh and acli
-  Task 5: Test init-workspace on current workspace
+  Task 1: Add Jira Ticket field to DESIGN.md template (Satisfies: AC-1)
+  Task 2: Write init-workspace operation doc (Satisfies: AC-2)
+  Task 3: Register init-workspace in SKILL.md (Satisfies: AC-3)
+  Task 4: Add allowed-prompts for gh and acli (Satisfies: AC-3)
+  Task 5: Test init-workspace on current workspace (Satisfies: AC-4)
+  AC coverage: 4/4 criteria covered
 
 Next steps:
   - Review DESIGN.md for accuracy
@@ -442,26 +539,35 @@ Enriching DESIGN.md...
   Requirements: 3 requirements extracted
   Architecture: placeholder (insufficient context)
 
-Searching existing solutions (qmd query, collection=tcetra)...
-  Query: "Fix authentication timeout in API gateway. <description>"
-  Top 3:
-    1. qmd://tcetra/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
-       Title: Auth token expiry race in API gateway
-    2. qmd://tcetra/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
-       Title: Gateway connection-pool saturation under retry storms
-    3. qmd://tcetra/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
-       Title: JWT exp clock-skew 401s on pipeline agents
+Formalizing acceptance criteria...
+  Source: must/should statements in ticket description (no explicit AC section)
+  3 draft criteria written to DESIGN.md (AC-1..AC-3) — flagged for interview
 
-Interviewing for gaps...
+Interviewing...
+  Q: "These acceptance criteria define 'done' for this task. Do they capture it?"
+  A: Amend — add criterion about retry behavior
+  AC-4 added; contract ratified (4 criteria)
+
   Q: "What components does this change affect? Any architectural constraints?"
   A: (user provides answer)
 
   Architecture: updated from interview
 
+Searching existing solutions (qmd query, collection=$QMD_COLLECTION)...
+  Query: "Fix authentication timeout in API gateway. <description>"
+  Top 3:
+    1. qmd://<collection>/notes/2026/01/2026-01-15-auth-token-expiry-race.md (score 87%)
+       Title: Auth token expiry race in API gateway
+    2. qmd://<collection>/notes/2026/02/2026-02-01-gateway-connection-pool.md (score 71%)
+       Title: Gateway connection-pool saturation under retry storms
+    3. qmd://<collection>/notes/2026/03/2026-03-11-jwt-clock-skew-401s.md (score 62%)
+       Title: JWT exp clock-skew 401s on pipeline agents
+
 Creating task list...
-  Task 1: Investigate auth timeout root cause
-  Task 2: Implement fix in API gateway
-  Task 3: Add timeout regression test
+  Task 1: Investigate auth timeout root cause (Satisfies: AC-1)
+  Task 2: Implement fix in API gateway (Satisfies: AC-1, AC-2)
+  Task 3: Add timeout regression test (Satisfies: AC-3, AC-4)
+  AC coverage: 4/4 criteria covered
 
 Next steps:
   - Review DESIGN.md for accuracy
@@ -485,6 +591,7 @@ Enriching CLAUDE.md...
 
 Enriching DESIGN.md...
   Requirements: unchanged (non-placeholder content)
+  Acceptance Criteria: unchanged (4 criteria, 2 already checked off — preserved)
   Architecture: unchanged (non-placeholder content)
   Design Decisions: unchanged (non-placeholder content)
 

@@ -54,6 +54,17 @@ dispatch_result:
 
 Dispatch-node only operates on **L0 leaf nodes**. If the node has children in the tree, it is L1 structure and should not be dispatched — return an error. See `references/layer-model.md`.
 
+## Spec Sign-off Precondition
+
+Dispatch (both container and tmux strategies) is GATED on a signed-off spec for the node. Before building spec content or dispatching, verify the node's spec note carries frontmatter `status: signed-off` — the Obsidian spec note produced via `/operator-interview` for this node (see `operator-interview-doctrine`). If it is not `signed-off` (e.g. `draft`, or no spec note exists), **do not dispatch** — record the block on the node and return an error:
+
+```
+Dispatch blocked: node ${NODE_ID} has no signed-off spec (status: <status|missing>).
+Run /operator-interview for this node to produce a spec and set status: signed-off, then re-dispatch.
+```
+
+This mirrors the interactive gates in `dispatch-task-cmd.md` (step 5a) and `discuss-dispatch.md` (handoff), so the **automated execute-tree path enforces the same signed-off-spec authority** as the interactive paths. A `draft` spec confers no dispatch authority.
+
 ## Spec Content
 
 Both container and tmux strategies need a DESIGN.md spec for the node. Build the spec content as:
@@ -75,7 +86,7 @@ ${NODE_DESCRIPTION}
 
 ${ACCEPTANCE_CRITERIA_AS_CHECKLIST}
 
-> **Criteria format**: Each criterion must be specific enough for an LLM to judge pass/fail unambiguously. Use observable, verifiable statements (e.g., "endpoint returns 404 when resource not found") not vague directives (e.g., "improve error handling"). Criteria are evaluated post-completion by the parent session — see execute-tree step 4a.
+> **Criteria format**: Write each criterion in canonical form — `- [ ] **AC-N**: <criterion> _(verify: <method>)_`, where `_(verify: <method>)_` is an optional one-line what-to-check hint (e.g. `_(verify: test output)_`, `_(verify: curl the endpoint)_`). Preserve any AC-N ids carried on the node; assign sequential ids only when the node has none. Each criterion must be specific enough for an LLM to judge pass/fail unambiguously. Use observable, verifiable statements (e.g., "endpoint returns 404 when resource not found") not vague directives (e.g., "improve error handling"). Criteria are evaluated post-completion by the parent session — see execute-tree step 4a.
 
 ## Project Context
 

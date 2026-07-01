@@ -34,7 +34,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/stale-workspaces.sh
 Stale workspaces detected — close them before starting new work:
 
   ~/src/work/cursor-rules/36-task-slug   pfeff/cursor-rules#36   CLOSED
-  ~/src/work/guardian/42-other-task      pfeff/guardian#42        CLOSED
+  ~/src/work/acme/42-other-task      acme/webapp#42        CLOSED
 
 To close a workspace:
   /close-workspace <path>

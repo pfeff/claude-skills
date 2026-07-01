@@ -1,0 +1,16 @@
+name: Host-Agnostic Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  host-agnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check published content is host-agnostic
+        run: sh scripts/check-host-agnostic.sh

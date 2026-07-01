@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# ac-count — count acceptance criteria across markdown files in BOTH formats.
+#
+# Usage:
+#   ac-count [--open] FILE [FILE ...]
+#
+# Recognizes two AC formats:
+#   - canonical task format:  - [ ] **AC-N (...)** ...
+#   - goal-tree/node format:  plain - [ ] <criterion> under an
+#                             "## Acceptance Criteria" heading
+#
+# A line counts as an AC if it is a `- [ ]`/`- [x]` checkbox AND
+# (it contains `**AC-` anywhere, OR it is under an Acceptance-Criteria
+# heading). Met = checked box OR contains `_(deferred`.
+#
+# Output:
+#   default:  "<met> <total>"   (space-separated, to stdout)
+#   --open:   "<open>"          where open = total - met
+#
+# Sums across all given files. Fail-soft: missing/unreadable files
+# contribute nothing and do not error.
+
+set -uo pipefail
+
+open_only=0
+files=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --open) open_only=1 ;;
+    *)      files+=("$arg") ;;
+  esac
+done
+
+met=0
+total=0
+
+for f in "${files[@]:-}"; do
+  [ -n "$f" ] || continue
+  [ -r "$f" ] || continue
+
+  read -r fm ft < <(awk '
+    /^#+[ \t]*[Aa]cceptance [Cc]riteria/ { insec = 1; next }
+    /^#/                                 { insec = 0 }
+    /^- \[[ xX]\]/ {
+      if ($0 ~ /\*\*AC-/ || insec) {
+        t++
+        if ($0 ~ /^- \[[xX]\]/ || $0 ~ /_\(deferred/) m++
+      }
+    }
+    END { printf "%d %d", m + 0, t + 0 }' "$f")
+
+  met=$((met + fm))
+  total=$((total + ft))
+done
+
+if [ "$open_only" -eq 1 ]; then
+  printf '%d' "$((total - met))"
+else
+  printf '%d %d' "$met" "$total"
+fi

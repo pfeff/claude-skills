@@ -356,14 +356,14 @@ active. The safe-break gate passes despite the visible spinner.
 
 | Name | Default | Config key | Behavior |
 |------|---------|-----------|---------|
-| `clear_threshold` | 50 | `clear_threshold` | Auto-clear when `ctx_pct ≥ clear_threshold` AND gate passes |
+| `clear_threshold` | 35 | `clear_threshold` | Auto-clear when `ctx_pct ≥ clear_threshold` AND gate passes. Lowered 50→35 (quota-burn fix): cache reads dominate token cost vs cache-create, so clearing earlier (a few more rebuilds) is strongly net-positive. |
 | `context_critical` | 84 | hardcoded | Surface `context-critical`; skip delivery; never auto-compact |
 | `auto_stop_idle_ticks` | 3 | `auto_stop_idle_ticks` | Auto-stop own tick after N consecutive confirmed-idle ticks. Absent key → 3 |
 
 Per-instance config (one file per supervised tree/layer):
 
 ```yaml
-clear_threshold: 50      # integer 0-100; default 50
+clear_threshold: 35      # integer 0-100; default 35
 cron_interval: 300       # seconds; default varies by layer
 cron_backoff: 600        # seconds; backoff interval for idle periods
 abandoned_ticks: 5       # integer; ticks of no-working-signal before abandoned

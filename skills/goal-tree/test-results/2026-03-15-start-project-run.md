@@ -1,8 +1,8 @@
 # Test Run: start-project (2026-03-15)
 
 ## Setup
-- **Command**: `/start-project --issue pfeff/guardian#186 --repos agent-coordinator,cursor-rules`
-- **Purpose**: Multi-purpose — advance Guardian, validate top-level objectives, validate updated workflow
+- **Command**: `/start-project --issue <owner>/<repo>#186 --repos agent-coordinator,cursor-rules`
+- **Purpose**: Multi-purpose — advance the strategic objective, validate top-level objectives, validate updated workflow
 - **Coordinator**: needs local deployment with persistence (bootstrap dependency)
 
 ## Observations
@@ -134,7 +134,7 @@
 ### 19. PR validator too tightly coupled to GitHub issues
 - **Severity**: Infrastructure — addressed in-session
 - **Where**: `scripts/validate-pr-description.sh`
-- **What happened**: Validator required `Closes #N` format (local issue number) and fetched issue body for acceptance criteria checkboxes. Cross-repo refs (`Closes pfeff/guardian#188`) and AC tree refs didn't match. Agent updated the validator to accept any reference format and removed the acceptance criteria fetch.
+- **What happened**: Validator required `Closes #N` format (local issue number) and fetched issue body for acceptance criteria checkboxes. Cross-repo refs (`Closes <owner>/<repo>#188`) and AC tree refs didn't match. Agent updated the validator to accept any reference format and removed the acceptance criteria fetch.
 - **Note**: Good fix, addresses the transition away from GitHub as primary tracker. The agent identified and fixed this correctly.
 
 ---

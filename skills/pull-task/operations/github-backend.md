@@ -18,7 +18,7 @@ This backend implements the pull-task interface:
 - `sqlite3` CLI (ships with macOS)
 - `gh` CLI (for issue details and board mutations)
 
-Cache DB location: `~/Library/Caches/guardian/project-board.db`
+Cache DB location: `~/Library/Caches/<project>/project-board.db`
 
 ## Execution Steps
 
@@ -26,8 +26,8 @@ Cache DB location: `~/Library/Caches/guardian/project-board.db`
 
 Extract project owner and number. Check these sources in order:
 
-1. **Defaults**: owner=`pfeff`, project=`Guardian` (#4, ID `PVT_kwHNa8POARiyqQ`)
-2. **Workspace CLAUDE.md**: If in a workspace, read `GitHub Issue:` field to extract the owner (e.g. `pfeff` from `pfeff/guardian#77`)
+1. **Defaults**: owner=`<owner>`, project=`<project>` (project number + ID from config)
+2. **Workspace CLAUDE.md**: If in a workspace, read `GitHub Issue:` field to extract the owner (e.g. `pfeff` from `<owner>/<repo>#77`)
 3. **Ask user**: Only if defaults don't apply and no workspace context
 
 If defaults match, skip project discovery and proceed directly to step 2.
@@ -60,7 +60,7 @@ Use a two-pass approach to avoid ranking hundreds of items when pre-prioritized 
 #### Pass 1: Planned items in current sprint (short-circuit)
 
 ```bash
-sqlite3 ~/Library/Caches/guardian/project-board.db "
+sqlite3 ~/Library/Caches/<project>/project-board.db "
   SELECT i.repo, i.issue_number, i.title
   FROM items i
   JOIN item_field_values sv ON i.item_id = sv.item_id
@@ -82,7 +82,7 @@ Replace `<current_sprint>` with the sprint name from step 2.
 Only if Pass 1 returns zero items:
 
 ```bash
-sqlite3 -separator '|' ~/Library/Caches/guardian/project-board.db "
+sqlite3 -separator '|' ~/Library/Caches/<project>/project-board.db "
   SELECT i.repo, i.issue_number, i.title,
          COALESCE(spv.value, '') as sprint,
          COALESCE(hv.value, '') as horizon,
@@ -126,7 +126,7 @@ Only fetch labels for the top ~6 candidates to avoid excessive API calls.
 
 Build a ranked list with these display fields per item:
 - Title
-- Repository (short form: e.g. `pfeff/guardian` → `guardian`)
+- Repository (short form: e.g. `acme/webapp` → `webapp`)
 - Issue number
 - Sprint
 - Labels (comma-separated)
@@ -148,7 +148,7 @@ AskUserQuestion:
   question: "Which task would you like to pull?"
   options:
     - label: "#78: Unified workspace setup"
-      description: "guardian | Sprint 1 (Feb 17-21) | enhancement | H1"
+      description: "webapp | Sprint 1 (Feb 17-21) | enhancement | H1"
     - label: "#34: Execute Integration Tests"
       description: "agent-orchestrator | Backlog | enhancement | H1"
     - label: "#55: Multi-model support"
@@ -227,4 +227,4 @@ The key output is the issue reference in `owner/repo#number` format, which is th
 - Pass 1 filter: `status == "Planned"` in current sprint (short-circuit)
 - Pass 2 filter: `["Backlog", "Planned"]` across all sprints (fallback)
 - Candidate display: top 4 ranked items
-- Cache DB: `~/Library/Caches/guardian/project-board.db`
+- Cache DB: `~/Library/Caches/<project>/project-board.db`

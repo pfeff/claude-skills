@@ -1,6 +1,6 @@
 # Solution Search Reference
 
-QMD-based hybrid search over the Obsidian vault. Used by `init-workspace` (step 9) and available to any skill needing to surface prior notes.
+QMD-based hybrid search over the Obsidian vault. Used by `init-workspace` (step 10) and available to any skill needing to surface prior notes.
 
 Per DD4 (`DESIGN.md` in the qmd-retrieval workspace), the Obsidian vault is the single retrieval source. Per-repo `docs/solutions/` trees are no longer searched — they remain in place as read-only historical artifacts.
 
@@ -16,7 +16,7 @@ timeout 60 qmd query "$query_text" -c "$QMD_COLLECTION"
 
 Sanitization (caller responsibility): strip control characters (`\n \r \t`) and QMD-grammar-hostile characters (backtick, `$`, backslash) before passing the text through. Truncate to ~2000 chars.
 
-`$QMD_COLLECTION` is per-host config, set in the DD6 host file (e.g. `tcetra` on the TCETRA-* WSL host).
+`$QMD_COLLECTION` is per-host config, set in the host file (`~/.claude/hosts/<hostname>.md`); each host selects its own collection name.
 
 No other flags. The plain `qmd query <text>` form runs hybrid BM25 + vector with auto-expansion and HyDE by default. A 60-second hard timeout is mandatory — reranking can run long on CPU-only hosts; CUDA-offloaded hosts still benefit from the bound.
 
@@ -66,5 +66,5 @@ grep -oE 'qmd://[^/]+/[^: ]+' /tmp/qmd-prior.out | awk '!seen[$0]++' | head -3
 
 ## See Also
 
-- `operations/init-workspace.md` step 9 — the canonical caller (builds query, persists top-3 into DESIGN.md `## Prior Context (QMD)`).
+- `operations/init-workspace.md` step 10 — the canonical caller (builds query, persists top-3 into DESIGN.md `## Prior Context (QMD)`).
 - DD1 / DD4 in the qmd-retrieval DESIGN.md — rationale for local hybrid retrieval and vault-only retrieval.

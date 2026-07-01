@@ -1,0 +1,7 @@
+# Local L{N}-review verdict artifacts — never committed to git.
+.claude/reviews/
+
+# Host-local private-hostname blocklist for scripts/check-host-agnostic.sh.
+# Contains private machine hostnames; must never be committed. Template:
+# scripts/.private-tokens.example
+scripts/.private-tokens

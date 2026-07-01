@@ -99,6 +99,20 @@ AskUserQuestion:
 
 If only one ready node, skip selection and use it directly.
 
+### 5a. Signed-off Spec Gate
+
+Dispatch is GATED on a signed-off spec note existing for the selected node. Before creating a workspace, verify the node's spec note carries frontmatter `status: signed-off`:
+
+- Locate the spec note for the node (the Obsidian spec note produced via `/operator-interview` / the obsidian-notes skill for this node, referenced from the node body or project docs).
+- Check its frontmatter `status`. If it is not `signed-off` (e.g. `draft`, or no spec note exists), **do not dispatch**. Report and stop:
+
+  ```
+  Dispatch blocked: node <node.id> has no signed-off spec (status: <status|missing>).
+  Run /operator-interview <node.title> to produce a spec, set status: signed-off, then re-run /dispatch-task.
+  ```
+
+- Only when `status: signed-off` is confirmed, proceed to step 6.
+
 ### 6. Check for Existing Workspace
 
 Before creating a workspace, check if one already exists:
@@ -144,7 +158,14 @@ Replace placeholder sections with:
 
 ## Acceptance Criteria
 
-<node.acceptance_criteria as checkbox list>
+<node.acceptance_criteria as canonical checkbox list>
+
+Write each criterion in canonical form:
+  - [ ] **AC-N**: <criterion> _(verify: <method>)_
+where `_(verify: <method>)_` is an optional one-line what-to-check hint.
+PRESERVE any existing AC-N ids carried on the GOAL.md node — reuse them
+verbatim. Assign sequential ids (AC-1, AC-2, …) only when the node has none.
+This step is idempotent: re-running must not renumber or rewrite existing ids.
 
 ## Project Context
 
@@ -152,6 +173,24 @@ Replace placeholder sections with:
 - **Root objective**: <frontmatter.title>
 - **Integration branch**: <project_branch>
 ```
+
+### 8a. Warn on Empty Acceptance Criteria (Provisional)
+
+After seeding the node's AC into DESIGN.md, check that at least one checkable criterion landed. A node dispatched with an empty AC section should warn, not silently proceed. Count the total ACs in BOTH formats with the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/ac-count "<workspace_path>/DESIGN.md"
+```
+
+`ac-count` prints `<met> <total>`. If `<total>` is `0`, **WARN** the operator (recommend the node carry ≥1 checkable acceptance criterion) and **continue**. Do not block: an empty AC section must not halt or fail dispatch.
+
+```
+ACCEPTANCE CRITERIA WARNING: dispatched node has no checkable acceptance criteria.
+Recommend capturing ≥1 checkable AC on the GOAL.md node.
+Continuing — dispatch is not blocked.
+```
+
+**Provisional (DESIGN.md DD-6)** — warn-first by deliberate doctrine: preserving the dispatch flow (fleet-safety) wins over a hard refusal that is unvalidated in use. The upgrade-to-refuse criteria live in DD-6; do not promote this to a hard gate here.
 
 ### 9. Update GOAL.md
 
@@ -191,6 +230,7 @@ Next steps:
 |-------|----------|
 | GOAL.md not found | "No GOAL.md found in <path>. This command requires a goal-tree project." |
 | GOAL.md parse error | "Failed to parse GOAL.md: <error>. Check format against references/goal-md-format.md." |
+| Spec not signed off | "Dispatch blocked: node has no signed-off spec (status: <status\|missing>). Run /operator-interview, set status: signed-off, then re-run." Stop without creating a workspace. |
 | No ready nodes | Display appropriate message based on tree state (blocked, complete, dependencies) |
 | create-workspace.sh fails | "Workspace creation failed (exit <code>): <stderr>. Check script output above." |
 | Workspace already exists | Skip creation, show attach instructions |

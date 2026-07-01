@@ -19,14 +19,14 @@ None. Uses defaults from `references/project-defaults.md`.
 project-board-helper sync
 ```
 
-This fetches all project items, fields, and field values from the GitHub API and writes them to the local SQLite cache at `~/Library/Caches/guardian/project-board.db`.
+This fetches all project items, fields, and field values from the GitHub API and writes them to the local SQLite cache at `~/Library/Caches/<project>/project-board.db`.
 
 ### 2. Verify sync
 
 Confirm the cache was updated by checking item count:
 
 ```bash
-sqlite3 ~/Library/Caches/guardian/project-board.db "SELECT COUNT(*) FROM items;"
+sqlite3 ~/Library/Caches/<project>/project-board.db "SELECT COUNT(*) FROM items;"
 ```
 
 ## When to Sync
