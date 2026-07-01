@@ -1,7 +1,7 @@
 ---
 name: kb-capture
-description: "Capture / ingest bridge for the LLM Knowledge Base. Stages work-relevant Readwise Reader documents into the vault's raw/ queue for later /kb-compile. A doc is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag (unconditional override). Capture writes only under raw/ (never off-limits zones) and is idempotent. Use when ingesting Reader sources into the knowledge base."
-argument-hint: "[blank for full inbox sweep, or a Reader doc id/url]"
+description: "Capture / ingest bridge for the LLM Knowledge Base. Sweeps work-relevant Readwise HIGHLIGHTED sources (the operator highlights-then-archives, so highlights — not the inbox — are the signal) into the vault's raw/ queue for later /kb-compile; kb-tagged docs are captured unconditionally. A source is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag. Capture writes only under raw/ (never off-limits zones) and is idempotent. Use when ingesting highlighted reading into the knowledge base."
+argument-hint: "[blank to sweep highlighted sources, or a Reader doc id/url]"
 allowed-tools:
   - Read
   - Write
@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.1.0
+version: 0.2.0
 ---
 
 # KB Capture
@@ -23,9 +23,15 @@ origin metadata and highlights/notes intact, ready for `/kb-compile`.
 > write are agent-orchestrated per `operations/capture.md` (Readwise MCP + `obsidian-notes`
 > CLI), and the full capture→compile→lint flow was verified end-to-end against a live vault.
 
+## What it sweeps
+
+The operator's workflow is **highlight → archive**, so highlighted sources (not the inbox)
+are the keeper signal. The default sweep enumerates the **Readwise highlights library**
+(grouped by source), *not* `location="new"`. See `operations/capture.md` step 1.
+
 ## Capture-eligibility predicate (SPEC §2.1)
 
-A Reader doc is captured iff **either**:
+A source is captured iff **either**:
 
 - **(A) Default path** — has ≥1 highlight (*notes count as highlights*) **AND** an LLM
   judges it work-relevant scored against `WORK-DOMAINS.md`. AI/LLM content is relevant
@@ -43,7 +49,7 @@ unmodified. Re-capturing the same source is a no-op (keyed via `kb_core.source_k
 ## Invocation
 
 ```
-/kb-capture            # sweep the Reader inbox for eligible docs
+/kb-capture            # sweep highlighted sources (bounded to a recent window)
 /kb-capture <doc>      # capture a specific Reader doc id/url
 ```
 
@@ -55,7 +61,7 @@ unmodified. Re-capturing the same source is a no-op (keyed via `kb_core.source_k
 
 ## Integration Points
 
-- **Readwise Reader** — source documents (MCP `reader_*` tools / export API).
+- **Readwise** — highlighted sources via `readwise_list_highlights` (primary); Reader docs via `reader_*` tools (kb-tag override / named input).
 - **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
 - **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
