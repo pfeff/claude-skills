@@ -55,53 +55,20 @@ Store as `$DIFF`. If the diff is empty, write an annotation with
 
 ### Step 2 — Identify work type and run required verification
 
-Detect the work type from the diff's changed file extensions (same detection
-logic as the lN-review-doctrine verification map). See
-`../lN-review-doctrine/SKILL.md` for the full map; summary of the most common
-cases:
+Detect the work type from the diff's changed file extensions and look up the
+required verification steps in the "Work-type → required-verification map" in
+`../lN-review-doctrine/SKILL.md`. That map is the single source of truth —
+read it at verification time; do not rely on a summary.
 
-| Work type | Signal | Required steps |
-|-----------|--------|----------------|
-| Claude skills | `**/skills/**`, `**/commands/**` | Doctrine-class sub-checklist (see below) |
-| Go | `*.go`, `go.mod` | `go build ./...`, `go test ./...`, `golangci-lint run` |
-| Python | `*.py`, `pyproject.toml` | `ruff check`, `pytest` (or repo runner), `mypy` if configured |
-| Terraform | `*.tf`, `*.tfvars` | `terraform fmt -check`, `terraform validate` |
-| Markdown/docs only | `*.md` only | `markdownlint` if configured; otherwise no required step |
-| Mixed | Multiple patterns match | Union of all required steps |
+For **Claude skills** (doctrine-class), run the "Doctrine-class PR
+sub-checklist" from the same doctrine file. Which items apply (doctrine-only
+vs executor skill) is defined there; when in doubt, run every item. Item 1
+(artifact-path consistency) applies whenever the changed skill reads or writes
+another skill's artifact path, regardless of whether those paths are declared
+in SKILL.md or in operations/.
 
-For **Claude skills** (doctrine-class), run the following sub-checklist. Each
-item that fails becomes a finding in the annotation:
-
-1. **Artifact-path consistency** (blocking) — For every cross-skill
-   producer/consumer pair, verify the producer writes to the path the consumer
-   reads. Grep both directions. If no operations/ directory exists in the
-   changed skill, this item is N/A.
-2. **Cross-skill reference resolution** (warning) — Every `../<skill>/...`
-   link in SKILL.md and `references/<file>.md` links in operations must resolve
-   to an existing path.
-3. **SKILL.md frontmatter validity** (blocking) — YAML frontmatter must parse
-   and declare `name`, `description`, `allowed-tools`, `version`. Command:
-   ```bash
-   python3 -c "
-   import sys; content = open('skills/<name>/SKILL.md').read()
-   parts = content.split('---', 2)
-   fm = parts[1] if len(parts) >= 3 else ''
-   missing = [f for f in ['name:','description:','allowed-tools:','version:'] if f not in fm]
-   print('FAIL:', missing) if missing else print('PASS')
-   "
-   ```
-4. **Files referenced exist** (warning) — Every `Read(...)` / `Read: <path>`
-   reference in operations must point at an existing file.
-5. **No inlined doctrine** (warning) — Doctrine-only skills own the rules;
-   executor skills must reference, not duplicate.
-6. **Host-agnosticism** (blocking) — Run the repo's guardrail:
-   ```bash
-   HOST_AGNOSTIC_DIRS="skills/<name>" sh scripts/check-host-agnostic.sh
-   ```
-   Require exit 0. Any hit is a blocking finding.
-
-Record which steps ran and their results as `evidence.tests_run` in the
-annotation.
+Each required step that fails becomes a finding in the annotation. Record
+which steps ran and their results as `evidence.tests_run`.
 
 ### Step 3 — Compose /review for code-level findings
 
@@ -231,7 +198,10 @@ frontmatter) and then stop. Do not open PRs, merge, or take further action.
 - Does not integrate with a queue or coordinator.
 - Does not re-implement review logic — it composes `/review` and the
   doctrine-class checklist.
-- Does not write to any path other than `.claude/reviews/self-verify-latest.md`.
+- Does not write to any path other than `.claude/reviews/self-verify-latest.md`,
+  except the inline-review result written to `.claude/reviews/latest.md` in
+  Step 3's uncommitted-change path (standing in for the `/review` skill, which
+  owns that path).
 
 ## References
 
