@@ -15,10 +15,6 @@ L0). The actual supervision skills (`l1-supervise`, `l2-supervise`)
 are thin executors that load this doctrine at tick time and apply it
 at their layer.
 
-`version: 1.2.0` reconciles two forked tracks into one source of
-truth: the canonical monolithic 1.1.0 and the runtime split 1.0.0.
-The reconciled body is a superset of both — see `references/lifecycle.md`.
-
 ## Source of truth
 
 | File | Purpose |
@@ -43,8 +39,9 @@ the durable multi-session tree must be separate sessions.
 
 **Termination is the supervisor retiring the child**, gated on all
 teardown guards (never-teardown-own-session, PR merged/abandoned,
-no-unpushed, no-dirty-tracked, and — for objective-scoped children —
-an objective-accept marker).
+no-unpushed, no-dirty-tracked, a CLEAN `l{N-1}-review` marker on the
+merged PR — complete-check condition 4, and — for objective-scoped
+children — an objective-accept marker).
 
 ## When this doctrine is wrong
 

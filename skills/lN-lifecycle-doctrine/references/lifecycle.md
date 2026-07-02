@@ -322,7 +322,7 @@ retire mechanics live in the l2-supervise launcher's `references/supervision.md`
 A child that is itself a supervisor (e.g. an L1, which runs an `l1-supervise`
 heartbeat) carries durable heartbeat state. Retiring it MUST also tear that down:
 remove its `ct` entry (`ct rm l1-<id>`) and **archive** its config dir
-`~/.config/l1-supervise/<id>/`. This is distinct from the S.14 confirmed-idle
+`~/.config/l1-supervise/<id>/`. This is distinct from the D10 confirmed-idle
 auto-stop / `--stop` (which preserves the dir for restart) — retirement closes
 the objective, so the heartbeat state is archived, not preserved. See the
 per-layer **L2 binding** below for the concrete sequence.
@@ -574,7 +574,7 @@ from-the-subagent invariant.
 ### Live cutover is the staged follow-on (NOT done by adopting this rule)
 
 Adopting this doctrine does **not** remove `send-keys` *content* delivery from the running
-path. That live cutover is staged in `~/src/work/layer-pivot/s19-ac-inbox/S19-INBOX.md`
+path. That live cutover is staged as the **S19 AC-inbox cutover**
 (stages 1–4: dual-write → recipient-drains → cut `send-keys` content → remove dual-write),
 each with rollback. Likewise, **wiring a child to actually drain on its turn** (project
 `CLAUDE.md` / loop doctrine) is stage 2 of that cutover, not part of stating this rule. This
@@ -684,23 +684,3 @@ The lifecycle states `pr-open → fixing → merged` integrate with the
 The review-marker gate is enforced by complete-check condition 4 above
 — `merged → complete` requires a CLEAN marker. The integration section
 defines the signal format; condition 4 is the enforcement point.
-
----
-
-## When this doctrine is wrong
-
-If a rule here is wrong for the current iteration, **fix it here**
-via PR against `pfeff/claude-skills`. Do not patch the rule inside
-`l1-supervise` or `l2-supervise` — that is the doctrine-drift
-failure mode this split exists to prevent. Doctrine edits land via
-PR on a branch.
-
-## See also
-
-- `lN-review-doctrine` — the parallel review doctrine; the lifecycle
-  `pr-open → fixing → merged` states reference the review-cycle states defined
-  there.
-- `goal-tree` `references/layer-model.md` — canonical "what can be a layer"
-  platform constraint and the tree-depth → layer mapping.
-- An `l1-supervise` executor runs this doctrine at N=1 (child=L0); an
-  `l2-supervise` executor runs it at N=2 (child=L1).
