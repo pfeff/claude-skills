@@ -25,7 +25,11 @@ open PRs, or integrate with any queue.
 
 Invoke at the end of the job's work, after all changes are made but before
 sending the "done" signal to the operator. Typical trigger: "I've made the
-changes, now let me verify before reporting."
+changes, now let me verify before reporting." Per the dispatch brief's
+standing instruction (`../dispatch-gate/SKILL.md` Step 5), commit the job's
+work to its isolated branch before invoking this skill, so the committed-branch
+`/review` path in Step 3 applies instead of the condensed uncommitted-tree
+checklist.
 
 ## Inputs
 

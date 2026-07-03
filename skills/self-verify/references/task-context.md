@@ -38,6 +38,26 @@ slice the dispatcher uses to confirm the job is ready to run. Writing them to
 `.claude/task-context.md` makes that contract durable and readable by self-verify
 at completion time without requiring the dispatch prompt to still be in context.
 
+## Fill heuristics
+
+The four-field schema does not change to express work-class judgment —
+that judgment lives in how the dispatcher fills the existing fields.
+These heuristics are consumed by `dispatch-gate` when it writes this
+file; future needs extend the heuristics below, not the schema.
+
+- **Spike heuristic.** For exploratory intent (a spike), frame the
+  Acceptance test field as "findings reported back / what we'll know
+  afterward" rather than a shipped-code condition, and set the Affected
+  surface field to a throwaway branch or read-only exploration. A spike
+  card is self-consistent without any extra flag — `self-verify` judges
+  it against whatever acceptance test is actually written, spike or not.
+- **Docs-in-surface heuristic.** When the job touches a user-facing
+  surface (a skill, an API, a schema), list the affected doc in the
+  Affected surface field alongside the code it documents — do not add a
+  separate docs field. A user-facing change with no doc listed in
+  Affected surface is a clarifying-pass question for the dispatcher, not
+  a silent gap.
+
 ## Fallback order when absent
 
 If `.claude/task-context.md` is not present, self-verify falls back to the
