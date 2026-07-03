@@ -107,10 +107,13 @@ myself."
 
 **Affected surface**: auth/
 
-**Override**: Dispatched despite unresolved fields — Acceptance test,
-Scope / blast-radius bound. Operator chose "dispatch anyway" during the
-clarifying pass on 2026-07-03.
+> **Override** (unresolved: Acceptance test, Scope / blast-radius bound):
+> operator chose "dispatch anyway" during the clarifying pass, 2026-07-03.
 ```
+
+The Override line is an annotation appended below the four fields, not
+a fifth field — the schema stays four fields. See the "Override
+annotation" format in `../../self-verify/references/task-context.md`.
 
 This is the "genuine catch" sample for spec decision 8's acceptance
 bar: an under-specified real slice, a clarifying dialogue, and a

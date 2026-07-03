@@ -133,6 +133,13 @@ if present; otherwise fall back to DESIGN.md / PLAN.md / dispatch prompt.
 - Is there obvious WIP/debugging debris (console.log, commented-out code)?
 - Minimality: does the diff add the least surface that meets the criteria?
 
+If `.claude/task-context.md` carries an Override annotation (see
+`references/task-context.md` "Override annotation") naming unresolved
+fields, evaluate those fields as known gaps: Axis 1 verdict is `warn`
+with the named gap(s) surfaced. Never treat an unresolved acceptance
+test as silently complete, and never collapse to `pass` solely because
+a placeholder value is present.
+
 Verdict: `pass` if all criteria attempted + in scope. `fail` if any criterion
 unattempted or diff is materially out of scope. `warn` for ambiguous scope.
 
