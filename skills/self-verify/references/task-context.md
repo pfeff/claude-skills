@@ -58,6 +58,31 @@ file; future needs extend the heuristics below, not the schema.
   Affected surface is a clarifying-pass question for the dispatcher, not
   a silent gap.
 
+## Override annotation
+
+When `dispatch-gate` Step 3 records an operator override (dispatching
+despite an unresolved field), it appends an annotation **below** the
+four fields — never a fifth field. The schema stays exactly four
+fields; this is appended content, not schema.
+
+Format — a blockquote paragraph appended after the four-field block:
+
+```markdown
+> **Override** (unresolved: <comma-separated field names>): <one-sentence
+> reason the operator gave for dispatching anyway>, <date>.
+```
+
+Example:
+
+```markdown
+> **Override** (unresolved: Acceptance test, Scope / blast-radius bound):
+> operator chose "dispatch anyway" during the clarifying pass, 2026-07-03.
+```
+
+`self-verify` Axis 1 reads this annotation when present: the named
+fields are evaluated as known gaps, not silently treated as complete
+(see Axis 1 in `../SKILL.md`).
+
 ## Fallback order when absent
 
 If `.claude/task-context.md` is not present, self-verify falls back to the

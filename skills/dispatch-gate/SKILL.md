@@ -79,12 +79,15 @@ If a gap remains after the clarifying pass:
 2. Offer an explicit "dispatch anyway" override.
 3. If the operator declines the override: stop here. No
    `.claude/task-context.md` is written.
-4. If the operator takes the override: proceed to Step 4, but write an
-   **Override** note into the task-context file naming which field(s)
-   were unresolved (see format below). This is the only path where the
-   file is written with a known gap — recording it is what makes
-   overrides countable. Frequent overrides are a calibration signal
-   that the criteria are miscalibrated, not a reason to skip recording.
+4. If the operator takes the override: proceed to Step 4, but append an
+   **Override annotation** below the four fields, naming which field(s)
+   were unresolved — using the annotation format defined in
+   `../self-verify/references/task-context.md` ("Override annotation").
+   This is appended content, not a fifth field; the four-field schema
+   is unchanged. This is the only path where the file is written with a
+   known gap — recording it is what makes overrides countable. Frequent
+   overrides are a calibration signal that the criteria are
+   miscalibrated, not a reason to skip recording.
 
 The override is always available — the gate must never stall work.
 Exploratory spikes are a legitimate work class handled by the spike
@@ -98,7 +101,8 @@ fill heuristic, not by this override path.
   four-field format defined in
   `../self-verify/references/task-context.md` — point at that format,
   do not duplicate it here. If Step 3's override applies, append the
-  Override note.
+  Override annotation below the four fields (not a field — see the
+  annotation format in that same reference).
 - **Cross-repo dispatch where the target repo/worktree doesn't exist
   yet**: do NOT provision a worktree or branch. Instead emit the
   **target path spec** — target repo, intended branch name, intended
@@ -125,6 +129,9 @@ gate remains on merge, not on commit — branch commits are cheap.
 - Does not change the `.claude/task-context.md` schema — new judgment
   is added as a fill heuristic in
   `../self-verify/references/task-context.md`, never as a new field.
+  The Step 3 Override note is appended content below the four fields
+  (an annotation), not a field — see the "Override annotation" format
+  in that same reference.
 
 ## References
 
