@@ -4,6 +4,7 @@ description: Fast-capture entrypoint for turning a workflow just performed in th
 allowed-tools:
   - Read
   - Write
+  - Edit
   - AskUserQuestion
 version: 1.0.0
 ---
