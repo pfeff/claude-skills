@@ -140,6 +140,8 @@ gate remains on merge, not on commit — branch commits are cheap.
   here.
 - `references/example-transcript.md` — illustrative ready and refuse
   dialogue transcripts.
+- `references/sample-runs.md` — real recorded dispatch-gate cycles
+  (ready and refuse), with dates and outcomes.
 - `../self-verify/SKILL.md` — reads the task-context file this skill
   writes; its "When to invoke" section states the commit-then-self-verify
   contract this skill's Step 5 depends on.
