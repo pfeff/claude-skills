@@ -343,12 +343,18 @@ reviewer: l<N>-review
 ---
 ```
 
-`blocking` and `warning` are first-class because the
+`blocking` and `warning` are first-class frontmatter fields.
+`info` count and `findings` total are intentionally absent from
+frontmatter — they were prior double-bookkeeping; consumers
+needing them can grep the body. **Advisory = warning + info.** The
 post-body's first line (`**<VERDICT>** — <N> blocking and <M>
 advisory finding(s).`) is the canonical greppable summary across
-review layers and reuses these numbers. `info` count and
-`findings` total are intentionally absent — they were prior
-double-bookkeeping; consumers needing them can grep the body.
+review layers; `<M>` is the *sum* of the warning-tier and
+info-tier findings actually present in the composed body — never
+just the `warning` frontmatter value on its own, since an `info`
+finding has no frontmatter field of its own to be reused from. See
+"Post-body composition" below for the mechanical count-assertion
+this requires before posting.
 
 Body: per-axis sections, each with the findings emitted by that
 axis. Empty axes get `_no findings_`.
@@ -433,6 +439,19 @@ positional strip is brittle if a finding ever contains a literal
    reviewer: l<N>-review
    -->
    ```
+4. **Advisory count assertion (mechanical, before posting)** — count
+   the warning-tier and info-tier finding bullets actually present
+   in the composed body (from steps 1–2 above); their sum is the
+   advisory count. Confirm this sum equals both the `<M>` written
+   into the first line and the count written into the trailing
+   metadata block (`warning` for an `l<N>-review:metadata` marker,
+   `advisory` for L0's `<!-- review:metadata -->` marker — same
+   rule, different field name). **If they differ, fix the marker
+   before posting — do not post a mismatched count.** This catches
+   drift between a running tally kept during review and the
+   findings that actually landed in the final body (e.g. a finding
+   added to a per-axis section after the tally was computed).
+   Applies identically at every layer, L0 through L{N}.
 
 HTML comments are not rendered in the PR UI but are preserved in
 the comment body and readable via `gh api /repos/.../pulls/<n>/reviews`
