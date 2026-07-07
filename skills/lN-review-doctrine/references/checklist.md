@@ -343,18 +343,17 @@ reviewer: l<N>-review
 ---
 ```
 
-`blocking` and `warning` are first-class frontmatter fields.
-`info` count and `findings` total are intentionally absent from
-frontmatter — they were prior double-bookkeeping; consumers
-needing them can grep the body. **Advisory = warning + info.** The
-post-body's first line (`**<VERDICT>** — <N> blocking and <M>
-advisory finding(s).`) is the canonical greppable summary across
-review layers; `<M>` is the *sum* of the warning-tier and
-info-tier findings actually present in the composed body — never
-just the `warning` frontmatter value on its own, since an `info`
-finding has no frontmatter field of its own to be reused from. See
-"Post-body composition" below for the mechanical count-assertion
-this requires before posting.
+`blocking` and `warning` are first-class frontmatter fields;
+`warning` holds the pure warning-tier count only. `info` count and
+`findings` total are intentionally absent from frontmatter — they
+were prior double-bookkeeping; consumers needing them can grep the
+body. **Advisory = warning + info.** The post-body's first line
+(`**<VERDICT>** — <N> blocking and <M> advisory finding(s).`) is
+the canonical greppable summary across review layers; `<M>` is the
+*sum* of the warning-tier and info-tier findings actually present
+in the composed body — never just the `warning` frontmatter value
+on its own. See "Post-body composition" below for the mechanical
+count-assertion this requires before posting.
 
 Body: per-axis sections, each with the findings emitted by that
 axis. Empty axes get `_no findings_`.
@@ -420,8 +419,11 @@ positional strip is brittle if a finding ever contains a literal
 
 1. **First line — exactly**:
    ```
-   **<VERDICT>** — <blocking> blocking and <warning> advisory finding(s).
+   **<VERDICT>** — <blocking> blocking and <advisory> advisory finding(s).
    ```
+   `<advisory>` is the warning+info sum (see "Advisory = warning +
+   info" above) — **not** a direct substitution of the `warning`
+   frontmatter field.
 2. **Body** — the same per-axis sections as the workspace
    artifact body (Conformance / Process / Objective Advancement).
 3. **Trailing metadata block** — an HTML comment carrying the
@@ -441,17 +443,15 @@ positional strip is brittle if a finding ever contains a literal
    ```
 4. **Advisory count assertion (mechanical, before posting)** — count
    the warning-tier and info-tier finding bullets actually present
-   in the composed body (from steps 1–2 above); their sum is the
-   advisory count. Confirm this sum equals both the `<M>` written
-   into the first line and the count written into the trailing
-   metadata block (`warning` for an `l<N>-review:metadata` marker,
-   `advisory` for L0's `<!-- review:metadata -->` marker — same
-   rule, different field name). **If they differ, fix the marker
-   before posting — do not post a mismatched count.** This catches
-   drift between a running tally kept during review and the
-   findings that actually landed in the final body (e.g. a finding
-   added to a per-axis section after the tally was computed).
-   Applies identically at every layer, L0 through L{N}.
+   in the composed body (step 2 above); their sum is the advisory
+   count. Confirm this sum equals the `<advisory>` written into the
+   first line. For L0's `<!-- review:metadata -->` marker, also
+   confirm it equals the marker's `advisory` field (L0 persists the
+   pre-summed count there). The `l<N>-review:metadata` marker's own
+   `warning` field is a *separate*, pure warning-tier count — do
+   **not** overwrite it with the advisory sum. **If the recount and
+   `<advisory>` differ, fix the first line before posting — do not
+   post a mismatched count.**
 
 HTML comments are not rendered in the PR UI but are preserved in
 the comment body and readable via `gh api /repos/.../pulls/<n>/reviews`
