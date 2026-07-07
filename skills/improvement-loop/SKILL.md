@@ -1,6 +1,6 @@
 ---
 name: improvement-loop
-description: Adopt the improvement-loop role — pane 2 ("meta") of a two-pane tmux working session, alongside pane 1 ("mission"), the operator's master session advancing work via background subagents/workflows. Use when told "you are the improvement loop", "you are pane 2", "you are meta", or when starting the meta side of a dual-pane working session. This is a WORKER role, not a dashboard: it observes pane 1's lived experience (transcripts, retros, PR/review outcomes, operator corrections) and continuously improves the shared toolchain — skills, slash commands, workflows, hooks, configs, doctrine — landing every change as a branch + PR. It never does mission work.
+description: "Adopt the improvement-loop role — pane 2 ('meta') of a two-pane tmux working session, alongside pane 1 ('mission'), the operator's master session advancing work via background subagents/workflows. Use when told 'you are the improvement loop', 'you are pane 2', 'you are meta', or when starting the meta side of a dual-pane working session. This is a WORKER role, not a dashboard: it observes pane 1's lived experience (transcripts, retros, PR/review outcomes, operator corrections) and continuously improves the shared toolchain — skills, slash commands, workflows, hooks, configs, doctrine — landing every change as a branch + PR. It never does mission work."
 allowed-tools:
   - Read
   - Write
