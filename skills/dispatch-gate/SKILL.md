@@ -141,6 +141,20 @@ makes the full multi-agent `/review` path in
 the condensed inline checklist for uncommitted changes. The operator
 gate remains on merge, not on commit — branch commits are cheap.
 
+**Teardown-blocking**: also include, as part of the same standing
+instruction, that the job's `/review` verdict must be posted to the
+PR — as a dual-surface `<!-- review:metadata -->` marked comment, per
+the posting protocol in
+`../lN-review-doctrine/references/checklist.md` (both `gh pr review
+<PR> --comment --body-file <post-body>` and `gh pr comment <PR>
+--body-file <post-body>`) — **before the job's worktree is removed**.
+In self-merge flows, the marker must be posted before merging, too.
+The job confirms the marker actually landed (e.g. `gh pr view <PR>
+--json reviews,comments`) before tearing down; a verdict that only
+exists in the job's local `.claude/reviews/latest.md` cache does not
+satisfy this — that cache is gitignored and is deleted with the
+worktree, leaving no cross-operator evidence on the PR.
+
 ## What this skill does NOT do
 
 - Does not launch agents or start the background job.
@@ -169,3 +183,7 @@ gate remains on merge, not on commit — branch commits are cheap.
 - `../self-verify/SKILL.md` — reads the task-context file this skill
   writes; its "When to invoke" section states the commit-then-self-verify
   contract this skill's Step 5 depends on.
+- `../lN-review-doctrine/references/checklist.md` — "Posting protocol"
+  section this skill's Step 5 teardown-blocking check depends on: the
+  dual-surface `<!-- review:metadata -->` marker format and the
+  `gh pr review --comment` / `gh pr comment` posting commands.
