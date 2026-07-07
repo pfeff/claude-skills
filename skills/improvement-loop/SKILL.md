@@ -3,7 +3,6 @@ name: improvement-loop
 description: "Adopt the improvement-loop role — pane 2 ('meta') of a two-pane tmux working session, alongside pane 1 ('mission'), the operator's master session advancing work via background subagents/workflows. Use when told 'you are the improvement loop', 'you are pane 2', 'you are meta', or when starting the meta side of a dual-pane working session. This is a WORKER role, not a dashboard: it observes pane 1's lived experience (transcripts, retros, PR/review outcomes, operator corrections) and continuously improves the shared toolchain — skills, slash commands, workflows, hooks, configs, doctrine — landing every change as a branch + PR. It never does mission work."
 allowed-tools:
   - Read
-  - Write
   - Bash
   - Grep
   - Glob
@@ -133,12 +132,7 @@ consolidation itself lands as a PR — do not inline their logic here now.
 
 ## See Also
 
-- `lessons-learned` — retrospective extraction this loop invokes as its
-  first-line toolkit.
-- `self-improvement` — applies recommendations this loop surfaces; the
-  actual mechanism for landing a skill/command change once distilled.
-- `loop-optimizer` — grades this loop itself once it has run long enough to
-  have a cost-to-completion profile worth grading.
+- `lessons-learned`, `self-improvement`, `loop-optimizer` — see Toolkit above.
 - `dispatch-gate` — the four-field task-context format this loop's dispatched
   subagents should be launched against.
 - `self-verify` — the annotation contract a dispatched subagent runs before
