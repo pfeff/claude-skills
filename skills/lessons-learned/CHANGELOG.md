@@ -2,6 +2,13 @@
 
 All notable changes to the **lessons-learned** skill will be documented in this file.
 
+## [1.2.1] - 2026-07-07
+
+### Added
+- Cross-reference to the `improvement-loop` host skill in See Also, documenting that this analysis now runs continuously in the improvement pane (transcript-delta mining + `/skillify` queue drain per `ct` tick).
+
+**Reasoning**: The split-screen self-improvement loop (improvement-loop DESIGN R7) evolves this skill into a hosted component rather than a manual one-off; the pointer keeps the two discoverable from each other without forking the concept.
+
 ## [1.2.0] - 2026-02-18
 
 ### Added

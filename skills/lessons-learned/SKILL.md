@@ -8,7 +8,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Lessons Learned Skill
@@ -185,3 +185,4 @@ Load operation details on-demand:
 - `/claude-skills:compound` - Document solved problems as searchable solution docs (Phase 3d bridge target)
 - `/claude-skills:self-improvement` - Apply recommendations to skills
 - `self-improvement/references/improvement-workflow.md` - Complete improvement cycle
+- `improvement-loop` - Loop host that runs this analysis continuously in the improvement pane (on each `ct` tick it mines the working session's transcript delta and drains the `/skillify` queue, then hands findings to `self-improvement` as PRs)
