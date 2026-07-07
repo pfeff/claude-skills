@@ -113,18 +113,24 @@ When the operator approves a public + sensitive dispatch, record the
 decision in `.claude/task-context.md` immediately below the four fields
 (same placement as Override annotation, but a different annotation type).
 
+**Do not restate the sensitive content or its specific category in the
+annotation** — this file is committed to the isolated branch and becomes
+part of the public destination the gate exists to protect (per Step 5,
+task-context.md is pushed with the branch). Record only that the gate was
+triggered and approved, not what was found.
+
 Format:
 
 ```markdown
-> **Privacy Gate** (context: <specific sensitive data>, destination:
-> <public channel>): operator approved on <date>.
+> **Privacy Gate** (destination: <public channel>): operator approved
+> publication on <date>.
 ```
 
 Example:
 
 ```markdown
-> **Privacy Gate** (context: personal financial data, destination: public
-> GitHub PR description): operator approved on 2026-07-07.
+> **Privacy Gate** (destination: public GitHub PR description): operator
+> approved publication on 2026-07-07.
 ```
 
 This annotation makes the decision durable and reviewable by `self-verify`
