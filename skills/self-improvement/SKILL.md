@@ -13,7 +13,7 @@ allowed-tools:
   - TaskGet
   - TaskUpdate
   - Task
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Self-Improvement Skill
@@ -249,3 +249,6 @@ Load operation details on-demand:
 - `/claude-skills:lessons-learned` - Generate recommendations
 - `/lessons-learned --aggregate` - Aggregate patterns across sessions
 - `references/improvement-workflow.md` - Review cadence and decision criteria
+- `improvement-loop` - Invokes this skill's apply machinery from the meta
+  pane; drafts each improvement as a PR-gated change against the target
+  surface's repo (see `improvement-loop/references/surface-repo-map.md`)

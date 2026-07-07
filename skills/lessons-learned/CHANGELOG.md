@@ -2,6 +2,13 @@
 
 All notable changes to the **lessons-learned** skill will be documented in this file.
 
+## [1.2.1] - 2026-07-07
+
+### Added
+- Cross-reference to the `improvement-loop` skill in See Also, documenting that it reads this skill's retro artifacts as one of its experience sources.
+
+**Reasoning**: `improvement-loop` (the dual-pane meta role) is a consumer of this skill's outputs; the pointer keeps the two discoverable from each other.
+
 ## [1.2.0] - 2026-02-18
 
 ### Added
