@@ -99,7 +99,10 @@ subagent instead.
 ## Token Efficiency
 
 Cost-to-completion is itself an improvement dimension, not just a property of
-individual changes. When scanning experience sources, also watch for:
+individual changes. This is a lightweight noticing heuristic for this loop's
+own ticks — the actual grading of recurring loops belongs to `loop-optimizer`
+(see Toolkit below); dispatch it rather than reimplementing its analysis here.
+While scanning experience sources, flag signals like:
 
 - **Model right-sizing misses** — a dispatched subagent running a bigger
   model than the task warrants (or a genuinely hard task under-powered on a
@@ -111,9 +114,9 @@ individual changes. When scanning experience sources, also watch for:
 - **Per-subagent token spend outliers** — a dispatch that burns
   disproportionate tokens relative to the value of its output.
 
-When a waste pattern recurs (not a one-off), it becomes the tick's
-improvement candidate like any other finding — draft a PR-gated fix through
-the normal Per-Tick Shape, not an inline change.
+When a pattern recurs (not a one-off), hand it to `loop-optimizer` for
+grading; its verdict becomes the tick's improvement candidate like any other
+finding, drafted as a PR-gated fix through the normal Per-Tick Shape.
 
 ## Toolkit (absorb, don't reimplement)
 

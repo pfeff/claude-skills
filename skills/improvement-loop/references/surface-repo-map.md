@@ -10,8 +10,9 @@ validated by real use.
 |---------|------|---------|
 | `mbp` plugin skills & their commands (`lessons-learned`, `self-improvement`, `skillify`, `goal-tree`, `task-workflow`, `git`, …) | `pfeff/claude-skills` | `skills/<name>/`, `.claude-plugin/marketplace.json` |
 | `improvement-loop` skill itself | `pfeff/claude-skills` | `skills/improvement-loop/` |
+| `l1-supervisor`, `l2-supervisor` (mbp role-contract skills) | `pfeff/claude-skills` | `skills/l1-supervisor/`, `skills/l2-supervisor/` |
 | `tc` plugin skills (`aws`, `octopus`, `atlassian`, corporate workflows) | `Tcetra/claude-skills` | `skills/<name>/` |
-| Personal skills (`chief-of-staff`, `l1-*`, `l2-*`, `durable-driver`, `loop-optimizer`, `obsidian-notes`) | `dotfiles` | `claude/skills/<name>/` |
+| Personal skills & launchers (`chief-of-staff`, `l1-supervise`/`l2-supervise` launchers, `durable-driver`, `loop-optimizer`, `obsidian-notes`) | `dotfiles` | `claude/skills/<name>/` |
 | Slash commands (workspace commands, etc.) | `dotfiles` | `claude/commands/*.md` |
 | **Global** CLAUDE.md | `dotfiles` | `claude/CLAUDE.md` |
 | **Per-repo** CLAUDE.md | that repo | `<repo>/CLAUDE.md` |
