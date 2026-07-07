@@ -1,6 +1,6 @@
 ---
 name: dispatch-gate
-description: Dispatch-readiness gate for background jobs. Before the operator launches a background agent (worktree job, subagent, or cross-repo dispatch), this skill checks the four slice-complete criteria — objective, acceptance test, scope/blast-radius bound, affected surface — runs a short clarifying dialogue on any gap, and writes the .claude/task-context.md the job will run against. Invoke when the operator asks to dispatch background work, or via /dispatch-gate.
+description: Dispatch-readiness gate for background jobs. Before the operator launches a background agent (worktree job, subagent, or cross-repo dispatch), this skill checks the privacy gate (public destination + sensitive context?), verifies the four slice-complete criteria — objective, acceptance test, scope/blast-radius bound, affected surface — runs a short clarifying dialogue on any gap, and writes the .claude/task-context.md the job will run against. Invoke when the operator asks to dispatch background work, or via /dispatch-gate.
 allowed-tools:
   - Bash
   - Read
@@ -35,6 +35,27 @@ file.
   `git -C <path> rev-parse --git-dir` or `test -d <path>`).
 
 ## Procedure
+
+### Step 0 — Privacy gate
+
+Before checking task readiness, verify that this dispatch does not
+silently leak sensitive context to public channels. This is a policy gate,
+independent of task readiness — it must pass before proceeding to Step 1.
+
+**Trigger**: Does the job target a public destination AND include access
+to sensitive context?
+
+- If no (private destination, or no sensitive data): proceed to Step 1.
+- If yes (public destination AND sensitive data): **Stop and ask the
+  operator** for explicit approval before proceeding. Record the operator's
+  decision in the task-context file's Privacy Gate Annotation (see
+  `references/privacy-gate.md` format).
+- If operator declines: do not dispatch. No task-context file is written.
+
+**Details**: See `references/privacy-gate.md` — it defines public
+destinations (GitHub public repos, published docs, shared Slack), sensitive
+context (financial, health, private URLs, vault excerpts), the dispatcher's
+decision logic, and the annotation format.
 
 ### Step 1 — Check the four slice-complete criteria
 
@@ -138,6 +159,9 @@ gate remains on merge, not on commit — branch commits are cheap.
 - `../self-verify/references/task-context.md` — the four-field format
   and fill heuristics this skill fills in; single home, not duplicated
   here.
+- `references/privacy-gate.md` — privacy-gate procedure (Step 0), definition
+  of public destinations and sensitive context, and Privacy Gate Annotation
+  format.
 - `references/example-transcript.md` — illustrative ready and refuse
   dialogue transcripts.
 - `references/sample-runs.md` — real recorded dispatch-gate cycles
