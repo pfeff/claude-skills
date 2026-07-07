@@ -1,9 +1,12 @@
 # Sample Runs
 
 Recorded babysat dispatch-gate cycles — real dates, real project
-identifiers, real outcomes. `example-transcript.md` is illustrative
-onboarding material; this file is the log of actual runs the gate has
-been through, per spec decision 8.
+identifiers, real outcomes — plus doctrine refinements fed back into
+the gate's contract from servicing the resulting work.
+`example-transcript.md` is illustrative onboarding material; this file
+is the log of actual runs the gate has been through, fulfilling the
+standing requirement that real sample runs (at least one clean pass
+and one genuine catch) be recorded as they occur.
 
 Each entry frames: intent → gate evaluation (which fields resolved or
 failed) → outcome → what it demonstrates about the criteria.
@@ -12,19 +15,20 @@ failed) → outcome → what it demonstrates about the criteria.
 
 ## 2026-07-03 — Refuse → premise-correction cycle
 
-**Intent**: Dispatch D/HYSA financial-lever work — a background job to
-act on a debt-vs-high-yield-savings tradeoff.
+**Intent**: Dispatch a background job whose objective rested on an
+assumption about operator-held context — context not derivable from
+any repo the job would touch.
 
 **Gate evaluation**: Objective and affected surface looked stated, but
-during the clarifying pass on scope the operator surfaced that the
-job's premise was invalid — the liquid cash the lever assumed was
-available was already earmarked for a home purchase. The HYSA premise
-didn't hold once that was on the table.
+during the clarifying pass the operator surfaced that the job's
+underlying premise was invalid — the operator-held context the
+objective assumed did not hold, which invalidated the objective
+itself, not just a field.
 
 **Outcome**: Dispatch cancelled before any work launched. No
-`.claude/task-context.md` was written. The corrected premise (cash is
-earmarked, not free capital) was recorded durably outside the gate
-(operator memory), so the same wrong-premise dispatch doesn't recur.
+`.claude/task-context.md` was written. The corrected premise was
+recorded durably outside the gate (operator memory), so the same
+wrong-premise dispatch doesn't recur.
 
 **What it demonstrates**: This is the gate working as designed, not a
 failure to dispatch. The clarifying dialogue's job is to surface
