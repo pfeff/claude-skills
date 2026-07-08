@@ -387,10 +387,15 @@ the marker:
 
 ```bash
 # (1) PR review — the canonical machine-read surface (reviews API).
+#     APPEND-ONLY: a submitted review object cannot be edited in place the
+#     way an issue comment can, and consumers read it most-recent-wins (see
+#     "How the next layer reads the artifact"), so re-running a review adds a
+#     new review object each time. This is intentional and unchanged.
 gh pr review <PR> --comment --body-file <post-body>
-# (2) Issue-comment mirror — identical body, so a comments-based or
-#     rendered-PR-view check also surfaces the marker.
-gh pr comment <PR> --body-file <post-body>
+# (2) Issue-comment mirror — UPDATE-IN-PLACE, keyed on this review type's
+#     marker token. Exactly one issue comment per marker type per PR: if a
+#     comment already carries "$marker", PATCH it; else create one. See
+#     "Find-or-update by marker" below.
 ```
 
 **Never `--request-changes`.** GitHub blocks REQUEST_CHANGES on a
@@ -409,6 +414,61 @@ a second source of truth; both surfaces carry the identical marker.
 (Root cause, 2026-06-04 / PR #194: an l1-review marker was posted only as
 a review; an operator check scanning issue comments / plain `gh pr view`
 read the PR as un-reviewed. Mirroring closes that gap.)
+
+### Find-or-update by marker (issue-comment surface — one comment per type)
+
+**Rule.** The issue-comment surface holds **exactly one comment per
+marker type per PR.** On every post, *find* the existing issue comment
+carrying this review type's marker token and *update it in place*; only
+*create* a new comment when none exists. Re-running a review (after a fix
+commit, or a ladder re-post) therefore **edits** the existing comment
+instead of appending a new one. This is the fix for the accumulation
+defect (guardian#296: multiple same-type review comments piled up on
+re-post).
+
+**Marker token — defined in exactly one place per executor.** The dedup
+key is *the marker token for this review type*, and each executor defines
+that token **once** (the same string it composes into the trailing
+metadata block). Keying find-or-update on that single definition — never
+a token hardcoded a second time in the posting step — keeps this rule
+robust to a future rename of the marker tokens (e.g. a Change/Acceptance/
+Objective relayering): rename the one definition and the update-in-place
+logic still finds its own comment. The tokens today are:
+
+| Layer | Marker token (the `$marker` below) |
+|-------|-------------------------------------|
+| L0 (`/review`) | `<!-- review:metadata` |
+| L1 (`l1-review`) | `<!-- l1-review:metadata` |
+| L2 (`l2-review`) | `<!-- l2-review:metadata` |
+
+(The literal `<!-- review:metadata` is **not** a substring of
+`<!-- l1-review:metadata`, and the `l[0-9]+` markers are mutually
+distinct, so a `contains($marker)` match never crosses layers.)
+
+**Canonical procedure** — the one implementation every executor's
+issue-comment post follows (`$owner_repo`, `$pr_number`, `$post_body`
+already set; `$marker` is the executor's single token definition):
+
+```bash
+# Find the newest existing issue comment carrying THIS type's marker.
+existing_id="$(gh api "/repos/$owner_repo/issues/$pr_number/comments" \
+  --jq "map(select(.body | contains(\"$marker\"))) | sort_by(.created_at) | last | .id // empty")"
+if [ -n "$existing_id" ]; then
+  # Update in place — one comment per marker type, idempotent on re-post.
+  gh api --method PATCH "/repos/$owner_repo/issues/comments/$existing_id" \
+    -F body=@"$post_body"
+else
+  gh pr comment "$pr_number" --repo "$owner_repo" --body-file "$post_body"
+fi
+```
+
+**Scope — issue-comment surface only.** This update-in-place rule governs
+surface (2) *exclusively*. The PR **review-object** surface (1) is
+**left as-is (append-only)**: a submitted review cannot be edited/deduped
+the same way, and its canonical read is most-recent-wins, so a fresh
+review object per run is correct and its behavior is **not** changed by
+this rule. Do not silently apply find-or-update to the review-object
+surface.
 
 ### Post-body composition
 
