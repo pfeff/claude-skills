@@ -63,7 +63,7 @@ TOOL_NAMES = [
     "Task", "Agent", "Skill", "NotebookEdit",
     "WebFetch", "WebSearch", "TodoWrite",
 ]
-MCP_PATTERN = r"mcp__[A-Za-z0-9_]+"
+MCP_PATTERN = r"mcp__[A-Za-z0-9_-]+"  # server/tool segments may contain hyphens
 TOOL_ALT = "(?:" + "|".join(TOOL_NAMES) + "|" + MCP_PATTERN + ")"
 
 CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")

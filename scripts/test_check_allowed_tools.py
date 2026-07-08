@@ -74,6 +74,55 @@ class TestWildcardNeverFails(unittest.TestCase):
         self.assertEqual(violations, [])
 
 
+class TestHyphenatedMcpTool(unittest.TestCase):
+    """Regression: hyphenated mcp__ tool names (e.g. mcp__agent-coordinator__ac_report)
+    must not be truncated at the first hyphen — truncation would flag a fully-compliant
+    skill as a violation, breaking R4 (no false positives)."""
+
+    def test_declared_and_mandated_passes(self):
+        violations = run_on_fixture("mcp-hyphen-declared")
+        self.assertEqual(violations, [], f"unexpected FP: {violations}")
+
+    def test_full_name_matched_in_must_line(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            "This step MUST invoke the mcp__agent-coordinator__ac_report tool.\n"
+        )
+        tools = {r[1] for r in refs}
+        self.assertIn("mcp__agent-coordinator__ac_report", tools)
+        self.assertNotIn("mcp__agent", tools)
+
+    def test_full_name_matched_in_call_form(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            "mcp__agent-coordinator__ac_report(status=done)\n"
+        )
+        tools = {r[1] for r in refs}
+        self.assertIn("mcp__agent-coordinator__ac_report", tools)
+
+    def test_undeclared_hyphenated_mcp_flagged_with_full_name(self):
+        fm = ["allowed-tools:", "  - Bash", "  - Read"]
+        tools, wildcard = check_allowed_tools.parse_allowed_tools(fm)
+        self.assertFalse(wildcard)
+        refs = check_allowed_tools.find_mandatory_refs(
+            "Step MUST call the mcp__agent-coordinator__ac_report tool.\n"
+        )
+        undeclared = [r[1] for r in refs if r[1] not in tools]
+        self.assertIn("mcp__agent-coordinator__ac_report", undeclared)
+
+
+class TestPluralToolsIsNotFlagged(unittest.TestCase):
+    """R4 guard: "Task tools: `TaskList`, `TaskGet`, ..." uses "Task" as a
+    category label for the task-list tool family, NOT the Task dispatch tool.
+    A plural "<Word> tools" phrase must NOT match — matching it produced a real
+    false positive against task-workflow's corpus, so the phrase form is
+    deliberately singular-"tool"-only."""
+
+    def test_plural_tools_category_label_not_matched(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            "- **Task tools**: `TaskList`, `TaskGet`, `TaskUpdate`\n"
+        )
+        self.assertEqual(refs, [])
+
+
 class TestPR223Reproduction(unittest.TestCase):
     """End-to-end repro of pfeff/dotfiles PR #223: l1-review's operations/run.md
     mandated the Agent/Task tool via "Spawn a sub-agent (Task/Agent tool)"

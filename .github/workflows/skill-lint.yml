@@ -19,16 +19,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine changed skill files
-        id: changed
-        run: |
-          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- 'skills/**/SKILL.md' 'skills/**/operations/*.md')
-          {
-            echo "files<<SKILL_LINT_EOF"
-            echo "$files"
-            echo "SKILL_LINT_EOF"
-          } >> "$GITHUB_OUTPUT"
+      - name: Unit tests for the validator
+        run: python3 -m unittest discover -s scripts -p 'test_check_allowed_tools.py'
 
+      # Compute the changed-file list and run the check in a SINGLE step. The
+      # list is a shell variable piped to xargs — never a multi-line step output
+      # interpolated into `run:` (that injects raw newlines and breaks the
+      # script on multi-file PRs). base_ref is passed via env, not `${{ }}` in
+      # the script body, for the same injection-safety reason.
       - name: Check skill allowed-tools on changed files
-        if: steps.changed.outputs.files != ''
-        run: python3 scripts/check-allowed-tools.py ${{ steps.changed.outputs.files }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          files=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- 'skills/**/SKILL.md' 'skills/**/operations/*.md')
+          if [ -z "$files" ]; then
+            echo "No changed skill files; nothing to check."
+            exit 0
+          fi
+          echo "$files" | xargs python3 scripts/check-allowed-tools.py
