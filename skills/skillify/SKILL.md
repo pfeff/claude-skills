@@ -83,11 +83,10 @@ resolve as a slash command in this repo. It must also be added to the
 `.claude-plugin/marketplace.json`, with `metadata.version` there and
 `version` in `.claude-plugin/plugin.json` both bumped (minor bump for a new
 skill, matching the pattern used when `kb-capture`/`kb-compile`/`kb-lint`
-were added). Skipping this step is a real failure mode in this repo: several
-existing skill directories (`dispatch-gate`, `self-verify`, `l1-supervisor`,
-`l2-supervisor`, `operator-interview`, `operator-interview-doctrine`) exist
-on disk today without an entry in that array, so they do not resolve as
-slash commands despite looking complete.
+were added). Skipping this step is a real failure mode in this repo:
+PR #133 had to retroactively register six skill directories that had sat
+on disk for a while with no entry in that array, so none of them resolved
+as slash commands despite looking complete.
 
 ## What this is NOT
 
