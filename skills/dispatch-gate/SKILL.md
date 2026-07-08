@@ -158,11 +158,10 @@ worktree, leaving no cross-operator evidence on the PR.
 ### Step 6 — Frozen manifest (post-dispatch)
 
 Once `.claude/task-context.md` is written and the job is dispatched, its
-four fields are **frozen**. The worker does not re-litigate them by
-silently reinterpreting scope, expanding the affected surface, or
-second-guessing the acceptance test mid-run — the clarifying pass (Step 2)
-and the override annotation (Step 3) are the only channels for changing
-what the job runs against, and both happen **before** dispatch.
+four fields are **frozen** — the worker does not unilaterally change
+scope, affected surface, or acceptance test mid-run. The clarifying pass
+(Step 2) and the override annotation (Step 3) are the only channels for
+changing what the job runs against, and both happen **before** dispatch.
 
 If a worker discovers, mid-run, that a frozen field no longer matches
 reality — the acceptance test doesn't fit what it's actually finding, the

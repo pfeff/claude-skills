@@ -349,23 +349,20 @@ mutating actor cannot see.
 
 When a child's observed reality disagrees with its task-context/manifest
 (the objective, acceptance test, scope, or affected surface it was
-dispatched against), the child **stops and reports** — it does not
-improvise a workaround or silently reinterpret its mandate. This mirrors
-the frozen-manifest rule in `dispatch-gate` (see that skill's Step 6): the
-four fields are set by the dispatcher at dispatch time, not renegotiated
-unilaterally by the child mid-run.
+dispatched against), the child **stops and reports** rather than
+improvising a workaround or silently reinterpreting its mandate — the
+same rule as `dispatch-gate`'s frozen-manifest Step 6, generalized to any
+child/manifest relationship, not just dispatch-gate's own four fields.
 
-**UNKNOWN means stop and ask.** If a child cannot determine which of two
-states holds — e.g. whether a push actually landed, whether a dependency
-is truly satisfied — it treats the ambiguity as a stop condition, not a
-coin flip. The existing push-state-unknown case in **Complete check**
-condition 2 (`@{u}` lookup fails → treat as NOT complete) is one concrete
-instance of this general rule; new UNKNOWN cases follow the same
-default-to-stop pattern rather than being resolved ad hoc per case.
+**UNKNOWN means stop and ask**, per the same default already established
+by the push-state-unknown case in **Complete check** condition 2 (`@{u}`
+lookup fails → treat as NOT complete): ambiguity is a stop condition, not
+a coin flip.
 
-The child surfaces the mismatch to its supervisor over the same
-escalation channel as `frozen` / `abandoned` / `teardown-blocked` above,
-rather than proceeding on an assumption the supervisor never approved.
+The child surfaces the mismatch to its supervisor via the standard
+inter-actor content channel (*Inter-actor delivery — inbox-on-nudge
+(S.25)* below — `ac_message_send` to the supervisor's agent-id), not by
+proceeding on an assumption the supervisor never approved.
 
 ---
 
