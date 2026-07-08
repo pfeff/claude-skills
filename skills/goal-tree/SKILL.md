@@ -102,6 +102,17 @@ Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive d
 - During execution, propose and act — checkpoints belong at phase boundaries (spec confirmation, tree approval, dispatch rounds), not after every thought. State assumptions and proceed; the user will redirect if needed.
 - Auto-continue the OODA loop. When ready nodes are exhausted in an open-ended project, immediately run `operations/next-cycle.md`. Do not stop and ask "what next?"
 
+### Risk Ordering
+
+When more than one ready node could be dispatched next and the order
+between them is a free choice, prefer the reversible/low-blast-radius
+node first. Hold irreversible or high-blast-radius steps (destructive
+infra changes, state migrations, anything that can't be cleanly rolled
+back via `git`) until reversible work in the same batch has landed and
+been reviewed. This does not override "ready work dispatches immediately,
+in parallel" above — it only breaks ties on *which* ready node goes first
+when order is discretionary, not a reason to hold back dispatch.
+
 ## Layer Model
 
 The goal tree encodes layer ownership via structure. See `references/layer-model.md` for the full reference.

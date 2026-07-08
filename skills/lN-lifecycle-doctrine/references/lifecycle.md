@@ -345,6 +345,30 @@ mutating actor cannot see.
 
 ---
 
+## Escalation invariant — reality vs. manifest
+
+When a child's observed reality disagrees with its task-context/manifest
+(the objective, acceptance test, scope, or affected surface it was
+dispatched against), the child **stops and reports** — it does not
+improvise a workaround or silently reinterpret its mandate. This mirrors
+the frozen-manifest rule in `dispatch-gate` (see that skill's Step 6): the
+four fields are set by the dispatcher at dispatch time, not renegotiated
+unilaterally by the child mid-run.
+
+**UNKNOWN means stop and ask.** If a child cannot determine which of two
+states holds — e.g. whether a push actually landed, whether a dependency
+is truly satisfied — it treats the ambiguity as a stop condition, not a
+coin flip. The existing push-state-unknown case in **Complete check**
+condition 2 (`@{u}` lookup fails → treat as NOT complete) is one concrete
+instance of this general rule; new UNKNOWN cases follow the same
+default-to-stop pattern rather than being resolved ad hoc per case.
+
+The child surfaces the mismatch to its supervisor over the same
+escalation channel as `frozen` / `abandoned` / `teardown-blocked` above,
+rather than proceeding on an assumption the supervisor never approved.
+
+---
+
 ## Idle-fleet signal
 
 When the child has **no remaining work** — all leaf PRs merged, all
