@@ -450,9 +450,17 @@ issue-comment post follows (`$owner_repo`, `$pr_number`, `$post_body`
 already set; `$marker` is the executor's single token definition):
 
 ```bash
-# Find the newest existing issue comment carrying THIS type's marker.
-existing_id="$(gh api "/repos/$owner_repo/issues/$pr_number/comments" \
-  --jq "map(select(.body | contains(\"$marker\"))) | sort_by(.created_at) | last | .id // empty")"
+# Newest issue comment whose body carries THIS type's marker at line start.
+#   --paginate + per_page=100: a PR that accumulated many comments (the exact
+#     case this fixes) can hold the existing marker past page 1 — without
+#     pagination it is missed and a duplicate is created anyway.
+#   line-anchored test("(^|\n)$marker"): the metadata block always begins a
+#     line, so an *inline* prose mention of the token (see the "Marker-quoting
+#     caveat" in the executors) can't false-match and get destructively
+#     overwritten by the PATCH below.
+#   tail -1: newest-wins across all pages (comments list ascending by age).
+existing_id="$(gh api --paginate "/repos/$owner_repo/issues/$pr_number/comments?per_page=100" \
+  --jq ".[] | select(.body | test(\"(^|\\n)$marker\")) | .id" | tail -1)"
 if [ -n "$existing_id" ]; then
   # Update in place — one comment per marker type, idempotent on re-post.
   gh api --method PATCH "/repos/$owner_repo/issues/comments/$existing_id" \
