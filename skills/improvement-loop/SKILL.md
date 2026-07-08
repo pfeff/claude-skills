@@ -53,12 +53,14 @@ Read all five on every tick, filtered for material new since the last tick:
 
 ## Lesson-Origin Taxonomy
 
-Complementary to `lessons-learned`'s categories (which classify by fix
-target: Workflow / Commands / Skills / Documentation), classify each
-candidate lesson by where it came from as you scan the experience sources
-above:
+Complementary to `lessons-learned`'s Category field (see its SKILL.md for
+the current list, which classifies by fix target — where the resulting
+change lands), classify each candidate lesson by where it came from as you
+scan the experience sources above:
 
 - **Operator corrections** — denials, redirections, explicit feedback.
+  Overlaps by design with Experience Source 4 above (that source names
+  *where* to look; this origin type is the classification tag once found).
 - **Repeated friction** — retries, permission stalls, manual workarounds
   recurring across sessions.
 - **Solved novel problems** — a non-obvious fix worth generalizing.
@@ -67,7 +69,8 @@ above:
 
 Origin explains *why* a lesson surfaced; fix-target explains *where* the
 resulting change lands. Apply both lenses to whatever material an
-invocation scans — this is not a separate per-cycle classification pass.
+invocation scans — this is not a separate classification pass, just a
+lens on the same scan.
 
 ## Scope Surfaces
 
