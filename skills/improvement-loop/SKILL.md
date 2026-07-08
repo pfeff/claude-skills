@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-version: 1.0.0
+version: 1.1.0
 ---
 
 # improvement-loop — continuous self-improvement role
@@ -32,7 +32,7 @@ meta work; you never do mission work.
 
 ## Experience Sources
 
-Read all four on every tick, filtered for material new since the last tick:
+Read all five on every tick, filtered for material new since the last tick:
 
 1. **Session transcripts** — pane 1's working-session JSONL under
    `~/.claude/projects/`. Filter for friction: retries, permission denials,
@@ -44,6 +44,33 @@ Read all four on every tick, filtered for material new since the last tick:
    dedicated capture mechanism is a later increment; for v0, read what
    already exists (transcripts, memory files) rather than building a new
    capture path.
+5. **Improvement backlog** — the shared task list
+   (`CLAUDE_CODE_TASK_LIST_ID=improvement-backlog`). A standing input
+   alongside 1–4, not a one-time seed: check it every tick, dedupe against
+   work already done or in flight, and treat entries as candidate material
+   for the same highest-value distillation step below — not an
+   automatic priority queue.
+
+## Lesson-Origin Taxonomy
+
+Complementary to `lessons-learned`'s Category field (see its SKILL.md for
+the current list, which classifies by fix target — where the resulting
+change lands), classify each candidate lesson by where it came from as you
+scan the experience sources above:
+
+- **Operator corrections** — denials, redirections, explicit feedback.
+  Overlaps by design with Experience Source 4 above (that source names
+  *where* to look; this origin type is the classification tag once found).
+- **Repeated friction** — retries, permission stalls, manual workarounds
+  recurring across sessions.
+- **Solved novel problems** — a non-obvious fix worth generalizing.
+- **Automation gaps** — a step that should have been caught or handled
+  automatically but wasn't.
+
+Origin explains *why* a lesson surfaced; fix-target explains *where* the
+resulting change lands. Apply both lenses to whatever material an
+invocation scans — this is not a separate classification pass, just a
+lens on the same scan.
 
 ## Scope Surfaces
 
@@ -90,6 +117,28 @@ judgment calls. If you find yourself drafting a skill body or reasoning
 through a doctrine tradeoff directly in this session, stop — dispatch a
 subagent instead.
 
+## Token Efficiency
+
+Cost-to-completion is itself an improvement dimension, not just a property of
+individual changes. This is a lightweight noticing heuristic for this loop's
+own ticks — the actual grading of recurring loops belongs to `loop-optimizer`
+(see Toolkit below); dispatch it rather than reimplementing its analysis here.
+While scanning experience sources, flag signals like:
+
+- **Model right-sizing misses** — a dispatched subagent running a bigger
+  model than the task warrants (or a genuinely hard task under-powered on a
+  small model).
+- **Prompt/context bloat** — skills or commands that load more context than
+  a tick actually needs.
+- **Empty-invocation waste** — ticks, hooks, or dispatches that fire and do
+  nothing useful.
+- **Per-subagent token spend outliers** — a dispatch that burns
+  disproportionate tokens relative to the value of its output.
+
+When a pattern recurs (not a one-off), hand it to `loop-optimizer` for
+grading; its verdict becomes the tick's improvement candidate like any other
+finding, drafted as a PR-gated fix through the normal Per-Tick Shape.
+
 ## Toolkit (absorb, don't reimplement)
 
 Invoke these existing meta-skills as the loop's toolkit rather than
@@ -104,7 +153,7 @@ consolidation itself lands as a PR — do not inline their logic here now.
 
 ## Per-Tick Shape (v0)
 
-1. Scan the four experience sources for material new since the last tick.
+1. Scan the five experience sources for material new since the last tick.
 2. If nothing new: log a quiet tick and end the turn (the `/loop` self-pacing
    lengthens on its own).
 3. If material exists: distill the single highest-value improvement
@@ -129,6 +178,13 @@ consolidation itself lands as a PR — do not inline their logic here now.
   reason to retry harder.** If the operator keeps rejecting proposals, the
   next tick's job is to recalibrate what counts as "highest-value," not to
   resubmit faster.
+- **Load-bearing surfaces get flagged, never auto-merged.** Before opening a
+  PR, check the target against `references/surface-repo-map.md`'s
+  load-bearing list (billing invariant, L{N} supervision doctrine, `ct`
+  tick-delivery mechanics, or anything else the operator has designated). If
+  it's load-bearing, mark the PR as such in its title or body — it always
+  waits for explicit operator discussion, no matter how routine the diff
+  looks.
 
 ## See Also
 
@@ -140,3 +196,5 @@ consolidation itself lands as a PR — do not inline their logic here now.
 - `lN-lifecycle-doctrine` — the general child-session lifecycle model;
   relevant if a dispatched improvement subagent needs supervising across
   more than one tick.
+- `references/surface-repo-map.md` — routes each improvable surface to its
+  target repo/path, and defines the load-bearing check referenced above.

@@ -2,6 +2,13 @@
 
 All notable changes to the **self-improvement** skill will be documented in this file.
 
+## [1.2.1] - 2026-07-07
+
+### Added
+- Cross-reference to the `improvement-loop` skill in See Also, documenting that it invokes this skill's apply machinery and drafts each improvement as a PR-gated change per `surface-repo-map.md`.
+
+**Reasoning**: `improvement-loop` (the dual-pane meta role) is the primary caller of this skill's apply-improvement flow; the pointer records that integration.
+
 ## [1.1.0] - 2026-02-15
 
 ### Added
