@@ -14,6 +14,7 @@ FIXTURES = SCRIPTS_DIR / "fixtures" / "allowed-tools-lint"
 spec = importlib.util.spec_from_file_location(
     "check_allowed_tools", SCRIPTS_DIR / "check-allowed-tools.py"
 )
+assert spec and spec.loader, "could not load check-allowed-tools.py"
 check_allowed_tools = importlib.util.module_from_spec(spec)
 sys.modules["check_allowed_tools"] = check_allowed_tools
 spec.loader.exec_module(check_allowed_tools)
@@ -119,11 +120,11 @@ class TestParseAllowedTools(unittest.TestCase):
 
     def test_missing_key_is_wildcard(self):
         fm = ["name: foo", "description: bar"]
-        tools, wildcard = check_allowed_tools.parse_allowed_tools(fm)
+        _, wildcard = check_allowed_tools.parse_allowed_tools(fm)
         self.assertTrue(wildcard)
 
     def test_no_frontmatter_is_wildcard(self):
-        tools, wildcard = check_allowed_tools.parse_allowed_tools(None)
+        _, wildcard = check_allowed_tools.parse_allowed_tools(None)
         self.assertTrue(wildcard)
 
 
