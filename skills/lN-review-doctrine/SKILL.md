@@ -3,7 +3,7 @@ name: lN-review-doctrine
 description: Shared doctrine reference for L{N}-review skills (l1-review, l2-review). Holds the 3-axis checklist (Conformance, Process, Objective Advancement), the work-type → required-verification map consumed by axis 2, the finding/verdict schema, and the self-PR posting caveat. This skill has no operations — it is reference content read by `/l1-review` and `/l2-review` at review time. Never inline this doctrine into the l1-review or l2-review skills themselves — operator-confirmed rules must persist in one place.
 allowed-tools:
   - Read
-version: 1.2.0
+version: 1.2.1
 ---
 
 # lN-review-doctrine — shared L{N}-review doctrine
