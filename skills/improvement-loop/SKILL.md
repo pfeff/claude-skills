@@ -51,6 +51,24 @@ Read all five on every tick, filtered for material new since the last tick:
    for the same highest-value distillation step below — not an
    automatic priority queue.
 
+## Lesson-Origin Taxonomy
+
+Complementary to `lessons-learned`'s categories (which classify by fix
+target: Workflow / Commands / Skills / Documentation), classify each
+candidate lesson by where it came from as you scan the experience sources
+above:
+
+- **Operator corrections** — denials, redirections, explicit feedback.
+- **Repeated friction** — retries, permission stalls, manual workarounds
+  recurring across sessions.
+- **Solved novel problems** — a non-obvious fix worth generalizing.
+- **Automation gaps** — a step that should have been caught or handled
+  automatically but wasn't.
+
+Origin explains *why* a lesson surfaced; fix-target explains *where* the
+resulting change lands. Apply both lenses to whatever material an
+invocation scans — this is not a separate per-cycle classification pass.
+
 ## Scope Surfaces
 
 All PR-gated. In scope:
