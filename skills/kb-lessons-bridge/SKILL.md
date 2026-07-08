@@ -36,12 +36,15 @@ session-derived insight.
 **Standalone / explicit invocation only.** This skill is never auto-wired to the end of
 `kb-compile` or CoS Knowledge Intake — it runs only when explicitly invoked (natural-language
 request or a future `/kb-lessons-bridge` command). Chaining it automatically would remove the
-confirm-before-write gate's meaning (see Steps 4) and is out of scope for this skill.
+confirm-before-write gate's meaning (see Step 4) and is out of scope for this skill.
 
 ## Schema this must match (verified against source, not assumed)
 
-Read directly from `self-improvement/operations/scan-recommendations.md` (Step 2 extraction
-regex) and `lessons-learned/operations/single-session-analysis.md` (body template):
+Read directly from
+`${CLAUDE_PLUGIN_ROOT}/skills/self-improvement/operations/scan-recommendations.md` (Step 2
+extraction regex) and
+`${CLAUDE_PLUGIN_ROOT}/skills/lessons-learned/operations/single-session-analysis.md` (body
+template):
 
 - **Discovery glob**: `ls -1t "$OBSIDIAN_VAULT_PATH"/Generated/*Lesson*.md` — the output
   filename **must contain the literal substring `Lesson`**.
@@ -54,13 +57,16 @@ regex) and `lessons-learned/operations/single-session-analysis.md` (body templat
   ```
   followed by a `**Target**:` line, free-text description, a `**Implementation**:` line, and a
   `---` separator before the next REC. Category must be one of `Workflow | Commands |
-  Utilities | Skills` to survive `self-improvement`'s Phase-3 category filter (Documentation /
+  Utilities | Skills` to survive `self-improvement`'s Step 3 category filter (Documentation /
   User Practices / External Tools get excluded there).
 - **Frontmatter** (per `lessons-learned`'s Phase 4): tags **must** include both
   `generated_note` and `lessons_learned`; `keywords:` as capitalized, space-separated
   wikilinks. Do not invent new tags — pull the vocabulary from the `obsidian-notes` skill.
-- **Filename**: `Generated/YYYYMMDDHHmm-Lessons Learned - {topic}.md` — same pattern
-  `lessons-learned` itself uses.
+- **Filename base pattern**: `lessons-learned` itself writes
+  `Generated/YYYYMMDDHHmm-Lessons Learned - {topic}.md`. This skill's own output (Step 5 below)
+  adds a `Reading Bridge -` segment ahead of `{topic}` so a bridge-generated note is
+  distinguishable from a session-derived one at a glance — the added segment doesn't change
+  the `*Lesson*.md` discovery glob match (both still contain the literal substring `Lesson`).
 - **REC numbering is per-note, not global** — `self-improvement` scans `#### REC-\d+:` within
   each lessons file independently, so a bridge-generated note numbering `REC-001, REC-002, ...`
   from 1 in its own file is safe even though other lessons-learned notes also start at
