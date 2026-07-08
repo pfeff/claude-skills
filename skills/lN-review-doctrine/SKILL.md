@@ -1,6 +1,6 @@
 ---
 name: lN-review-doctrine
-description: Shared doctrine reference for L{N}-review skills (l1-review, l2-review). Holds the 3-axis checklist (Conformance, Process, Objective Advancement), the work-type → required-verification map consumed by axis 2, the finding/verdict schema, and the self-PR posting caveat. This skill has no operations — it is reference content read by `/l1-review` and `/l2-review` at review time. Never inline this doctrine into the l1-review or l2-review skills themselves — operator-confirmed rules must persist in one place.
+description: Shared doctrine reference for L{N}-review skills (l1-review, l2-review). Holds the 3-axis checklist (Conformance, Process, Objective Advancement), the reviewer-independence and reviewer-worktree-discipline invariants, the work-type → required-verification map consumed by axis 2, the finding/verdict schema, and the self-PR posting caveat. This skill has no operations — it is reference content read by `/l1-review` and `/l2-review` at review time. Never inline this doctrine into the l1-review or l2-review skills themselves — operator-confirmed rules must persist in one place.
 allowed-tools:
   - Read
 version: 1.3.0
@@ -17,7 +17,7 @@ time and apply it at their layer.
 
 | File | Purpose |
 |------|---------|
-| `references/checklist.md` | Role, reviewer-independence invariant, the 3-axis checklist, finding schema, verdict rubric (incl. the single-vocabulary deprecation of APPROVE/REJECT/ESCALATE), artifact format, posting protocol, local-artifact rule. |
+| `references/checklist.md` | Role, reviewer-independence invariant, reviewer-worktree-discipline invariant, the 3-axis checklist, finding schema, verdict rubric (incl. the single-vocabulary deprecation of APPROVE/REJECT/ESCALATE), artifact format, posting protocol, local-artifact rule. |
 | `references/verification-map.md` | Work-type → required-verification map consumed by axis 2 (Process), plus the doctrine- and workflow-class sub-checklists. |
 
 ## Invariants
@@ -37,6 +37,12 @@ L{N}-review **runs in an independent context window** — a fresh
 verifier that sees only the work product plus L{N}'s parent
 objective, never the authoring trace. See checklist.md *Reviewer
 independence*.
+
+L{N}-review **operates read-only on the worktree** — never `stash`,
+`checkout`, `reset`, `restore`, `clean`, `rebase`, or switch
+branches in the review worktree, even temporarily. See checklist.md
+*Reviewer worktree discipline* for the non-mutating recipe for
+inspecting other revisions.
 
 ## When this doctrine is wrong
 

@@ -19,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.7.0
+version: 0.7.1
 ---
 
 # Review Skill
@@ -80,6 +80,12 @@ anchored regex that admits only that safe form.
 7. **Post sticky verdict comment** — when reviewing a PR, upsert a single review comment (edited in place on re-run, never appended) and, unless it is the reviewer's own PR, submit a formal `REQUEST_CHANGES`/`APPROVE` event
 
 **Implementation**: Load `operations/run-review.md` for full orchestration logic.
+
+**Worktree discipline**: this skill only ever reads the diff (`git diff`,
+`gh pr diff`) — it never checks out, stashes, resets, or otherwise mutates
+the worktree. Keep it that way; see `lN-review-doctrine`'s "Reviewer
+worktree discipline" for the non-mutating recipe if a review ever needs
+to inspect another revision.
 
 ## Limits
 
