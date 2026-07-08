@@ -1,0 +1,34 @@
+name: Skill Lint
+
+# Checks only the skill files a PR actually touches — not the whole tree.
+# The corpus carries known pre-existing allowed-tools gaps (see
+# scripts/check-allowed-tools.py docstring / repo history); scoping to the
+# diff catches new instances of the defect without blocking unrelated PRs
+# on unrelated pre-existing debt.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'skills/**'
+
+jobs:
+  allowed-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed skill files
+        id: changed
+        run: |
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- 'skills/**/SKILL.md' 'skills/**/operations/*.md')
+          {
+            echo "files<<SKILL_LINT_EOF"
+            echo "$files"
+            echo "SKILL_LINT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check skill allowed-tools on changed files
+        if: steps.changed.outputs.files != ''
+        run: python3 scripts/check-allowed-tools.py ${{ steps.changed.outputs.files }}
