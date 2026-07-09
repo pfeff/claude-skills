@@ -155,6 +155,34 @@ exists in the job's local `.claude/reviews/latest.md` cache does not
 satisfy this — that cache is gitignored and is deleted with the
 worktree, leaving no cross-operator evidence on the PR.
 
+### Step 6 — Frozen manifest (post-dispatch)
+
+Once `.claude/task-context.md` is written and the job is dispatched, its
+four fields are **frozen** — the worker does not unilaterally change
+scope, affected surface, or acceptance test mid-run. The clarifying pass
+(Step 2) and the override annotation (Step 3) are the only channels for
+changing what the job runs against, and both happen **before** dispatch.
+
+If a worker discovers, mid-run, that a frozen field no longer matches
+reality — the acceptance test doesn't fit what it's actually finding, the
+affected surface omits a file the job needs to touch, or the scope bound
+doesn't cover the real blast radius — the worker stops and returns to the
+dispatcher rather than proceeding on its own judgment. The dispatcher then
+re-runs Steps 1-3 against the new information and, if a field needs to
+change, writes an updated task-context file — a new dispatch decision, not
+a live edit the worker makes to its own manifest.
+
+**How the worker signals the stop**: a dispatch-gate job has no
+agent-id — it is babysat, not AC-registered (see "When to invoke" above)
+— so it cannot page a supervisor via `ac_message_send`. Instead the
+worker halts and states the mismatch in its own output with an explicit
+`STOP —` prefix naming the frozen field and what was found instead, so
+it's visible in the pane the operator is babysitting. If the job already
+has an open PR, also post the same note as a PR comment (`gh pr comment
+<PR> --body "STOP — <field>: <what disagrees>"`) so the mismatch has a
+durable record even if the operator isn't watching the pane at that
+moment.
+
 ## What this skill does NOT do
 
 - Does not launch agents or start the background job.

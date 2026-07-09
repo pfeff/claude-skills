@@ -345,6 +345,41 @@ mutating actor cannot see.
 
 ---
 
+## Escalation invariant — reality vs. manifest
+
+When a child's observed reality disagrees with its task-context/manifest
+(the objective, acceptance test, scope, or affected surface it was
+dispatched against), the child **stops and reports** rather than
+improvising a workaround or silently reinterpreting its mandate — the
+same rule as `dispatch-gate`'s frozen-manifest Step 6, generalized to any
+child/manifest relationship, not just dispatch-gate's own four fields.
+
+**UNKNOWN means stop and ask**, per the same default already established
+by the push-state-unknown case in **Complete check** condition 2 (`@{u}`
+lookup fails → treat as NOT complete): ambiguity is a stop condition, not
+a coin flip.
+
+**Reporting channel depends on actor type.** This doctrine's native scope
+is AC-registered L{N} fleet members, but the frozen-manifest rule itself
+(dispatch-gate Step 6) applies more broadly — not every child that
+follows it has an agent-id:
+
+- **AC-registered actor** (an L0/L1/L2 fleet member with a stable
+  agent-id): surfaces the mismatch via the standard inter-actor content
+  channel (*Inter-actor delivery — inbox-on-nudge (S.25)* below —
+  `ac_message_send` to the supervisor's agent-id).
+- **Non-AC background job** (e.g. a `dispatch-gate`-launched worktree/
+  subagent/cross-repo job — babysat per that skill's "When to invoke,"
+  with no agent-id to address): stops and leaves a clear note through
+  whatever channel its dispatcher actually watches, rather than reaching
+  for a nonexistent agent-id. See `dispatch-gate/SKILL.md` Step 6 for the
+  concrete mechanism.
+
+Either way, the child does not proceed on an assumption the
+dispatcher/supervisor never approved.
+
+---
+
 ## Idle-fleet signal
 
 When the child has **no remaining work** — all leaf PRs merged, all

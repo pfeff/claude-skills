@@ -101,6 +101,7 @@ Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive d
 - Dispatch ready nodes immediately. Conversation about node B does NOT block dispatching node A if A's spec is clear and dependencies are met.
 - During execution, propose and act — checkpoints belong at phase boundaries (spec confirmation, tree approval, dispatch rounds), not after every thought. State assumptions and proceed; the user will redirect if needed.
 - Auto-continue the OODA loop. When ready nodes are exhausted in an open-ended project, immediately run `operations/next-cycle.md`. Do not stop and ask "what next?"
+- **Risk ordering is a tie-break, not a gate.** When several ready nodes could dispatch in the same round and their relative order is a free choice, list/dispatch the reversible or low-blast-radius ones ahead of irreversible or high-blast-radius ones (destructive infra changes, state migrations, anything that can't be cleanly rolled back via `git`). This only orders nodes within the round — every ready node still dispatches immediately per the rule above; it is never a reason to hold one back pending another's review.
 
 ## Layer Model
 
