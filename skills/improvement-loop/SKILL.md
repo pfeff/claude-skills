@@ -158,9 +158,26 @@ consolidation itself lands as a PR — do not inline their logic here now.
    lengthens on its own).
 3. If material exists: distill the single highest-value improvement
    candidate. One improvement in flight per tick — no side quests.
-4. Dispatch a right-sized subagent to draft the change in an ephemeral
-   worktree.
-5. Land it as a PR against the relevant source repo.
+4. Resolve `dispatch-gate`'s four slice-complete fields (Objective,
+   Acceptance test, Scope / blast-radius bound, Affected surface) from what
+   step 3 already distilled out of the experience sources — this loop runs
+   unattended, so there is no operator for `dispatch-gate` Step 2's
+   clarifying dialogue. If a field genuinely can't be resolved from tick
+   context alone, that's a signal to fall back to step 2's quiet-tick path
+   rather than dispatch against a gap, mirroring dispatch-gate's
+   never-dispatch-then-ask principle for the unattended case. Dispatch a
+   right-sized subagent to draft the change in an ephemeral worktree,
+   passing the four resolved fields in the dispatch prompt itself: because
+   the subagent's worktree doesn't exist until the Agent tool creates it,
+   the subagent — not the dispatcher — writes them into
+   `.claude/task-context.md` at its own worktree root as its first action,
+   before starting the actual work. Before reporting its PR as done, the
+   subagent runs `self-verify`'s annotation contract against its own change
+   and reports the outcome — not just the bare PR URL — back to this
+   session.
+5. Land it as a PR against the relevant source repo, carrying forward the
+   self-verify outcome the subagent reported back in step 4 alongside the
+   PR link.
 6. Append an entry to the experience-log vault note
    (`Notes/2026/07/2026-07-06-dual-pane-experience-log.md`) via the
    `obsidian-notes` skill. Non-blocking on failure — log and continue rather
