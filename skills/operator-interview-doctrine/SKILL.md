@@ -198,10 +198,18 @@ Match its shape.
 1. **Playback.** Before asking for sign-off, play the assembled spec back to the
    operator — Problem/Why, Decisions, Requirements, Acceptance Criteria, and any
    `[NEEDS CLARIFICATION]` still open. Playback is the operator's last chance to
-   correct before the spec becomes authority-bearing.
-2. **Explicit sign-off.** The operator must explicitly sign off. Silence, "looks
-   fine," or a non-answer is NOT sign-off. Until explicit sign-off, the spec stays
-   `status: draft`.
+   correct before the spec becomes authority-bearing. Playback is sent as its own
+   message and **ends with the played-back spec content** — it does not end with a
+   question, and it does not carry the sign-off ask.
+2. **Explicit sign-off.** The sign-off ask is a **separate, subsequent turn**: a
+   single, standalone question — e.g. "Do you sign off on this spec?" — asked on its
+   own. Never bundle it with "or anything to change first?", never append it to the
+   playback message, never combine it with any other ask. If the operator raises a
+   change during or after playback, handle that change as its own turn — replay the
+   affected section if needed — before returning to the standalone sign-off ask; do
+   not try to cover both "any changes?" and "sign off?" in one compound question.
+   The operator must explicitly sign off. Silence, "looks fine," or a non-answer is
+   NOT sign-off. Until explicit sign-off, the spec stays `status: draft`.
 3. **Promote.** On explicit sign-off, set frontmatter `status: signed-off` and
    `signed_off: <date>`. Only then does the spec confer build authority.
 4. **Gate.** Build and dispatch consumers read `status` from frontmatter and proceed
