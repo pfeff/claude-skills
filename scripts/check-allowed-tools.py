@@ -18,22 +18,25 @@ A tool reference counts as "mandatory" — and is checked against
 `allowed-tools` — only when the text around it is unambiguously imperative:
 
   1. Call form:            Read(...), Agent(...), mcp__foo__bar(...)
-  2. "<Tool> tool" phrase:  "the Agent tool", "Task/Agent tool",
-                            "invoke/use/via the X tool"  (all reduce to the
-                            same "<Tool(s)> tool" shape)
-  3. A MUST/SHALL line that also names a known tool on that same line.
+  2. Imperative phrase:    "invoke/use/via the X tool" — a directive verb
+                           immediately preceding "<Tool> tool".
+  3. Parenthetical tag:    "(Task/Agent tool)" — a tool named inside
+                           parentheses and tagged "tool)", the exact shape
+                           of the PR #223 defect ("Spawn a sub-agent
+                           (Task/Agent tool)").
+  4. A MUST/SHALL line that also names a known tool on that same line.
 
-Deliberately NOT implemented: flagging every bare occurrence of a
-tool-namespace word (e.g. "Write", "Read", "Task") inside a numbered step.
-That was tried and produces real false positives against this repo's own
-corpus — e.g. task-workflow's "### 1. Task Creation" / "### 7. Task
-Navigation" headings use "Task" as an ordinary English word (the task-list
-feature), not a reference to the Task/Agent tool, and task-workflow's
-allowed-tools does not include "Task" at all. Per this validator's R4
-(false positives are worse than missed edge cases), bare-word-in-numbered-
-step matching is dropped in favor of the three explicit-mandate signals
-above, which catch the real PR #223 defect ("Spawn a sub-agent (Task/Agent
-tool)") with zero observed false positives on either corpus.
+A prohibition line ("MUST NOT use the X tool", "never invoke the X tool")
+is the opposite of a mandate and is skipped entirely — flagging it would be
+a false positive.
+
+Deliberately NOT flagged: a bare "the X tool" mention without an imperative
+verb or parentheses (e.g. task-workflow's "the Task tool description
+field", "parallel Task tool invocation"), a plural "X tools" category label,
+and a bare tool-namespace word inside a heading ("### 1. Task Creation").
+These produce real false positives against this repo's own corpus, and per
+this validator's R4 (false positives are worse than missed edge cases) they
+are left unmatched.
 
 A skill's `allowed-tools` list is treated as "no restriction" (never
 flagged) when: the key is absent from frontmatter entirely, the value is
@@ -66,11 +69,26 @@ TOOL_NAMES = [
 MCP_PATTERN = r"mcp__[A-Za-z0-9_-]+"  # server/tool segments may contain hyphens
 TOOL_ALT = "(?:" + "|".join(TOOL_NAMES) + "|" + MCP_PATTERN + ")"
 
+TOOLS_GROUP = TOOL_ALT + r"(?:\s*/\s*" + TOOL_ALT + r")*"
+
 CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")
-TOOL_PHRASE_RE = re.compile(
-    r"\b(" + TOOL_ALT + r"(?:\s*/\s*" + TOOL_ALT + r")*)\s+tool\b"
+# Imperative phrasing: a directive verb ("invoke/use/via", any case) right
+# before "<Tool> tool". Tool names stay case-sensitive so ordinary lowercase
+# words ("use the read below") are not mistaken for the Read tool.
+TOOL_IMPERATIVE_RE = re.compile(
+    r"(?:[Ii]nvoke[sd]?|[Ii]nvoking|[Uu]se[sd]?|[Uu]sing|[Vv]ia)"
+    r"\s+(?:[Tt]he\s+)?(" + TOOLS_GROUP + r")\s+tool\b"
 )
+# Parenthetical tool tag: "(Task/Agent tool)" — the PR #223 defect shape.
+TOOL_PAREN_RE = re.compile(r"\((" + TOOLS_GROUP + r")\s+tool\)")
 MODAL_RE = re.compile(r"\bMUST\b|\bSHALL\b")
+# Prohibition, not a mandate: "MUST NOT use the X tool", "never invoke ...".
+NEGATION_RE = re.compile(
+    r"\b(?:MUST|SHALL)\s+(?:NOT|NEVER)\b"
+    r"|\b(?:do not|don't|does not|doesn't|never|cannot|can't)\s+"
+    r"(?:invoke|use|call|run)\b",
+    re.IGNORECASE,
+)
 TOOL_TOKEN_RE = re.compile(r"\b(" + TOOL_ALT + r")\b")
 
 
@@ -143,6 +161,8 @@ def parse_allowed_tools(frontmatter_lines):
     else:
         # Block list form: subsequent indented "  - Item" lines.
         for line in frontmatter_lines[idx + 1:]:
+            if line.strip().startswith("#"):
+                continue  # YAML comment interleaved among list items
             if re.match(r"^\s*-\s+", line):
                 raw_items.append(re.sub(r"^\s*-\s+", "", line))
             elif line.strip() == "" or re.match(r"^\s", line):
@@ -181,14 +201,18 @@ def find_mandatory_refs(text):
     references. Returns a list of (line_no, tool_name, line_text)."""
     refs = []
     for line_no, line in enumerate(text.splitlines(), start=1):
+        if NEGATION_RE.search(line):
+            continue  # a prohibition is not a mandatory invocation
+
         seen_on_line = set()
 
         for m in CALL_FORM_RE.finditer(line):
             seen_on_line.add(m.group(1))
 
-        for m in TOOL_PHRASE_RE.finditer(line):
-            for name in re.split(r"\s*/\s*", m.group(1)):
-                seen_on_line.add(name)
+        for rx in (TOOL_IMPERATIVE_RE, TOOL_PAREN_RE):
+            for m in rx.finditer(line):
+                for name in re.split(r"\s*/\s*", m.group(1)):
+                    seen_on_line.add(name)
 
         if MODAL_RE.search(line):
             for m in TOOL_TOKEN_RE.finditer(line):

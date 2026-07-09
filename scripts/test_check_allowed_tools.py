@@ -167,6 +167,16 @@ class TestParseAllowedTools(unittest.TestCase):
         self.assertEqual(tools, {"Bash", "Read"})
         self.assertFalse(wildcard)
 
+    def test_block_list_with_interleaved_comment(self):
+        # Regression: a YAML comment line between block-list items must not
+        # cause the parser to drop the items that follow it — dropping a
+        # legitimately-declared tool would flag a tool that IS declared (R4).
+        fm = ["allowed-tools:", "  - Bash", "  # scoped below", "  - Agent",
+              "version: 1.0.0"]
+        tools, wildcard = check_allowed_tools.parse_allowed_tools(fm)
+        self.assertEqual(tools, {"Bash", "Agent"})
+        self.assertFalse(wildcard)
+
     def test_missing_key_is_wildcard(self):
         fm = ["name: foo", "description: bar"]
         _, wildcard = check_allowed_tools.parse_allowed_tools(fm)
@@ -210,6 +220,32 @@ class TestFindMandatoryRefs(unittest.TestCase):
             "Some environments also expose an Agent capability for fan-out.\n"
         )
         self.assertEqual(refs, [])
+
+    def test_bare_tool_phrase_without_imperative_not_flagged(self):
+        # R4: a bare "the X tool" mention with no imperative verb and no
+        # parentheses is prose, not a mandate — the real false-positive class
+        # from task-workflow's operations/ docs.
+        for line in (
+            "| task_subject | Yes | Short label for the Task tool field |\n",
+            "This reuses the parallel Task tool invocation pattern.\n",
+            "The Skill tool returns control to the caller afterward.\n",
+        ):
+            self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
+
+    def test_imperative_use_is_flagged(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            "Use the Edit tool for surgical updates.\n"
+        )
+        self.assertIn("Edit", {r[1] for r in refs})
+
+    def test_must_not_negation_not_flagged(self):
+        # R4: a prohibition ("MUST NOT use the X tool") is not a mandate.
+        for line in (
+            "The reviewer MUST NOT use the Bash tool during grading.\n",
+            "You must not invoke the Agent tool here.\n",
+            "Never invoke the Task tool from this step.\n",
+        ):
+            self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
 
 
 if __name__ == "__main__":
