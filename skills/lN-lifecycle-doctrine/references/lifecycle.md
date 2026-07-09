@@ -359,10 +359,24 @@ by the push-state-unknown case in **Complete check** condition 2 (`@{u}`
 lookup fails → treat as NOT complete): ambiguity is a stop condition, not
 a coin flip.
 
-The child surfaces the mismatch to its supervisor via the standard
-inter-actor content channel (*Inter-actor delivery — inbox-on-nudge
-(S.25)* below — `ac_message_send` to the supervisor's agent-id), not by
-proceeding on an assumption the supervisor never approved.
+**Reporting channel depends on actor type.** This doctrine's native scope
+is AC-registered L{N} fleet members, but the frozen-manifest rule itself
+(dispatch-gate Step 6) applies more broadly — not every child that
+follows it has an agent-id:
+
+- **AC-registered actor** (an L0/L1/L2 fleet member with a stable
+  agent-id): surfaces the mismatch via the standard inter-actor content
+  channel (*Inter-actor delivery — inbox-on-nudge (S.25)* below —
+  `ac_message_send` to the supervisor's agent-id).
+- **Non-AC background job** (e.g. a `dispatch-gate`-launched worktree/
+  subagent/cross-repo job — babysat per that skill's "When to invoke,"
+  with no agent-id to address): stops and leaves a clear note through
+  whatever channel its dispatcher actually watches, rather than reaching
+  for a nonexistent agent-id. See `dispatch-gate/SKILL.md` Step 6 for the
+  concrete mechanism.
+
+Either way, the child does not proceed on an assumption the
+dispatcher/supervisor never approved.
 
 ---
 

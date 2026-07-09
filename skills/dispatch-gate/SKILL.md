@@ -172,6 +172,17 @@ re-runs Steps 1-3 against the new information and, if a field needs to
 change, writes an updated task-context file — a new dispatch decision, not
 a live edit the worker makes to its own manifest.
 
+**How the worker signals the stop**: a dispatch-gate job has no
+agent-id — it is babysat, not AC-registered (see "When to invoke" above)
+— so it cannot page a supervisor via `ac_message_send`. Instead the
+worker halts and states the mismatch in its own output with an explicit
+`STOP —` prefix naming the frozen field and what was found instead, so
+it's visible in the pane the operator is babysitting. If the job already
+has an open PR, also post the same note as a PR comment (`gh pr comment
+<PR> --body "STOP — <field>: <what disagrees>"`) so the mismatch has a
+durable record even if the operator isn't watching the pane at that
+moment.
+
 ## What this skill does NOT do
 
 - Does not launch agents or start the background job.
