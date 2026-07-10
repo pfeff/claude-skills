@@ -12,7 +12,7 @@ this step is byte-for-byte identical to the no-anchor form.
   `<owner>` and `<repo>` each contain only alphanumerics, hyphens, underscores,
   and dots (one `/` separator), and that neither segment begins with `-` (so
   `--repo -x/repo` is rejected as an option-injection attempt). Store as
-  `$EXPLICIT_REPO`. If invalid, report the error and stop.
+  `$REPO`. If invalid, report the error and stop.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
@@ -22,17 +22,11 @@ empty). Plain PR numbers and branch names pass through with no character
 restriction — exactly as before shorthand support existed; only the shorthand
 case below imposes a shape, and it does so via a self-validating anchored regex.
 
-Set `$REPO` = `$EXPLICIT_REPO` (may be empty). Shorthand parsing in "Parse
-arguments" below may overwrite `$REPO`; `$EXPLICIT_REPO` itself is never
-overwritten, so the original `--repo` value (if any) stays available there for
-the conflict check.
+`$REPO` may be empty (in-repo behavior). Shorthand parsing in "Parse arguments"
+below may overwrite it (last-writer-wins). Do not pass both the shorthand and
+`--repo`.
 
 Derive `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
-
-Note: `$REPO_FLAG` is **not** derived here. It is derived in "Parse arguments"
-below, after shorthand parsing has had a chance to set `$REPO` — deriving it
-here would freeze it at whatever `$EXPLICIT_REPO` was (often empty), which is
-exactly the bug the shorthand form exists to avoid.
 
 ### Detect base branch
 
@@ -61,20 +55,12 @@ Numeric and Otherwise cases in the dispatch below:
   Because the regex admits only this exact safe shape, it is its own
   validation — no separate character-gate and no `git`/`gh` call is needed to
   classify the token, and it cannot match a token containing shell
-  metacharacters. A token shaped exactly like `owner/repo#N` is **always**
-  treated as this shorthand; branch disambiguation is not attempted (see the
-  precedence note below).
+  metacharacters. (See the Precedence note below for how this shape wins over a
+  same-named branch.)
 
-  Before mutating `$REPO`: if `$EXPLICIT_REPO` is set (an explicit `--repo`
-  flag was given) and its value disagrees with the `<owner>/<repo>` parsed from
-  the shorthand — compared case-insensitively, since GitHub owner/repo segments
-  are case-insensitive — report a conflicting-input error and stop. This
-  compare-before-mutate ordering keeps the conflict check independent of any
-  later change to `$REPO`.
-
-  Then split the token: store the `<owner>/<repo>` part in `$REPO` (overwriting
-  the `$EXPLICIT_REPO`-derived value, if any) and replace the target token with
-  the bare `<number>` so it falls through to the Numeric case below.
+  Split the token: store the `<owner>/<repo>` part in `$REPO` (overwriting any
+  value set by `--repo`; last-writer-wins) and replace the target token with the
+  bare `<number>` so it falls through to the Numeric case below.
 
 - **Not shorthand** — anything else, including plain PR numbers like `42` and
   ordinary branch names (even those containing git-legal characters such as
@@ -87,28 +73,31 @@ interpreted as the out-of-repo shorthand, never as a branch. Git branch names
 may legally contain `/` and `#`, so a local branch literally named
 `owner/repo#N` is theoretically possible, but such a branch is not reviewable
 by that bare name through this skill — review it another way (e.g. rename it,
-or pass an explicit branch/worktree target). This deliberate, documented
-tradeoff replaces the earlier branch-existence (`rev-parse`) disambiguation,
-whose guarding machinery was the source of repeated regressions.
+or pass an explicit branch/worktree target).
 
-Now that `$REPO` has its final value, derive `$REPO_FLAG` = ` --repo $REPO`
-when `$REPO` is set, otherwise empty. Deriving it here (after shorthand
-classification) rather than earlier is deliberate: the shorthand must be able
-to set `$REPO` first.
+Derive `$REPO_FLAG` here, after shorthand parsing has set `$REPO`: `$REPO_FLAG`
+= ` --repo $REPO` when `$REPO` is set, otherwise empty.
 
-**Dispatch** on the (possibly shorthand-rewritten) target token:
+**Dispatch** on the (possibly shorthand-rewritten) target token. Across all
+three cases, hold every ref/target value in a shell variable and reference it
+only as a quoted variable expansion — never inline a raw target value as
+literal characters into a command string.
 
-- **Empty / no args**: Current branch vs base. Run `$GIT diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
-- **Numeric** (e.g. `42`): PR number. Run `gh pr diff <target>$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
+- **Empty / no args**: Current branch vs base. Run `$GIT diff "$BASE...HEAD"`
+  (`$BASE` referenced as a variable). Set `$PR_NUMBER` to empty.
+- **Numeric** (e.g. `42`): PR number. Assign the numeric target to a shell
+  variable (`target=<value>`) and run `gh pr diff "$target"$REPO_FLAG`. Set
+  `$PR_NUMBER` to the numeric value.
 - **Otherwise**: Branch name. First reject the target if it begins with `-`
   (report an error and stop) — this prevents a leading-dash target from being
-  taken by `git` as an option. Then run `$GIT diff "$BASE...$target"`, passing
-  the target to `git` as a single literal argument: the `$BASE...$target` refspec
-  is one quoted argv token and must **not** be string-concatenated into a shell
-  command that could evaluate metacharacters. A branch name containing shell
-  metacharacters (e.g. `$(touch /tmp/x)`) is therefore handed to `git` inertly as
-  one argument — `git` treats it as a nonexistent ref and errors cleanly — never
-  evaluated by a shell. Set `$PR_NUMBER` to empty.
+  taken by `git` as an option. Assign the raw target to a shell variable (e.g.
+  `target=<value>` via the parsed argument, not by interpolating it into other
+  command text); reference it only as `"$target"`. Then run
+  `$GIT diff "$BASE...$target"`. Because command substitution is not re-triggered
+  on the contents of an expanded variable, a branch name containing `$(...)` or
+  backticks is passed to git as inert literal text (git reports an unknown ref),
+  never executed. Do NOT construct the diff command by pasting the literal
+  target string into it. Set `$PR_NUMBER` to empty.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
@@ -289,4 +278,10 @@ Present the contents of `.claude/reviews/latest.md` to the user (without the YAM
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 
-When `$PR_NUMBER` is set, automatically post findings as inline PR review comments by executing the `operations/post-review.md` operation with the current `$PR_NUMBER` (and `$REPO` from Step 1, if set, so the comments post to the out-of-repo PR). This posts line-level comments on the PR diff and a summary review comment.
+When `$PR_NUMBER` is set, automatically post findings as inline PR review
+comments by executing the `operations/post-review.md` operation. Pass both
+`$PR_NUMBER` and `$REPO` (from Step 1) into that operation — `$REPO` is
+post-review.md's documented input and is what makes its `gh` calls target the
+out-of-repo PR rather than cwd's repo. When `$REPO` is empty, post-review.md
+runs in its identical in-repo form. This posts line-level comments on the PR
+diff and a summary review comment.
