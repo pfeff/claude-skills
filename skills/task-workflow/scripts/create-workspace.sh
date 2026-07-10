@@ -169,6 +169,26 @@ elif [[ "$MODE" == "meta" ]]; then
     echo "Error: --name is required for meta mode" >&2
     exit 1
   fi
+  # Reject path-traversal and shell-hazard characters before META_NAME is
+  # interpolated into any filesystem path or branch name. Mirrors
+  # resolve_repo_path()'s traversal-rejection approach (used for --repos
+  # values) for consistency rather than inventing a new validation style.
+  if [[ "$META_NAME" == */* ]]; then
+    echo "Error: --name must not contain '/' (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == -* ]]; then
+    echo "Error: --name must not start with '-' (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == . || "$META_NAME" == .. || "$META_NAME" == *..* ]]; then
+    echo "Error: --name must not contain '..' (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == *:* ]]; then
+    echo "Error: --name must not contain ':' (rejected: '$META_NAME') — close-workspace.sh's DESIGN.md first-line parser splits TASK_ID on ':', which would silently truncate the name" >&2
+    exit 1
+  fi
   if [[ -z "$HEADLINE" ]]; then
     HEADLINE="$META_NAME"
   fi
@@ -1242,19 +1262,6 @@ create_meta_workspace() {
             echo "Error: Failed to create worktree for $repo" >&2
             exit 4
           fi
-        fi
-      fi
-
-      actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-      if [[ "$actual_branch" == "$default_branch" ]]; then
-        echo "    WARNING: Worktree on default branch '$default_branch', switching to feature branch..."
-        if (cd "$worktree_path" && git checkout -b "$BRANCH_NAME" 2>/dev/null); then
-          echo "    Created and switched to branch '$BRANCH_NAME'"
-        elif (cd "$worktree_path" && git checkout "$BRANCH_NAME" 2>/dev/null); then
-          echo "    Switched to existing branch '$BRANCH_NAME'"
-        else
-          echo "Error: Failed to switch worktree to feature branch '$BRANCH_NAME'" >&2
-          exit 4
         fi
       fi
 
