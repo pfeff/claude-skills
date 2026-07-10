@@ -204,15 +204,33 @@ elif [[ "$MODE" == "meta" ]]; then
   # META_NAME is interpolated into a filesystem path ($HOME/src/work/meta/NAME)
   # and a git branch name (meta/NAME), so it must be safe for both. Enforce a
   # positive allowlist rather than enumerating hazards: only permit ASCII
-  # letters, digits, '.', '_', '-', with an alphanumeric first character. A
-  # positive allowlist inherently excludes every path-traversal sequence
-  # (needs '/'), every git ref-name metacharacter (~ ^ : ? * [ \ and @{),
-  # whitespace, and control character at once — and the alphanumeric-first
+  # letters, digits, '.', '_', '-', with an alphanumeric first character. The
+  # allowlist governs the character SET: it excludes every path-traversal
+  # component separator ('/'), every git ref-name metacharacter (~ ^ : ? * [ \
+  # and @{), whitespace, and control characters — and the alphanumeric-first
   # rule rejects a leading '-' (reads as a flag) and a leading '.' (hidden
-  # dir / invalid ref) in the same check. This closes the git-ref-grammar gap
-  # that a hazard-enumeration approach kept missing.
+  # dir / invalid ref) in the same check.
   if [[ ! "$META_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     echo "Error: --name may contain only ASCII letters, digits, '.', '_', '-' and must start with a letter or digit (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  # The allowlist alone still permits three character SEQUENCES that are legal
+  # in a filename but illegal in a git ref name (git-check-ref-format), so
+  # meta/NAME would fail late at `git worktree add` (exit 4, partial workspace
+  # left behind). Reject them up front here. Given the allowlist already fixes
+  # the alphabet to [A-Za-z0-9._-] with an alphanumeric first char, these are
+  # the ONLY residual ref-name rules a passing name could still violate — so
+  # allowlist + these three form a complete guard for meta/NAME.
+  if [[ "$META_NAME" == *..* ]]; then
+    echo "Error: --name must not contain '..' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == *. ]]; then
+    echo "Error: --name must not end with '.' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == *.lock ]]; then
+    echo "Error: --name must not end with '.lock' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
     exit 1
   fi
   if [[ -z "$HEADLINE" ]]; then

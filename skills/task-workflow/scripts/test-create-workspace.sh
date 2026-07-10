@@ -339,6 +339,59 @@ else
 fi
 rm -rf "$WS_FIXTURE" "$WS_OUT"
 
+# Illegal git-ref SEQUENCES that pass the character-set allowlist but are still
+# invalid as a git ref name (git-check-ref-format): a '..', a trailing '.', and
+# a '.lock' suffix. Each is built entirely from allowed characters, so without
+# the dedicated sequence checks `git worktree add -b meta/<name>` fails late
+# (exit 4) and leaves a partial workspace (dir + DESIGN.md) behind. Assert each
+# fails EARLY at exit 1 with the clear up-front error (NOT exit 4) and that
+# nothing is left on disk.
+for seq_name in 'foo..bar' 'foo.' 'foo.lock'; do
+  SEQ_FIXTURE=$(mktemp -d)
+  mkdir -p "$SEQ_FIXTURE/src/work"
+  SEQ_OUT=$(mktemp)
+  rc=0
+  HOME="$SEQ_FIXTURE" bash "$SCRIPT" --meta --name "$seq_name" --headline test >"$SEQ_OUT" 2>&1 || rc=$?
+  assert_rc 1 "$rc" "meta mode rejects illegal ref sequence --name '$seq_name' with exit 1 (not exit 4)"
+  if grep -qF "illegal in a git ref name" "$SEQ_OUT"; then
+    echo "  PASS: '$seq_name' rejected with the up-front ref-sequence error"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: '$seq_name' did not use the up-front ref-sequence error"
+    echo "    output: $(cat "$SEQ_OUT")"
+    FAIL=$((FAIL + 1))
+  fi
+  if [[ ! -d "$SEQ_FIXTURE/src/work/meta/$seq_name" ]]; then
+    echo "  PASS: '$seq_name' left no partial workspace on disk"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: '$seq_name' left a partial workspace behind"
+    FAIL=$((FAIL + 1))
+  fi
+  rm -rf "$SEQ_FIXTURE" "$SEQ_OUT"
+done
+
+# Names with a single interior dot and the DO-649-thing style must still PASS —
+# the sequence checks reject only '..', trailing '.', and '.lock', not every
+# dot. Assert these create the workspace and exit 0.
+for good_name in 'foo.bar' 'DO-649-thing'; do
+  GOOD_FIXTURE=$(mktemp -d)
+  mkdir -p "$GOOD_FIXTURE/src/work"
+  GOOD_OUT=$(mktemp)
+  rc=0
+  HOME="$GOOD_FIXTURE" bash "$SCRIPT" --meta --name "$good_name" --headline test >"$GOOD_OUT" 2>&1 || rc=$?
+  assert_rc 0 "$rc" "meta mode accepts normal --name '$good_name'"
+  if [[ -d "$GOOD_FIXTURE/src/work/meta/$good_name" ]]; then
+    echo "  PASS: '$good_name' created its workspace"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: '$good_name' did not create a workspace"
+    echo "    output: $(cat "$GOOD_OUT")"
+    FAIL=$((FAIL + 1))
+  fi
+  rm -rf "$GOOD_FIXTURE" "$GOOD_OUT"
+done
+
 # --headline is embedded unsanitized into the DESIGN.md first line; a crafted
 # embedded newline could forge a second, spoofed line. Reject it the same way
 # META_NAME's hazard characters are rejected.
