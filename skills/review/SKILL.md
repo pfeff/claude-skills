@@ -1,7 +1,7 @@
 ---
 name: review
 description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. Use when the user requests a code review or invokes /claude-skills:review.
-argument-hint: "[PR number, branch name, or blank for current branch]"
+argument-hint: "[PR number, branch name, owner/repo#number, or blank for current branch]"
 allowed-tools:
   - Bash(git diff:*)
   - Bash(git -C:*)

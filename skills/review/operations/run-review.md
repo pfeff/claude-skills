@@ -10,45 +10,32 @@ this step is byte-for-byte identical to the no-anchor form.
 
 - `--repo <owner>/<repo>`: out-of-repo anchor for `gh` PR calls. Validate that
   `<owner>` and `<repo>` each contain only alphanumerics, hyphens, underscores,
-  and dots (one `/` separator). Store as `$REPO`. If invalid, report the error
-  and stop.
+  and dots (one `/` separator). Store as `$EXPLICIT_REPO`. If invalid, report
+  the error and stop.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
 Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
 token is the target (PR number, branch name, owner/repo#number shorthand, or
-empty). Derive two prefixes used below:
+empty).
 
-- `$REPO_FLAG` = ` --repo $REPO` when `$REPO` is set, otherwise empty.
-- `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
+Before the target token is used in any shell command below, coarsely validate
+it: reject it (report an error and stop) if it contains any character other
+than alphanumerics, `/`, `#`, `-`, `_`, or `.`. This check applies
+unconditionally, before any shell command touches the token, regardless of
+which case below ends up claiming it.
 
-Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
-cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
-specify the same thing as `<number> --repo <owner>/<repo>`.
+Set `$REPO` = `$EXPLICIT_REPO` (may be empty). Shorthand parsing in "Parse
+arguments" below may overwrite `$REPO`; `$EXPLICIT_REPO` itself is never
+overwritten, so the original `--repo` value (if any) stays available there for
+the conflict check.
 
-**Branch-existence check wins over shorthand interpretation.** Git branch
-names may legally contain both `/` and `#`, so a local or remote branch
-literally named `pfeff/dotfiles#247` is possible — and if such a branch
-exists, it must not be silently reinterpreted as an out-of-repo PR reference.
-Before treating the target token as shorthand, check whether it already
-resolves to an existing branch or ref: run `$GIT rev-parse --verify --quiet
-<target-token>` (discarding output, checking only the exit code). If it
-succeeds, the token is an existing branch — treat it as the Branch case in
-"Parse arguments" below, unchanged, and skip shorthand parsing entirely.
+Derive `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
 
-Only when the branch-existence check fails (the token does not resolve to an
-existing branch or ref) do the following: if the target token matches, in
-its entirety (anchored — no unvalidated leading or trailing characters:
-`^<owner>/<repo>#<number>$`), the pattern `<owner>/<repo>#<number>` — same
-owner/repo character validation as above (one `/` separator), then a literal
-`#`, then one or more digits — split it into its `<owner>/<repo>` and
-`<number>` parts. Store the `<owner>/<repo>` part in `$REPO` (same variable
-the `--repo` flag populates) and replace the target token with the bare
-`<number>` so it falls through to the Numeric case in "Parse arguments"
-below. If an explicit `--repo` flag was also given and its value disagrees
-with the `<owner>/<repo>` parsed from this shorthand — compared
-case-insensitively, since GitHub owner/repo segments are case-insensitive —
-report a conflicting-input error and stop.
+Note: `$REPO_FLAG` is **not** derived here. It is derived in "Parse arguments"
+below, after shorthand parsing has had a chance to set `$REPO` — deriving it
+here would freeze it at whatever `$EXPLICIT_REPO` was (often empty), which is
+exactly the bug the shorthand form exists to avoid.
 
 ### Detect base branch
 
@@ -61,7 +48,47 @@ Store the result as `$BASE`.
 
 ### Parse arguments
 
-Parse the remaining target token to determine the review target:
+Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
+cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
+specify the same thing as `<number> --repo <owner>/<repo>`.
+
+**Classify the target token first:**
+
+Does it match, in its entirety (anchored — no unvalidated leading or trailing
+characters: `^<owner>/<repo>#<number>$`), the pattern `<owner>/<repo>#<number>`
+— same owner/repo character validation as the `--repo` flag (one `/`
+separator), then a literal `#`, then one or more digits?
+
+- **No** (this covers plain PR numbers like `42` and ordinary branch names):
+  it is not shorthand-shaped. Skip the branch-existence check below entirely
+  — no git call is made — and go straight to the dispatch at the end of this
+  section, unchanged from before shorthand support existed.
+- **Yes**: the token is shorthand-shaped, but proceed to the
+  branch-existence check before treating it as shorthand.
+
+**Branch-existence check wins over shorthand interpretation, and only runs for
+shorthand-shaped tokens.** Git branch names may legally contain both `/` and
+`#`, so a local or remote branch literally named `pfeff/dotfiles#247` is
+possible — and if such a branch exists, it must not be silently reinterpreted
+as an out-of-repo PR reference. Run `$GIT rev-parse --verify --quiet
+"<target-token>"` (quoted; discarding output, checking only the exit code).
+If it succeeds, the token is an existing branch — treat it as the Branch case
+in the dispatch below, unchanged, and skip shorthand parsing entirely.
+
+Only when the branch-existence check fails (the token does not resolve to an
+existing branch or ref) do the following: split the shorthand-shaped token
+into its `<owner>/<repo>` and `<number>` parts. Store the `<owner>/<repo>`
+part in `$REPO` (overwriting the `$EXPLICIT_REPO`-derived value, if any) and
+replace the target token with the bare `<number>` so it falls through to the
+Numeric case below. If `$EXPLICIT_REPO` is also set (an explicit `--repo` flag
+was given) and its value disagrees with the `<owner>/<repo>` parsed from this
+shorthand — compared case-insensitively, since GitHub owner/repo segments are
+case-insensitive — report a conflicting-input error and stop.
+
+Now that `$REPO` has its final value, derive `$REPO_FLAG` = ` --repo $REPO`
+when `$REPO` is set, otherwise empty.
+
+**Dispatch** on the (possibly shorthand-rewritten) target token:
 
 - **Empty / no args**: Current branch vs base. Run `$GIT diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
 - **Numeric** (e.g. `42`): PR number. Run `gh pr diff <target>$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
