@@ -200,14 +200,20 @@ Match its shape.
    `[NEEDS CLARIFICATION]` still open. Playback is the operator's last chance to
    correct before the spec becomes authority-bearing. Playback is sent as its own
    message and **ends with the played-back spec content** — it does not end with a
-   question, and it does not carry the sign-off ask.
-2. **Explicit sign-off.** The sign-off ask is a **separate, subsequent turn**: a
-   single, standalone question — e.g. "Do you sign off on this spec?" — asked on its
-   own. Never bundle it with "or anything to change first?", never append it to the
-   playback message, never combine it with any other ask. If the operator raises a
-   change during or after playback, handle that change as its own turn — replay the
-   affected section if needed — before returning to the standalone sign-off ask; do
-   not try to cover both "any changes?" and "sign off?" in one compound question.
+   question, and it does not carry the sign-off ask. **Playback ends the assistant's
+   turn** (the message/response boundary — distinct from a question or a batch within
+   one message): the response stops after playback, with no further content. The
+   sign-off ask is asked only in a subsequent turn, after the operator has had the
+   opportunity to respond — their next input, even if it's just an implicit continue
+   — never emitted back-to-back with playback in the same response.
+2. **Explicit sign-off.** The sign-off ask is a single, standalone question — e.g.
+   "Do you sign off on this spec?" — asked on its own turn, per step 1. Ask it
+   through `AskUserQuestion` as a single closed question (e.g. Sign off / Not yet,
+   with a recommended default), per the AskUserQuestion usage rules above. If the
+   operator raises a change during or after playback but before sign-off, handle it
+   as its own exchange — replay the affected section if needed — then re-ask the
+   standalone sign-off question; this is distinct from the re-sign rule (step 5),
+   which applies to a material change made after sign-off has already been granted.
    The operator must explicitly sign off. Silence, "looks fine," or a non-answer is
    NOT sign-off. Until explicit sign-off, the spec stays `status: draft`.
 3. **Promote.** On explicit sign-off, set frontmatter `status: signed-off` and
