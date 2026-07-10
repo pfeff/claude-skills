@@ -5,7 +5,7 @@ allowed-tools:
   - Bash
   - Read
   - Write
-version: 1.0.0
+version: 1.0.1
 ---
 
 # dispatch-gate — dispatch-readiness gate
@@ -130,6 +130,17 @@ fill heuristic, not by this override path.
   worktree location — and instruct the operator/launcher to place the
   `.claude/task-context.md` file once the worktree exists.
   Auto-provisioning is deferred to a later increment.
+- **Tool-level worktree isolation** (e.g. `Agent(isolation: "worktree")`):
+  the subagent's own tooling provisions the worktree, so the dispatcher
+  has no pre-existing path to write into — there's no "existing worktree"
+  and no separate operator/launcher to hand a path spec to. Resolve the
+  four fields as usual and pass them in the dispatch prompt; the subagent
+  writes them into `.claude/task-context.md` at its own worktree root as
+  its first action, before starting the actual work. This is a mechanical
+  variant of the same frozen-manifest intent — the dispatcher still
+  resolves the fields, the subagent is just the one physically placing the
+  file. `improvement-loop/SKILL.md`'s Per-Tick Shape step 4 is a concrete
+  example of this case.
 
 ### Step 5 — Standing dispatch-brief instruction
 

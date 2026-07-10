@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-version: 1.1.0
+version: 1.2.0
 ---
 
 # improvement-loop — continuous self-improvement role
@@ -161,23 +161,25 @@ consolidation itself lands as a PR — do not inline their logic here now.
 4. Resolve `dispatch-gate`'s four slice-complete fields (Objective,
    Acceptance test, Scope / blast-radius bound, Affected surface) from what
    step 3 already distilled out of the experience sources — this loop runs
-   unattended, so there is no operator for `dispatch-gate` Step 2's
-   clarifying dialogue. If a field genuinely can't be resolved from tick
-   context alone, that's a signal to fall back to step 2's quiet-tick path
-   rather than dispatch against a gap, mirroring dispatch-gate's
-   never-dispatch-then-ask principle for the unattended case. Dispatch a
-   right-sized subagent to draft the change in an ephemeral worktree,
-   passing the four resolved fields in the dispatch prompt itself: because
-   the subagent's worktree doesn't exist until the Agent tool creates it,
-   the subagent — not the dispatcher — writes them into
-   `.claude/task-context.md` at its own worktree root as its first action,
-   before starting the actual work. Before reporting its PR as done, the
-   subagent runs `self-verify`'s annotation contract against its own change
-   and reports the outcome — not just the bare PR URL — back to this
-   session.
-5. Land it as a PR against the relevant source repo, carrying forward the
-   self-verify outcome the subagent reported back in step 4 alongside the
-   PR link.
+   unattended, so there is no operator for dispatch-gate's Step 2
+   (clarifying dialogue). If a field can't be resolved from tick context
+   alone, fall back to this loop's own Per-Tick Shape step 2 (quiet tick)
+   rather than dispatch against a gap, per dispatch-gate's
+   never-dispatch-then-ask principle. Dispatch a right-sized subagent to
+   draft the change in an ephemeral worktree (`Agent(isolation:
+   "worktree")`), passing the four resolved fields in the dispatch prompt.
+   The subagent's worktree doesn't exist until the Agent tool creates it,
+   so the subagent writes the four fields into `.claude/task-context.md`
+   itself as its first action — the tool-level-isolation case dispatch-gate's
+   Step 4 documents. As part of its own work, the subagent opens the PR
+   against the relevant source repo, then runs `self-verify`'s annotation
+   contract against that PR before reporting back the PR link and the
+   self-verify outcome together — not just the bare PR URL.
+5. Confirm and log the PR link and self-verify outcome the subagent
+   reported in step 4. Report a clean pass as such; if the outcome is
+   non-clean (e.g. a BLOCKING verdict), say so plainly rather than folding
+   it into the same report as a pass — self-verify is evidence for the
+   operator, not an autonomous merge gate.
 6. Append an entry to the experience-log vault note
    (`Notes/2026/07/2026-07-06-dual-pane-experience-log.md`) via the
    `obsidian-notes` skill. Non-blocking on failure — log and continue rather
