@@ -267,11 +267,11 @@ HOME="$TRAVERSAL_FIXTURE" bash "$SCRIPT" --meta --name '../../../../tmp/pwned-me
 rc=$?
 assert_rc 1 "$rc" "meta mode rejects the exact PoC path-traversal --name"
 
-# The PoC contains both '/' and '..'; the '/' check fires first, which is
-# a correct rejection either way — assert the error names *a* rejected
-# character rather than over-specifying which check tripped first.
-if grep -qE "must not contain '(/|\.\.)'" "$TRAVERSAL_OUT"; then
-  echo "  PASS: rejection error names the offending character"
+# The PoC contains '/' and '..', both excluded by the positive allowlist.
+# Assert the single allowlist error fires and names the permitted set rather
+# than over-specifying which hazard tripped it.
+if grep -qF "may contain only ASCII letters, digits" "$TRAVERSAL_OUT"; then
+  echo "  PASS: rejection error names the allowed character set"
   PASS=$((PASS + 1))
 else
   echo "  FAIL: rejection error did not clearly name the offending character"
@@ -298,13 +298,16 @@ fi
 
 rm -rf "$TRAVERSAL_FIXTURE" "$TRAVERSAL_OUT"
 
-# Other invalid --name values covered by the same validation pass: a leading
+# Other invalid --name values rejected by the positive allowlist: a leading
 # dash (flag-injection hazard), a colon (corrupts close-workspace.sh's
 # "# id: headline" first-line parser — see TASK_ID="${FIRST_LINE%%:*}"),
-# embedded whitespace (would produce an unbuildable branch name, see below),
-# and an embedded newline (control character, would forge a second DESIGN.md
-# line for list-tasks.sh's unrestricted scan).
-for bad_name in '-rf' 'foo:bar' 'a/b' '..' 'foo bar' "$(printf 'foo\nbar')"; do
+# a slash, a bare '..' (leading dot), embedded whitespace (unbuildable branch
+# name, see below), an embedded newline (control character, would forge a
+# second DESIGN.md line for list-tasks.sh's unrestricted scan), and the git
+# ref-name metacharacters (~ ^ ? * [ \ @{) that a hazard-enumeration approach
+# missed but the allowlist rejects for free.
+for bad_name in '-rf' 'foo:bar' 'a/b' '..' 'foo bar' "$(printf 'foo\nbar')" \
+                'foo~bar' 'foo^bar' 'foo?bar' 'foo*bar' 'foo[bar' 'foo\bar' 'foo@{bar'; do
   BAD_FIXTURE=$(mktemp -d)
   mkdir -p "$BAD_FIXTURE/src/work"
   BAD_OUT=$(mktemp)
@@ -317,20 +320,20 @@ done
 # Whitespace in --name previously passed validation, then broke downstream:
 # `git worktree add ... -b "meta/foo bar"` fails (branch names can't contain
 # spaces), exhausting all three fallback attempts and surfacing only a
-# generic "Failed to create worktree" (exit 4) instead of the same clear,
-# upfront validation error the other hazard classes get. Assert the specific
-# whitespace message, not just exit 1.
+# generic "Failed to create worktree" (exit 4) instead of a clear, upfront
+# validation error. The positive allowlist now rejects it at exit 1 with the
+# allowlist message. Assert exit 1 (not exit 4) and the allowlist message.
 WS_FIXTURE=$(mktemp -d)
 mkdir -p "$WS_FIXTURE/src/work"
 WS_OUT=$(mktemp)
 rc=0
 HOME="$WS_FIXTURE" bash "$SCRIPT" --meta --name 'foo bar' --headline test >"$WS_OUT" 2>&1 || rc=$?
 assert_rc 1 "$rc" "meta mode rejects whitespace in --name with exit 1 (not exit 4)"
-if grep -q "must not contain whitespace" "$WS_OUT"; then
-  echo "  PASS: whitespace rejection error names whitespace specifically"
+if grep -qF "may contain only ASCII letters, digits" "$WS_OUT"; then
+  echo "  PASS: whitespace rejection uses the upfront allowlist error"
   PASS=$((PASS + 1))
 else
-  echo "  FAIL: whitespace rejection error did not name whitespace"
+  echo "  FAIL: whitespace rejection did not use the allowlist error"
   echo "    output: $(cat "$WS_OUT")"
   FAIL=$((FAIL + 1))
 fi
@@ -348,15 +351,30 @@ HOME="$HEADLINE_FIXTURE" bash "$SCRIPT" --meta --name headline-test \
 assert_rc 1 "$rc" "meta mode rejects embedded newline in --headline"
 rm -rf "$HEADLINE_FIXTURE" "$HEADLINE_OUT"
 
-# --meta combined with flags that only make sense in task/node mode is a
-# confused invocation, not a valid combination.
-CONFLICT_FIXTURE=$(mktemp -d)
-mkdir -p "$CONFLICT_FIXTURE/src/work"
-CONFLICT_OUT=$(mktemp)
-rc=0
-HOME="$CONFLICT_FIXTURE" bash "$SCRIPT" --meta --name conflict-test --task-id 5 >"$CONFLICT_OUT" 2>&1 || rc=$?
-assert_rc 1 "$rc" "meta mode rejects --task-id combined with --meta"
-rm -rf "$CONFLICT_FIXTURE" "$CONFLICT_OUT"
+# --meta combined with any flag that only makes sense in task/node mode is a
+# confused invocation, not a valid combination. The guard must reject every
+# other-mode flag — not just the first few — so none is silently dropped.
+# Each pair is "<flag> <value>" (or just "<flag>" for the bare mode flag).
+for conflict_case in \
+  "--task-id 5" \
+  "--epic myepic" \
+  "--model opus" \
+  "--issue owner/repo#1" \
+  "--description desc" \
+  "--node-id N1" \
+  "--node-db-id 5" \
+  "--project-dir /tmp" \
+  "--project-branch some/branch" \
+  "--node"; do
+  CONFLICT_FIXTURE=$(mktemp -d)
+  mkdir -p "$CONFLICT_FIXTURE/src/work"
+  CONFLICT_OUT=$(mktemp)
+  rc=0
+  # shellcheck disable=SC2086 -- intentional word-split of the flag+value pair
+  HOME="$CONFLICT_FIXTURE" bash "$SCRIPT" --meta --name conflict-test $conflict_case >"$CONFLICT_OUT" 2>&1 || rc=$?
+  assert_rc 1 "$rc" "meta mode rejects '$conflict_case' combined with --meta (not silently dropped)"
+  rm -rf "$CONFLICT_FIXTURE" "$CONFLICT_OUT"
+done
 
 #------------------------------------------------------------------------------
 # Meta mode - --repos (real git worktree creation + close-workspace.sh teardown)

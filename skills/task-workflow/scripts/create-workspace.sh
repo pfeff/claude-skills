@@ -101,6 +101,10 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --node)
+      if [[ -n "$MODE" ]]; then
+        echo "Error: --node cannot be combined with --$MODE" >&2
+        exit 1
+      fi
       MODE="node"
       shift
       ;;
@@ -121,6 +125,10 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --meta)
+      if [[ -n "$MODE" ]]; then
+        echo "Error: --meta cannot be combined with --$MODE" >&2
+        exit 1
+      fi
       MODE="meta"
       shift
       ;;
@@ -169,38 +177,42 @@ elif [[ "$MODE" == "meta" ]]; then
     echo "Error: --name is required for meta mode" >&2
     exit 1
   fi
-  # --meta is a distinct mode from task/node; flags that only make sense in
-  # those modes signal a confused invocation rather than a valid combination.
-  if [[ -n "$TASK_ID" || -n "$NODE_ID" || -n "$ISSUE_REF" ]]; then
-    echo "Error: --meta cannot be combined with --task-id, --node-id, or --issue" >&2
-    exit 1
-  fi
-  # Reject path-traversal and shell-hazard characters before META_NAME is
-  # interpolated into any filesystem path or branch name. Mirrors
-  # resolve_repo_path()'s traversal-rejection approach (used for --repos
-  # values) for consistency rather than inventing a new validation style.
-  if [[ "$META_NAME" == */* ]]; then
-    echo "Error: --name must not contain '/' (rejected: '$META_NAME')" >&2
-    exit 1
-  fi
-  if [[ "$META_NAME" == -* ]]; then
-    echo "Error: --name must not start with '-' (rejected: '$META_NAME')" >&2
-    exit 1
-  fi
-  if [[ "$META_NAME" == . || "$META_NAME" == .. || "$META_NAME" == *..* ]]; then
-    echo "Error: --name must not contain '..' (rejected: '$META_NAME')" >&2
-    exit 1
-  fi
-  if [[ "$META_NAME" == *:* ]]; then
-    echo "Error: --name must not contain ':' (rejected: '$META_NAME') — close-workspace.sh's DESIGN.md first-line parser splits TASK_ID on ':', which would silently truncate the name" >&2
-    exit 1
-  fi
-  if [[ "$META_NAME" == *[[:space:]]* ]]; then
-    echo "Error: --name must not contain whitespace (rejected: '$META_NAME')" >&2
-    exit 1
-  fi
-  if [[ "$META_NAME" == *[[:cntrl:]]* ]]; then
-    echo "Error: --name must not contain control characters (rejected: '$META_NAME')" >&2
+  # --meta is a distinct, lightweight mode; its only legitimate flags are
+  # --name, --headline, and --repos. Reject every task/node-mode flag so a
+  # confused invocation fails loudly instead of silently dropping the flag.
+  # Each entry pairs the variable a value-carrying flag sets with the flag's
+  # spelling; a non-empty value means that flag was passed. (The bare
+  # mode-setting flag --node is caught by the mode-conflict guard at parse
+  # time.)
+  for _pair in \
+    "TASK_ID:--task-id" \
+    "EPIC:--epic" \
+    "MODEL:--model" \
+    "ISSUE_REF:--issue" \
+    "DESCRIPTION:--description" \
+    "NODE_ID:--node-id" \
+    "NODE_DB_ID:--node-db-id" \
+    "PROJECT_DIR:--project-dir" \
+    "PROJECT_BRANCH:--project-branch"; do
+    _var="${_pair%%:*}"
+    _flag="${_pair#*:}"
+    if [[ -n "${!_var}" ]]; then
+      echo "Error: --meta cannot be combined with $_flag (only --name, --headline, --repos apply in meta mode)" >&2
+      exit 1
+    fi
+  done
+  # META_NAME is interpolated into a filesystem path ($HOME/src/work/meta/NAME)
+  # and a git branch name (meta/NAME), so it must be safe for both. Enforce a
+  # positive allowlist rather than enumerating hazards: only permit ASCII
+  # letters, digits, '.', '_', '-', with an alphanumeric first character. A
+  # positive allowlist inherently excludes every path-traversal sequence
+  # (needs '/'), every git ref-name metacharacter (~ ^ : ? * [ \ and @{),
+  # whitespace, and control character at once — and the alphanumeric-first
+  # rule rejects a leading '-' (reads as a flag) and a leading '.' (hidden
+  # dir / invalid ref) in the same check. This closes the git-ref-grammar gap
+  # that a hazard-enumeration approach kept missing.
+  if [[ ! "$META_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "Error: --name may contain only ASCII letters, digits, '.', '_', '-' and must start with a letter or digit (rejected: '$META_NAME')" >&2
     exit 1
   fi
   if [[ -z "$HEADLINE" ]]; then
