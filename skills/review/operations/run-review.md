@@ -17,13 +17,9 @@ this step is byte-for-byte identical to the no-anchor form.
 
 Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
 token is the target (PR number, branch name, owner/repo#number shorthand, or
-empty).
-
-Before the target token is used in any shell command below, coarsely validate
-it: reject it (report an error and stop) if it contains any character other
-than alphanumerics, `/`, `#`, `-`, `_`, or `.`. This check applies
-unconditionally, before any shell command touches the token, regardless of
-which case below ends up claiming it.
+empty). Plain PR numbers and branch names pass through with no character
+restriction — exactly as before shorthand support existed; only the shorthand
+case below imposes a shape, and it does so via a self-validating anchored regex.
 
 Set `$REPO` = `$EXPLICIT_REPO` (may be empty). Shorthand parsing in "Parse
 arguments" below may overwrite `$REPO`; `$EXPLICIT_REPO` itself is never
@@ -52,41 +48,51 @@ Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
 cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
 specify the same thing as `<number> --repo <owner>/<repo>`.
 
-**Classify the target token first:**
+**Classify the target token.** Run this shorthand case first, before the
+Numeric and Otherwise cases in the dispatch below:
 
-Does it match, in its entirety (anchored — no unvalidated leading or trailing
-characters: `^<owner>/<repo>#<number>$`), the pattern `<owner>/<repo>#<number>`
-— same owner/repo character validation as the `--repo` flag (one `/`
-separator), then a literal `#`, then one or more digits?
+- **Shorthand** — the token matches, in its entirety, the anchored regex
+  `^[A-Za-z0-9._][A-Za-z0-9._-]*/[A-Za-z0-9._-]+#[0-9]+$`: an `<owner>`
+  segment whose first character is not a hyphen (so a leading-dash token like
+  `-x/repo#1` can never match and can never reach a downstream shell call as an
+  option), a `/`, a `<repo>` segment, a literal `#`, then one or more digits.
+  Because the regex admits only this exact safe shape, it is its own
+  validation — no separate character-gate and no `git`/`gh` call is needed to
+  classify the token, and it cannot match a token containing shell
+  metacharacters. A token shaped exactly like `owner/repo#N` is **always**
+  treated as this shorthand; branch disambiguation is not attempted (see the
+  precedence note below).
 
-- **No** (this covers plain PR numbers like `42` and ordinary branch names):
-  it is not shorthand-shaped. Skip the branch-existence check below entirely
-  — no git call is made — and go straight to the dispatch at the end of this
-  section, unchanged from before shorthand support existed.
-- **Yes**: the token is shorthand-shaped, but proceed to the
-  branch-existence check before treating it as shorthand.
+  Before mutating `$REPO`: if `$EXPLICIT_REPO` is set (an explicit `--repo`
+  flag was given) and its value disagrees with the `<owner>/<repo>` parsed from
+  the shorthand — compared case-insensitively, since GitHub owner/repo segments
+  are case-insensitive — report a conflicting-input error and stop. This
+  compare-before-mutate ordering keeps the conflict check independent of any
+  later change to `$REPO`.
 
-**Branch-existence check wins over shorthand interpretation, and only runs for
-shorthand-shaped tokens.** Git branch names may legally contain both `/` and
-`#`, so a local or remote branch literally named `pfeff/dotfiles#247` is
-possible — and if such a branch exists, it must not be silently reinterpreted
-as an out-of-repo PR reference. Run `$GIT rev-parse --verify --quiet
-"<target-token>"` (quoted; discarding output, checking only the exit code).
-If it succeeds, the token is an existing branch — treat it as the Branch case
-in the dispatch below, unchanged, and skip shorthand parsing entirely.
+  Then split the token: store the `<owner>/<repo>` part in `$REPO` (overwriting
+  the `$EXPLICIT_REPO`-derived value, if any) and replace the target token with
+  the bare `<number>` so it falls through to the Numeric case below.
 
-Only when the branch-existence check fails (the token does not resolve to an
-existing branch or ref) do the following: split the shorthand-shaped token
-into its `<owner>/<repo>` and `<number>` parts. Store the `<owner>/<repo>`
-part in `$REPO` (overwriting the `$EXPLICIT_REPO`-derived value, if any) and
-replace the target token with the bare `<number>` so it falls through to the
-Numeric case below. If `$EXPLICIT_REPO` is also set (an explicit `--repo` flag
-was given) and its value disagrees with the `<owner>/<repo>` parsed from this
-shorthand — compared case-insensitively, since GitHub owner/repo segments are
-case-insensitive — report a conflicting-input error and stop.
+- **Not shorthand** — anything else, including plain PR numbers like `42` and
+  ordinary branch names (even those containing git-legal characters such as
+  `!`, `@`, `+`, `%`, `(`, `)`): pass it through unchanged, with no character
+  restriction and no git call, to the dispatch below — exactly as before
+  shorthand support existed.
+
+**Precedence:** a token shaped exactly like `<owner>/<repo>#<number>` is always
+interpreted as the out-of-repo shorthand, never as a branch. Git branch names
+may legally contain `/` and `#`, so a local branch literally named
+`owner/repo#N` is theoretically possible, but such a branch is not reviewable
+by that bare name through this skill — review it another way (e.g. rename it,
+or pass an explicit branch/worktree target). This deliberate, documented
+tradeoff replaces the earlier branch-existence (`rev-parse`) disambiguation,
+whose guarding machinery was the source of repeated regressions.
 
 Now that `$REPO` has its final value, derive `$REPO_FLAG` = ` --repo $REPO`
-when `$REPO` is set, otherwise empty.
+when `$REPO` is set, otherwise empty. Deriving it here (after shorthand
+classification) rather than earlier is deliberate: the shorthand must be able
+to set `$REPO` first.
 
 **Dispatch** on the (possibly shorthand-rewritten) target token:
 
