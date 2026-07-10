@@ -287,6 +287,108 @@ rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
 
 echo ""
 
+# Test 12: Jira-style task-id with a digit immediately after the first letter
+# (e.g. "AB2-345") resolves correctly. Regression: the task-id regex used to
+# require the letter-portion to be letters-only, rejecting real Jira keys
+# like this one and falling through to "Not a valid path or task-id".
+echo "Test 12: Jira-style task-id with digit after first letter resolves"
+task_id="ZZ2$RANDOM-345"
+ws=$(make_jira_workspace "$task_id")
+epic_dir=$(dirname "$ws")
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$task_id" --force --no-archive --no-close-issue </dev/null >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 0 "$exit_code" "digit-after-letter task-id exits 0"
+if grep -qF "Workspace: $ws" "$stdout_file"; then
+  echo "  PASS: resolved to the created workspace"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: did not resolve to $ws"
+  echo "    stdout was:"
+  sed 's/^/      /' "$stdout_file"
+  echo "    stderr was:"
+  sed 's/^/      /' "$stderr_file"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$ws" ]]; then
+  echo "  PASS: workspace directory removed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory still exists"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 13: workspace directory actually created with a lowercase/mixed-case
+# name (simulating a workspace created from a lowercase/mixed-case task-id,
+# since create-workspace.sh does not normalize case) resolves when queried
+# with a different case, e.g. uppercase. Regression: the previous fix
+# uppercased the query and did a case-sensitive `find -name`, which would
+# never match a lowercase-named directory.
+echo "Test 13: lowercase-named workspace directory resolves when queried uppercase"
+dir_task_id="zzmixed$RANDOM-7"
+ws=$(make_jira_workspace "$dir_task_id")
+epic_dir=$(dirname "$ws")
+query_id=$(echo "$dir_task_id" | tr '[:lower:]' '[:upper:]')
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$query_id" --force --no-archive --no-close-issue </dev/null >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 0 "$exit_code" "uppercase query against lowercase dir exits 0"
+if grep -qF "Workspace: $ws" "$stdout_file"; then
+  echo "  PASS: uppercase query resolved to the lowercase-named workspace"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: uppercase query did not resolve to $ws"
+  echo "    stdout was:"
+  sed 's/^/      /' "$stdout_file"
+  echo "    stderr was:"
+  sed 's/^/      /' "$stderr_file"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$ws" ]]; then
+  echo "  PASS: workspace directory removed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory still exists"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 14: ambiguous task-id (matches workspaces in two different epics)
+# errors out rather than silently picking one, per workspace-locator.sh's
+# multi-match detection (which close-workspace.sh now delegates to instead
+# of its own inline `find | head -1`).
+echo "Test 14: ambiguous task-id errors instead of silently picking a match"
+task_id="ZZDUP$RANDOM-1"
+ws1=$(make_jira_workspace "$task_id")
+epic_dir1=$(dirname "$ws1")
+epic_dir2="$HOME/src/work/test-close-workspace-dup-$$-$RANDOM"
+mkdir -p "$epic_dir2"
+ws2="$epic_dir2/${task_id}-othertask"
+mkdir -p "$ws2"
+echo "# ${task_id}: Test workspace 2" > "$ws2/DESIGN.md"
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$task_id" --force --no-archive --no-close-issue </dev/null 2>"$stderr_file" || exit_code=$?
+assert_exit_code 2 "$exit_code" "ambiguous task-id exits with EXIT_WORKSPACE_NOT_FOUND"
+assert_stderr_contains "Multiple workspaces found" "$stderr_file" "stderr reports multiple matches"
+if [[ -d "$ws1" && -d "$ws2" ]]; then
+  echo "  PASS: neither workspace was touched"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: a workspace was removed despite ambiguity"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$ws1" "$epic_dir1" "$ws2" "$epic_dir2" "$stderr_file"
+
+echo ""
+
 #------------------------------------------------------------------------------
 # Summary
 #------------------------------------------------------------------------------

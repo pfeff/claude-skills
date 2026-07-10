@@ -148,17 +148,11 @@ if [[ -z "$WORKSPACE_PATH" ]]; then
 elif [[ -d "$WORKSPACE_PATH" ]]; then
   # Explicit path: resolve to absolute
   WORKSPACE_PATH="$(cd "$WORKSPACE_PATH" && pwd)"
-elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z]+-[0-9]+)$ ]]; then
-  # Numeric or Jira-style task-id: search ~/src/work
-  # Normalize the letter portion to uppercase before the lookup: workspace
-  # directories are always created with uppercase Jira keys (e.g. DO-649),
-  # but `find` matches names case-sensitively, so "do-649" or "Do-649" must
-  # resolve to the same search as "DO-649".
-  TASK_ID_QUERY="${WORKSPACE_PATH^^}"
-  found=$(find ~/src/work -maxdepth 2 -type d -name "${TASK_ID_QUERY}-*" 2>/dev/null | head -1)
-  if [[ -z "$found" ]]; then
-    echo "Error: No workspace found for task-id: $WORKSPACE_PATH" >&2
-    echo "Searched: ~/src/work/*/${TASK_ID_QUERY}-*" >&2
+elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z][A-Za-z0-9]*-[0-9]+)$ ]]; then
+  # Numeric or Jira-style task-id: resolve via the canonical workspace-locator
+  # utility, which searches ~/src/work case-insensitively and errors out on
+  # no-match or multiple-match rather than silently guessing.
+  if ! found=$("$SCRIPT_DIR/workspace-locator.sh" "$WORKSPACE_PATH"); then
     exit "$EXIT_WORKSPACE_NOT_FOUND"
   fi
   WORKSPACE_PATH="$found"
