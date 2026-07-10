@@ -10,7 +10,8 @@
 #
 # Arguments:
 #   WORKSPACE_PATH  Path to workspace directory (defaults to CWD)
-#   TASK_ID         Task identifier (e.g., "94") to search for in ~/src/work
+#   TASK_ID         Task identifier to search for in ~/src/work: numeric
+#                   (e.g., "94") or Jira-style (e.g., "DO-649", case-insensitive)
 #
 # Options:
 #   --no-archive       Skip archiving before removal
@@ -59,7 +60,8 @@ usage() {
   echo ""
   echo "Arguments:"
   echo "  WORKSPACE_PATH  Path to workspace directory (defaults to CWD)"
-  echo "  TASK_ID         Numeric task identifier to search for in ~/src/work"
+  echo "  TASK_ID         Numeric or Jira-style (e.g., DO-649, case-insensitive)"
+  echo "                  task identifier to search for in ~/src/work"
   echo ""
   echo "Options:"
   echo "  --no-archive       Skip archiving before removal"
@@ -148,10 +150,15 @@ elif [[ -d "$WORKSPACE_PATH" ]]; then
   WORKSPACE_PATH="$(cd "$WORKSPACE_PATH" && pwd)"
 elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z]+-[0-9]+)$ ]]; then
   # Numeric or Jira-style task-id: search ~/src/work
-  found=$(find ~/src/work -maxdepth 2 -type d -name "${WORKSPACE_PATH}-*" 2>/dev/null | head -1)
+  # Normalize the letter portion to uppercase before the lookup: workspace
+  # directories are always created with uppercase Jira keys (e.g. DO-649),
+  # but `find` matches names case-sensitively, so "do-649" or "Do-649" must
+  # resolve to the same search as "DO-649".
+  TASK_ID_QUERY="${WORKSPACE_PATH^^}"
+  found=$(find ~/src/work -maxdepth 2 -type d -name "${TASK_ID_QUERY}-*" 2>/dev/null | head -1)
   if [[ -z "$found" ]]; then
     echo "Error: No workspace found for task-id: $WORKSPACE_PATH" >&2
-    echo "Searched: ~/src/work/*/${WORKSPACE_PATH}-*" >&2
+    echo "Searched: ~/src/work/*/${TASK_ID_QUERY}-*" >&2
     exit "$EXIT_WORKSPACE_NOT_FOUND"
   fi
   WORKSPACE_PATH="$found"

@@ -1,9 +1,11 @@
 #!/bin/bash
 #
-# Tests for close-workspace.sh TTY detection guards
+# Tests for close-workspace.sh TTY detection guards and task-id resolution
 #
 # Verifies that non-interactive mode (no TTY) is handled gracefully
-# rather than failing with an opaque exit code from `read`.
+# rather than failing with an opaque exit code from `read`, and that
+# numeric/Jira-style task-id lookups in ~/src/work resolve correctly
+# regardless of letter case.
 
 set -euo pipefail
 
@@ -35,6 +37,20 @@ make_goal_workspace() {
 
 make_empty_workspace() {
   mktemp -d
+}
+
+# Creates a workspace directory under ~/src/work/<epic>/<task_id>-<slug>, matching
+# the layout close-workspace.sh's TASK_ID lookup (`find ~/src/work -maxdepth 2 ...`)
+# searches. Echoes the created workspace directory path.
+make_jira_workspace() {
+  local task_id="$1"
+  local epic_dir
+  epic_dir="$HOME/src/work/test-close-workspace-$$-$RANDOM"
+  mkdir -p "$epic_dir"
+  local dir="$epic_dir/${task_id}-testtask"
+  mkdir -p "$dir"
+  echo "# ${task_id}: Test workspace" > "$dir/DESIGN.md"
+  echo "$dir"
 }
 
 assert_exit_code() {
@@ -203,6 +219,71 @@ bash "$SCRIPT" "$ws" --force --no-archive --no-close-issue </dev/null 2>"$stderr
 assert_exit_code 2 "$exit_code" "exits with EXIT_WORKSPACE_NOT_FOUND"
 assert_stderr_contains "No DESIGN.md or GOAL.md" "$stderr_file" "stderr names both files"
 rm -rf "$ws" "$stderr_file"
+
+echo ""
+
+# Test 10: Jira-style task-id (uppercase) resolves via ~/src/work lookup and closes end-to-end
+echo "Test 10: Jira-style task-id (uppercase) resolves and closes workspace"
+task_id="ZZTEST-$RANDOM"
+ws=$(make_jira_workspace "$task_id")
+epic_dir=$(dirname "$ws")
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$task_id" --force --no-archive --no-close-issue </dev/null >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 0 "$exit_code" "uppercase Jira-id exits 0"
+if grep -qF "Workspace: $ws" "$stdout_file"; then
+  echo "  PASS: resolved to the created workspace"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: did not resolve to $ws"
+  echo "    stdout was:"
+  sed 's/^/      /' "$stdout_file"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$ws" ]]; then
+  echo "  PASS: workspace directory removed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory still exists"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 11: lowercase/mixed-case Jira-style task-id normalizes to uppercase and
+# resolves to the SAME workspace an uppercase form would (regression: the
+# task-id validation regex accepts lowercase, but workspace directories are
+# always created with uppercase Jira keys, so the lookup must uppercase the
+# letter portion before searching).
+echo "Test 11: lowercase/mixed-case Jira-style task-id resolves to same workspace"
+task_id="ZZTEST-$RANDOM"
+ws=$(make_jira_workspace "$task_id")
+epic_dir=$(dirname "$ws")
+lower_id=$(echo "$task_id" | tr '[:upper:]' '[:lower:]')
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$lower_id" --force --no-archive --no-close-issue </dev/null >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 0 "$exit_code" "lowercase Jira-id exits 0"
+if grep -qF "Workspace: $ws" "$stdout_file"; then
+  echo "  PASS: lowercase id resolved to the uppercase-named workspace"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: lowercase id did not resolve to $ws"
+  echo "    stdout was:"
+  sed 's/^/      /' "$stdout_file"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$ws" ]]; then
+  echo "  PASS: workspace directory removed"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory still exists"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
 
 echo ""
 
