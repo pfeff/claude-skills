@@ -146,8 +146,8 @@ if [[ -z "$WORKSPACE_PATH" ]]; then
 elif [[ -d "$WORKSPACE_PATH" ]]; then
   # Explicit path: resolve to absolute
   WORKSPACE_PATH="$(cd "$WORKSPACE_PATH" && pwd)"
-elif [[ "$WORKSPACE_PATH" =~ ^[0-9]+$ ]]; then
-  # Numeric task-id: search ~/src/work
+elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z]+-[0-9]+)$ ]]; then
+  # Numeric or Jira-style task-id: search ~/src/work
   found=$(find ~/src/work -maxdepth 2 -type d -name "${WORKSPACE_PATH}-*" 2>/dev/null | head -1)
   if [[ -z "$found" ]]; then
     echo "Error: No workspace found for task-id: $WORKSPACE_PATH" >&2
