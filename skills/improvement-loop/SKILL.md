@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-version: 1.2.0
+version: 1.2.1
 ---
 
 # improvement-loop — continuous self-improvement role
@@ -184,7 +184,9 @@ consolidation itself lands as a PR — do not inline their logic here now.
    (`Notes/2026/07/2026-07-06-dual-pane-experience-log.md`) via the
    `obsidian-notes` skill. Non-blocking on failure — log and continue rather
    than stall the tick.
-7. End turn.
+7. End turn. If the last action was `ScheduleWakeup` or a backgrounded
+   `Task`/`Agent` dispatch, close with a short visible acknowledgment first
+   (see Guardrails).
 
 ## Guardrails
 
@@ -204,6 +206,11 @@ consolidation itself lands as a PR — do not inline their logic here now.
   it's load-bearing, mark the PR as such in its title or body — it always
   waits for explicit operator discussion, no matter how routine the diff
   looks.
+- **Never close a tick with no visible output.** If `ScheduleWakeup` or a
+  backgrounded `Task`/`Agent` dispatch is the last action of the turn, end
+  with a short visible acknowledgment (what's in flight, why the turn is
+  ending) — the harness auto-nudges empty-output turns, costing an extra
+  round-trip every time this is skipped.
 
 ## See Also
 
