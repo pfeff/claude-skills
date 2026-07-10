@@ -166,6 +166,80 @@ assert_eq "$FIXTURE/src/azdevops/acme/Infra/legacy-repo" "$path" "azdevops fallb
 export HOME="$ORIG_HOME"
 
 #------------------------------------------------------------------------------
+# Meta mode - end-to-end (real subprocess, not sourced, against a fixture HOME)
+#------------------------------------------------------------------------------
+
+echo ""
+echo "=== meta mode (end-to-end) ==="
+
+META_FIXTURE=$(mktemp -d)
+mkdir -p "$META_FIXTURE/src/work"
+META_OUT=$(mktemp)
+
+# --meta with no --repos: bare tracked directory + DESIGN.md stub only.
+HOME="$META_FIXTURE" bash "$SCRIPT" --meta --name test-meta-ws --headline "Ephemeral test workspace" \
+  >"$META_OUT" 2>&1
+rc=$?
+assert_rc 0 "$rc" "meta mode (no repos) exits 0"
+
+META_WS="$META_FIXTURE/src/work/meta/test-meta-ws"
+if [[ -d "$META_WS" ]]; then
+  echo "  PASS: meta workspace directory created at \$HOME/src/work/meta/<name>"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: meta workspace directory not created"
+  FAIL=$((FAIL + 1))
+fi
+
+assert_eq "# test-meta-ws: Ephemeral test workspace" "$(head -1 "$META_WS/DESIGN.md" 2>/dev/null)" \
+  "meta DESIGN.md stub matches close-workspace.sh's expected '# id: headline' format"
+
+# No tmuxp/CLAUDE.md/.envrc ceremony for meta mode.
+if [[ ! -f "$META_WS/.tmuxp.yaml" && ! -f "$META_WS/CLAUDE.md" && ! -f "$META_WS/.envrc" ]]; then
+  echo "  PASS: meta workspace has no tmuxp/CLAUDE.md/.envrc scaffolding"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: meta workspace unexpectedly contains task-mode scaffolding"
+  FAIL=$((FAIL + 1))
+fi
+
+# close-workspace.sh must tear this down without any special-casing.
+CLOSE_SCRIPT="$SCRIPT_DIR/close-workspace.sh"
+bash "$CLOSE_SCRIPT" "$META_WS" --force --no-archive --no-close-issue </dev/null >"$META_OUT" 2>&1
+rc=$?
+assert_rc 0 "$rc" "close-workspace.sh tears down a meta workspace"
+
+if [[ ! -d "$META_WS" ]]; then
+  echo "  PASS: meta workspace removed by close-workspace.sh"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: meta workspace still exists after close-workspace.sh"
+  FAIL=$((FAIL + 1))
+fi
+
+rm -rf "$META_FIXTURE" "$META_OUT"
+
+# --meta with --name only (no --headline): defaults headline to name.
+META_FIXTURE2=$(mktemp -d)
+mkdir -p "$META_FIXTURE2/src/work"
+META_OUT2=$(mktemp)
+HOME="$META_FIXTURE2" bash "$SCRIPT" --meta --name bare-name-ws >"$META_OUT2" 2>&1
+rc=$?
+assert_rc 0 "$rc" "meta mode without --headline exits 0"
+assert_eq "# bare-name-ws: bare-name-ws" \
+  "$(head -1 "$META_FIXTURE2/src/work/meta/bare-name-ws/DESIGN.md" 2>/dev/null)" \
+  "meta headline defaults to --name when omitted"
+rm -rf "$META_FIXTURE2" "$META_OUT2"
+
+# --meta without --name is a validation error (exit 1).
+META_OUT3=$(mktemp)
+rc=0
+bash "$SCRIPT" --meta >"$META_OUT3" 2>&1 || rc=$?
+assert_rc 1 "$rc" "meta mode without --name exits 1"
+rm -f "$META_OUT3"
+rm -f /tmp/meta-noname.out
+
+#------------------------------------------------------------------------------
 # Summary
 #------------------------------------------------------------------------------
 

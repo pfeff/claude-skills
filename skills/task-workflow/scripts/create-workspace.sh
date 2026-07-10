@@ -17,6 +17,16 @@
 #                 sonnet, haiku, or full model IDs). Defaults to "sonnet" when
 #                 omitted.
 #
+# Meta mode (lightweight, non-task-tree workspace):
+#   create-workspace.sh --meta --name NAME [--headline "HEADLINE"] [--repos REPOS]
+#
+# Creates a tracked directory at ~/src/work/meta/NAME with a minimal DESIGN.md
+# stub (so close-workspace.sh can tear it down) and, optionally, a git worktree
+# per repo on branch "meta/NAME". No tmuxp session, CLAUDE.md, .envrc, or
+# goal-tree scaffolding is created. Intended for ephemeral background-agent
+# worktree isolation and interactive-session working directories that don't
+# warrant full task-workspace ceremony. --headline defaults to NAME.
+#
 # Exit codes:
 #   0 - Success
 #   1 - Invalid arguments
@@ -55,6 +65,9 @@ NODE_ID=""
 NODE_DB_ID=""
 PROJECT_DIR=""
 PROJECT_BRANCH=""
+
+# Meta mode values
+META_NAME=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -107,6 +120,14 @@ while [[ $# -gt 0 ]]; do
       PROJECT_BRANCH="$2"
       shift 2
       ;;
+    --meta)
+      MODE="meta"
+      shift
+      ;;
+    --name)
+      META_NAME="$2"
+      shift 2
+      ;;
     *)
       echo "Error: Unknown argument: $1" >&2
       exit 1
@@ -141,6 +162,15 @@ if [[ "$MODE" == "node" ]]; then
   fi
   if [[ -z "$HEADLINE" ]]; then
     HEADLINE="Node $NODE_ID"
+  fi
+elif [[ "$MODE" == "meta" ]]; then
+  # Meta mode validation — lightweight, non-task-tree workspace
+  if [[ -z "$META_NAME" ]]; then
+    echo "Error: --name is required for meta mode" >&2
+    exit 1
+  fi
+  if [[ -z "$HEADLINE" ]]; then
+    HEADLINE="$META_NAME"
   fi
 else
   # Task mode validation
@@ -1133,6 +1163,190 @@ EOF
 }
 
 #------------------------------------------------------------------------------
+# create_meta_workspace - Create a lightweight, non-task-tree workspace
+#
+# Minimal ceremony: a tracked directory under ~/src/work/meta/<name> with a
+# one-line DESIGN.md stub (so close-workspace.sh can tear it down) and,
+# optionally, a git worktree per repo. No CLAUDE.md, .envrc, settings.json,
+# or tmuxp session — this kind exists purely to be a discoverable, cleanup-
+# tracked directory for ephemeral background-agent worktree isolation or
+# interactive-session working directories.
+#------------------------------------------------------------------------------
+
+create_meta_workspace() {
+  echo "Creating meta workspace '$META_NAME'..."
+
+  WORKSPACE_PATH="$HOME/src/work/meta/$META_NAME"
+  BRANCH_NAME="meta/$META_NAME"
+
+  echo "  Path: $WORKSPACE_PATH"
+
+  #----------------------------------------------------------------------------
+  # Step 1: Check prerequisites
+  #----------------------------------------------------------------------------
+
+  if [[ -d "$WORKSPACE_PATH" ]]; then
+    echo "Error: Meta workspace already exists: $WORKSPACE_PATH" >&2
+    echo "Delete it first or use a different --name." >&2
+    exit 2
+  fi
+
+  if [[ -n "$REPOS" ]]; then
+    IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      if ! resolve_repo_path "$repo" &>/dev/null; then
+        echo "Error: Repository not found: $repo" >&2
+        echo "Searched in ~/src/github and ~/src/azdevops" >&2
+        exit 2
+      fi
+    done
+  fi
+
+  #----------------------------------------------------------------------------
+  # Step 2: Create workspace directory and DESIGN.md stub
+  #----------------------------------------------------------------------------
+
+  echo "Creating workspace directory..."
+  mkdir -p "$WORKSPACE_PATH"
+  echo "  Created: $WORKSPACE_PATH"
+
+  echo "# $META_NAME: $HEADLINE" > "$WORKSPACE_PATH/DESIGN.md"
+  echo "  DESIGN.md: created (stub)"
+
+  #----------------------------------------------------------------------------
+  # Step 3: Create git worktrees (optional)
+  #----------------------------------------------------------------------------
+
+  if [[ -n "$REPOS" ]]; then
+    echo "Creating git worktrees..."
+
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      worktree_path="$WORKSPACE_PATH/$repo_basename"
+
+      echo "  $repo_basename:"
+      echo "    Source: $repo_path"
+      echo "    Worktree: $worktree_path"
+      echo "    Branch: $BRANCH_NAME"
+
+      cd "$repo_path"
+      default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+      git fetch origin "$default_branch" --quiet 2>/dev/null || true
+
+      if ! git worktree add "$worktree_path" -b "$BRANCH_NAME" "origin/$default_branch" 2>/dev/null; then
+        if ! git worktree add "$worktree_path" "$BRANCH_NAME" 2>/dev/null; then
+          if ! git worktree add "$worktree_path" -b "$BRANCH_NAME" 2>/dev/null; then
+            echo "Error: Failed to create worktree for $repo" >&2
+            exit 4
+          fi
+        fi
+      fi
+
+      actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+      if [[ "$actual_branch" == "$default_branch" ]]; then
+        echo "    WARNING: Worktree on default branch '$default_branch', switching to feature branch..."
+        if (cd "$worktree_path" && git checkout -b "$BRANCH_NAME" 2>/dev/null); then
+          echo "    Created and switched to branch '$BRANCH_NAME'"
+        elif (cd "$worktree_path" && git checkout "$BRANCH_NAME" 2>/dev/null); then
+          echo "    Switched to existing branch '$BRANCH_NAME'"
+        else
+          echo "Error: Failed to switch worktree to feature branch '$BRANCH_NAME'" >&2
+          exit 4
+        fi
+      fi
+
+      echo "    Created worktree"
+
+      install_worktree_branch_hook "$worktree_path"
+    done
+  fi
+
+  #----------------------------------------------------------------------------
+  # Step 4: Verification
+  #----------------------------------------------------------------------------
+
+  echo ""
+  echo "Running verification checks..."
+  VERIFICATION_FAILED=0
+
+  if [[ -d "$WORKSPACE_PATH" ]]; then
+    verify_check "Workspace directory exists" "pass"
+  else
+    verify_check "Workspace directory exists" "fail"
+  fi
+
+  EXPECTED_FIRST_LINE="# $META_NAME: $HEADLINE"
+  if [[ -f "$WORKSPACE_PATH/DESIGN.md" ]]; then
+    ACTUAL_FIRST_LINE=$(head -1 "$WORKSPACE_PATH/DESIGN.md")
+    if [[ "$ACTUAL_FIRST_LINE" == "$EXPECTED_FIRST_LINE" ]]; then
+      verify_check "DESIGN.md first line format" "pass"
+    else
+      verify_check "DESIGN.md first line format" "fail"
+    fi
+  else
+    verify_check "DESIGN.md first line format" "fail"
+  fi
+
+  if [[ -n "$REPOS" ]]; then
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      worktree_path="$WORKSPACE_PATH/$repo_basename"
+      if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
+        actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ "$actual_branch" == "$BRANCH_NAME" ]]; then
+          verify_check "Git worktree $repo_basename on correct branch" "pass"
+        else
+          verify_check "Git worktree $repo_basename on correct branch" "fail"
+        fi
+      else
+        verify_check "Git worktree $repo_basename exists" "fail"
+      fi
+    done
+  fi
+
+  if [[ $VERIFICATION_FAILED -eq 1 ]]; then
+    echo ""
+    echo "Error: One or more verification checks failed" >&2
+    exit 7
+  fi
+
+  echo ""
+  echo "All verification checks passed!"
+
+  #----------------------------------------------------------------------------
+  # Summary
+  #----------------------------------------------------------------------------
+
+  echo ""
+  echo "=========================================="
+  echo "Meta workspace created successfully!"
+  echo "=========================================="
+  echo ""
+  echo "  Path: $WORKSPACE_PATH"
+  echo ""
+  echo "Files created:"
+  echo "  - DESIGN.md (stub)"
+  if [[ -n "$REPOS" ]]; then
+    echo ""
+    echo "Git worktrees:"
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      echo "  - $repo_basename (branch: $BRANCH_NAME)"
+    done
+  fi
+  echo ""
+  echo "Next steps:"
+  echo "  cd \"$WORKSPACE_PATH\""
+}
+
+#------------------------------------------------------------------------------
 # Mode dispatcher
 #------------------------------------------------------------------------------
 
@@ -1142,5 +1356,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   case "$MODE" in
     task) create_task_workspace ;;
     node) create_node_workspace ;;
+    meta) create_meta_workspace ;;
   esac
 fi
