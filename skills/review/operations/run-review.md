@@ -192,8 +192,11 @@ Rules:
 
 Present the contents of `.claude/reviews/latest.md` to the user (without the YAML frontmatter).
 
-## Step 10: Post Inline PR Comments
+## Step 10: Post Verdict Comment
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 
-When `$PR_NUMBER` is set, automatically post findings as inline PR review comments by executing the `operations/post-review.md` operation with the current `$PR_NUMBER`. This posts line-level comments on the PR diff and a summary review comment.
+When `$PR_NUMBER` is set, execute the `operations/post-review.md` operation with the
+current `$PR_NUMBER`. This upserts a single sticky verdict comment on the PR (edited in
+place on re-run, never appended) and, unless reviewing your own PR, submits a
+`REQUEST_CHANGES`/`APPROVE` event.
