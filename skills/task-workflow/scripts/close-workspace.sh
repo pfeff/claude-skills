@@ -30,7 +30,6 @@
 set -euo pipefail
 
 # Script location
-# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Exit codes
@@ -152,6 +151,8 @@ elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z][A-Za-z0-9]*-[0-9]+)$ ]]; then
   # Numeric or Jira-style task-id: resolve via the canonical workspace-locator
   # utility, which searches ~/src/work case-insensitively and errors out on
   # no-match or multiple-match rather than silently guessing.
+  # Note: the locator's failure modes (no-match exit 1, ambiguous-match exit 1)
+  # are intentionally collapsed into a single EXIT_WORKSPACE_NOT_FOUND here.
   if ! found=$("$SCRIPT_DIR/workspace-locator.sh" "$WORKSPACE_PATH"); then
     exit "$EXIT_WORKSPACE_NOT_FOUND"
   fi

@@ -252,11 +252,11 @@ rm -rf "$ws" "$epic_dir" "$stdout_file" "$stderr_file"
 
 echo ""
 
-# Test 11: lowercase/mixed-case Jira-style task-id normalizes to uppercase and
-# resolves to the SAME workspace an uppercase form would (regression: the
-# task-id validation regex accepts lowercase, but workspace directories are
-# always created with uppercase Jira keys, so the lookup must uppercase the
-# letter portion before searching).
+# Test 11: lowercase/mixed-case Jira-style task-id resolves to the SAME workspace
+# an uppercase form would (regression: the task-id validation regex accepts
+# lowercase, but workspace directories are typically created with uppercase Jira
+# keys, so the lookup must match case-insensitively — workspace-locator.sh uses
+# `find -iname`, not case normalization of the query).
 echo "Test 11: lowercase/mixed-case Jira-style task-id resolves to same workspace"
 task_id="ZZTEST-$RANDOM"
 ws=$(make_jira_workspace "$task_id")
@@ -386,6 +386,51 @@ else
   FAIL=$((FAIL + 1))
 fi
 rm -rf "$ws1" "$epic_dir1" "$ws2" "$epic_dir2" "$stderr_file"
+
+echo ""
+
+# Test 15: ambiguous match WITHIN a specified epic errors instead of silently
+# picking the first (epic-scoped branch of workspace-locator.sh). Case-insensitive
+# `find -iname` makes collisions like FOO-1-old / foo-1-new possible in one epic
+# dir, so the epic branch must apply the same multi-match guard as the no-epic
+# branch. The specify-epic remediation the no-epic branch points to is exactly
+# this path, so it must not itself silently guess.
+echo "Test 15: ambiguous match within a specified epic errors"
+LOCATOR="$SCRIPT_DIR/workspace-locator.sh"
+task_id="ZZEPICDUP$RANDOM-1"
+epic="test-close-workspace-epicdup-$$-$RANDOM"
+epic_dir="$HOME/src/work/$epic"
+mkdir -p "$epic_dir/${task_id}-old"
+lower_id=$(echo "$task_id" | tr '[:upper:]' '[:lower:]')
+mkdir -p "$epic_dir/${lower_id}-new"
+stdout_file=$(mktemp)
+stderr_file=$(mktemp)
+exit_code=0
+bash "$LOCATOR" "$task_id" "$epic" >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+assert_exit_code 1 "$exit_code" "epic-scoped ambiguous match exits 1"
+assert_stderr_contains "Multiple workspaces found" "$stderr_file" "epic-scoped stderr reports multiple matches"
+if [[ ! -s "$stdout_file" ]]; then
+  echo "  PASS: no workspace path emitted on stdout"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: emitted a path despite ambiguity: $(cat "$stdout_file")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$epic_dir" "$stdout_file" "$stderr_file"
+
+echo ""
+
+# Test 16: task-id matching no workspace, resolved through the
+# close-workspace.sh -> workspace-locator.sh delegation path, returns the
+# not-found exit code. This delegation path replaced previously-inline
+# not-found handling and otherwise had no coverage.
+echo "Test 16: unmatched task-id via delegation exits not-found"
+task_id="ZZNOPE$RANDOM-9"
+stderr_file=$(mktemp)
+exit_code=0
+bash "$SCRIPT" "$task_id" --force --no-archive --no-close-issue </dev/null 2>"$stderr_file" || exit_code=$?
+assert_exit_code 2 "$exit_code" "unmatched task-id exits EXIT_WORKSPACE_NOT_FOUND"
+rm -rf "$stderr_file"
 
 echo ""
 
