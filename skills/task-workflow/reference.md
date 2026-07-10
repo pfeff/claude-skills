@@ -261,12 +261,12 @@ Discover and open existing workspace.
 
 **With Epic**:
 ```bash
-find ~/src/work/<epic> -maxdepth 1 -type d -name "<task-id>-*"
+find ~/src/work/<epic> -maxdepth 1 -type d -iname "<task-id>-*"
 ```
 
 **Without Epic**:
 ```bash
-find ~/src/work -maxdepth 2 -type d -name "<task-id>-*"
+find ~/src/work -maxdepth 2 -type d -iname "<task-id>-*"
 ```
 
 **Utility Script**: `scripts/workspace-locator.sh <task-id> [epic]`
