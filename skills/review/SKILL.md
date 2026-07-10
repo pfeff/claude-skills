@@ -55,7 +55,7 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
   the standard GitHub cross-reference syntax for a PR in another repo, parsed into
   the same `$REPO` and PR-number values. A token of this exact shape always wins
   over a same-named branch (see the Precedence note in `operations/run-review.md`).
-  Do not pass both the shorthand and `--repo`.
+  Passing both a `--repo` flag and the `owner/repo#N` shorthand that disagree is a conflicting-input error.
 - `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
   or current-branch target diffs against that worktree instead of cwd. Use when
   the target branch lives in a different checkout. `--repo` may be combined to

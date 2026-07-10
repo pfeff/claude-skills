@@ -23,8 +23,7 @@ restriction — exactly as before shorthand support existed; only the shorthand
 case below imposes a shape, and it does so via a self-validating anchored regex.
 
 `$REPO` may be empty (in-repo behavior). Shorthand parsing in "Parse arguments"
-below may overwrite it (last-writer-wins). Do not pass both the shorthand and
-`--repo`.
+below may set it. Passing both a `--repo` flag and the `owner/repo#N` shorthand that disagree is a conflicting-input error.
 
 Derive `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
 
@@ -58,9 +57,14 @@ Numeric and Otherwise cases in the dispatch below:
   metacharacters. (See the Precedence note below for how this shape wins over a
   same-named branch.)
 
-  Split the token: store the `<owner>/<repo>` part in `$REPO` (overwriting any
-  value set by `--repo`; last-writer-wins) and replace the target token with the
-  bare `<number>` so it falls through to the Numeric case below.
+  Split the token into its `<owner>/<repo>` part and bare `<number>`. If `$REPO`
+  was already set by an explicit `--repo` flag and its value differs from this
+  shorthand's `<owner>/<repo>` compared case-insensitively (GitHub owner/repo is
+  case-insensitive), report a conflicting-input error and stop — the same
+  report-and-stop the `--repo` validation above uses on malformed input.
+  Otherwise store the shorthand's `<owner>/<repo>` in `$REPO` and replace the
+  target token with the bare `<number>` so it falls through to the Numeric case
+  below.
 
 - **Not shorthand** — anything else, including plain PR numbers like `42` and
   ordinary branch names (even those containing git-legal characters such as
