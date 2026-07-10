@@ -423,7 +423,8 @@ for conflict_case in \
   mkdir -p "$CONFLICT_FIXTURE/src/work"
   CONFLICT_OUT=$(mktemp)
   rc=0
-  # shellcheck disable=SC2086 -- intentional word-split of the flag+value pair
+  # intentional word-split of the flag+value pair
+  # shellcheck disable=SC2086
   HOME="$CONFLICT_FIXTURE" bash "$SCRIPT" --meta --name conflict-test $conflict_case >"$CONFLICT_OUT" 2>&1 || rc=$?
   assert_rc 1 "$rc" "meta mode rejects '$conflict_case' combined with --meta (not silently dropped)"
   rm -rf "$CONFLICT_FIXTURE" "$CONFLICT_OUT"
