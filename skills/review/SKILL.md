@@ -19,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.5.0
+version: 0.6.0
 ---
 
 # Review Skill
@@ -43,6 +43,7 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
 
 ```
 /claude-skills:review 42 --repo <owner>/<repo>       # PR #42 in another repo
+/claude-skills:review pfeff/dotfiles#247             # PR #247 in another repo (shorthand)
 /claude-skills:review feature-xyz --worktree <path>  # branch in another worktree
 ```
 
@@ -50,6 +51,9 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
   and `gh pr view` via `--repo`; `gh repo view` takes it positionally) so a bare
   PR-number target resolves against the named repo instead of cwd. Use when
   reviewing an out-of-repo PR.
+- `<owner>/<repo>#<number>` — shorthand equivalent to `<number> --repo <owner>/<repo>`;
+  the standard GitHub cross-reference syntax for a PR in another repo, parsed into
+  the same `$REPO` and PR-number values.
 - `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
   or current-branch target diffs against that worktree instead of cwd. Use when
   the target branch lives in a different checkout. `--repo` may be combined to

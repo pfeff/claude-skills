@@ -15,6 +15,19 @@ this step is byte-for-byte identical to the no-anchor form.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
+Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
+cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
+specify the same thing as `<number> --repo <owner>/<repo>`. If the remaining
+target token (after removing `--repo`/`--worktree`) matches
+`<owner>/<repo>#<number>` — same owner/repo character validation as above (one
+`/` separator), then a literal `#`, then digits — split it into its
+`<owner>/<repo>` and `<number>` parts. Store the `<owner>/<repo>` part in
+`$REPO` (same variable the `--repo` flag populates) and replace the target
+token with the bare `<number>` so it falls through to the Numeric case in
+"Parse arguments" below. If an explicit `--repo` flag was also given and its
+value disagrees with the `<owner>/<repo>` parsed from this shorthand, report a
+conflicting-input error and stop.
+
 Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
 token is the target (PR number, branch name, or empty). Derive two prefixes used
 below:
