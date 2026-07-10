@@ -299,9 +299,12 @@ fi
 rm -rf "$TRAVERSAL_FIXTURE" "$TRAVERSAL_OUT"
 
 # Other invalid --name values covered by the same validation pass: a leading
-# dash (flag-injection hazard), and a colon (corrupts close-workspace.sh's
-# "# id: headline" first-line parser — see TASK_ID="${FIRST_LINE%%:*}").
-for bad_name in '-rf' 'foo:bar' 'a/b' '..'; do
+# dash (flag-injection hazard), a colon (corrupts close-workspace.sh's
+# "# id: headline" first-line parser — see TASK_ID="${FIRST_LINE%%:*}"),
+# embedded whitespace (would produce an unbuildable branch name, see below),
+# and an embedded newline (control character, would forge a second DESIGN.md
+# line for list-tasks.sh's unrestricted scan).
+for bad_name in '-rf' 'foo:bar' 'a/b' '..' 'foo bar' "$(printf 'foo\nbar')"; do
   BAD_FIXTURE=$(mktemp -d)
   mkdir -p "$BAD_FIXTURE/src/work"
   BAD_OUT=$(mktemp)
@@ -310,6 +313,50 @@ for bad_name in '-rf' 'foo:bar' 'a/b' '..'; do
   assert_rc 1 "$rc" "meta mode rejects invalid --name '$bad_name'"
   rm -rf "$BAD_FIXTURE" "$BAD_OUT"
 done
+
+# Whitespace in --name previously passed validation, then broke downstream:
+# `git worktree add ... -b "meta/foo bar"` fails (branch names can't contain
+# spaces), exhausting all three fallback attempts and surfacing only a
+# generic "Failed to create worktree" (exit 4) instead of the same clear,
+# upfront validation error the other hazard classes get. Assert the specific
+# whitespace message, not just exit 1.
+WS_FIXTURE=$(mktemp -d)
+mkdir -p "$WS_FIXTURE/src/work"
+WS_OUT=$(mktemp)
+rc=0
+HOME="$WS_FIXTURE" bash "$SCRIPT" --meta --name 'foo bar' --headline test >"$WS_OUT" 2>&1 || rc=$?
+assert_rc 1 "$rc" "meta mode rejects whitespace in --name with exit 1 (not exit 4)"
+if grep -q "must not contain whitespace" "$WS_OUT"; then
+  echo "  PASS: whitespace rejection error names whitespace specifically"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: whitespace rejection error did not name whitespace"
+  echo "    output: $(cat "$WS_OUT")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$WS_FIXTURE" "$WS_OUT"
+
+# --headline is embedded unsanitized into the DESIGN.md first line; a crafted
+# embedded newline could forge a second, spoofed line. Reject it the same way
+# META_NAME's hazard characters are rejected.
+HEADLINE_FIXTURE=$(mktemp -d)
+mkdir -p "$HEADLINE_FIXTURE/src/work"
+HEADLINE_OUT=$(mktemp)
+rc=0
+HOME="$HEADLINE_FIXTURE" bash "$SCRIPT" --meta --name headline-test \
+  --headline "$(printf 'Fine\n# spoofed-id: Spoofed Headline')" >"$HEADLINE_OUT" 2>&1 || rc=$?
+assert_rc 1 "$rc" "meta mode rejects embedded newline in --headline"
+rm -rf "$HEADLINE_FIXTURE" "$HEADLINE_OUT"
+
+# --meta combined with flags that only make sense in task/node mode is a
+# confused invocation, not a valid combination.
+CONFLICT_FIXTURE=$(mktemp -d)
+mkdir -p "$CONFLICT_FIXTURE/src/work"
+CONFLICT_OUT=$(mktemp)
+rc=0
+HOME="$CONFLICT_FIXTURE" bash "$SCRIPT" --meta --name conflict-test --task-id 5 >"$CONFLICT_OUT" 2>&1 || rc=$?
+assert_rc 1 "$rc" "meta mode rejects --task-id combined with --meta"
+rm -rf "$CONFLICT_FIXTURE" "$CONFLICT_OUT"
 
 #------------------------------------------------------------------------------
 # Meta mode - --repos (real git worktree creation + close-workspace.sh teardown)
@@ -382,6 +429,152 @@ else
 fi
 
 rm -rf "$REPO_FIXTURE" "$REPO_OUT"
+
+#------------------------------------------------------------------------------
+# Meta mode - failure-path coverage
+#
+# Three unique failure paths in create_meta_workspace previously had no test
+# coverage: (a) the "already exists" early-exit, (b) the "--repos entry not
+# found" early-exit, and (c) the worktree-creation-exhausted-fallback path.
+#------------------------------------------------------------------------------
+
+echo ""
+echo "=== meta mode failure paths ==="
+
+# (a) "Meta workspace already exists" early-exit.
+EXISTS_FIXTURE=$(mktemp -d)
+mkdir -p "$EXISTS_FIXTURE/src/work/meta/dup-ws"
+EXISTS_OUT=$(mktemp)
+rc=0
+HOME="$EXISTS_FIXTURE" bash "$SCRIPT" --meta --name dup-ws --headline test >"$EXISTS_OUT" 2>&1 || rc=$?
+assert_rc 2 "$rc" "meta mode exits 2 when workspace already exists"
+if grep -q "Meta workspace already exists" "$EXISTS_OUT"; then
+  echo "  PASS: already-exists error identifies the workspace"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: already-exists error message missing"
+  echo "    output: $(cat "$EXISTS_OUT")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$EXISTS_FIXTURE" "$EXISTS_OUT"
+
+# (b) "--repos entry not found" early-exit.
+NOTFOUND_FIXTURE=$(mktemp -d)
+mkdir -p "$NOTFOUND_FIXTURE/src/work"
+NOTFOUND_OUT=$(mktemp)
+rc=0
+HOME="$NOTFOUND_FIXTURE" bash "$SCRIPT" --meta --name notfound-ws --headline test \
+  --repos "nobody/does-not-exist" >"$NOTFOUND_OUT" 2>&1 || rc=$?
+assert_rc 2 "$rc" "meta mode exits 2 when a --repos entry is not found"
+if grep -q "Repository not found: nobody/does-not-exist" "$NOTFOUND_OUT"; then
+  echo "  PASS: repo-not-found error identifies the missing repo"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: repo-not-found error message missing or wrong"
+  echo "    output: $(cat "$NOTFOUND_OUT")"
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -d "$NOTFOUND_FIXTURE/src/work/meta/notfound-ws" ]]; then
+  echo "  PASS: no workspace directory created when a --repos entry is missing"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory was created despite a missing --repos entry"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$NOTFOUND_FIXTURE" "$NOTFOUND_OUT"
+
+# (c) Worktree-creation-exhausted-fallback path. Pre-check out the branch the
+# script will target ("meta/<name>") in a separate worktree of the same repo,
+# so all three of create_git_worktree's fallback attempts fail: attempt 1 has
+# no origin remote to branch from, and attempts 2/3 both collide with the
+# branch already being checked out elsewhere.
+EXHAUST_FIXTURE=$(mktemp -d)
+mkdir -p "$EXHAUST_FIXTURE/src/work"
+mkdir -p "$EXHAUST_FIXTURE/src/github/testowner/exhaustrepo"
+(
+  cd "$EXHAUST_FIXTURE/src/github/testowner/exhaustrepo" || exit 1
+  git init -q -b main .
+  git config user.email "test@example.com"
+  git config user.name "Test"
+  echo "hello" > README.md
+  git add README.md
+  git commit -q -m "initial commit"
+  git worktree add ../exhaustrepo-other-wt -b meta/exhaust-ws
+) >/dev/null 2>&1
+
+EXHAUST_OUT=$(mktemp)
+rc=0
+HOME="$EXHAUST_FIXTURE" bash "$SCRIPT" --meta --name exhaust-ws --headline test \
+  --repos "testowner/exhaustrepo" >"$EXHAUST_OUT" 2>&1 || rc=$?
+assert_rc 4 "$rc" "meta mode exits 4 when all three worktree-add fallbacks fail"
+if grep -q "Failed to create worktree" "$EXHAUST_OUT"; then
+  echo "  PASS: exhausted-fallback error identifies the failure"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: exhausted-fallback error message missing"
+  echo "    output: $(cat "$EXHAUST_OUT")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$EXHAUST_FIXTURE" "$EXHAUST_OUT"
+
+#------------------------------------------------------------------------------
+# Meta mode - --repos basename collision (no partial worktree creation)
+#
+# worktree_path is derived from basename only, not the owner: two --repos
+# entries resolving to different owners but the same repo basename would
+# target the same worktree_path. Assert the collision is caught upfront
+# (exit 2) before anything is created — not partway through, after the first
+# worktree already succeeded.
+#------------------------------------------------------------------------------
+
+echo ""
+echo "=== meta mode --repos basename collision ==="
+
+COLLISION_FIXTURE=$(mktemp -d)
+mkdir -p "$COLLISION_FIXTURE/src/work"
+mkdir -p "$COLLISION_FIXTURE/src/github/org1/tools" "$COLLISION_FIXTURE/src/github/org2/tools"
+(
+  cd "$COLLISION_FIXTURE/src/github/org1/tools" || exit 1
+  git init -q -b main .
+  git config user.email "test@example.com"
+  git config user.name "Test"
+  echo "hi" > README.md
+  git add README.md
+  git commit -q -m init
+) >/dev/null 2>&1
+(
+  cd "$COLLISION_FIXTURE/src/github/org2/tools" || exit 1
+  git init -q -b main .
+  git config user.email "test@example.com"
+  git config user.name "Test"
+  echo "hi" > README.md
+  git add README.md
+  git commit -q -m init
+) >/dev/null 2>&1
+
+COLLISION_OUT=$(mktemp)
+rc=0
+HOME="$COLLISION_FIXTURE" bash "$SCRIPT" --meta --name collision-ws --headline test \
+  --repos "org1/tools,org2/tools" >"$COLLISION_OUT" 2>&1 || rc=$?
+assert_rc 2 "$rc" "meta mode rejects --repos basename collision before creating anything"
+if grep -q "would collide" "$COLLISION_OUT"; then
+  echo "  PASS: collision error identifies the colliding basename"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: collision error message missing"
+  echo "    output: $(cat "$COLLISION_OUT")"
+  FAIL=$((FAIL + 1))
+fi
+
+if [[ ! -d "$COLLISION_FIXTURE/src/work/meta/collision-ws" ]]; then
+  echo "  PASS: no workspace directory created (pre-flight check fires before any worktree work)"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: workspace directory was created despite the basename collision"
+  FAIL=$((FAIL + 1))
+fi
+
+rm -rf "$COLLISION_FIXTURE" "$COLLISION_OUT"
 
 #------------------------------------------------------------------------------
 # Summary
