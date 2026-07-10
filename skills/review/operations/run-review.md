@@ -10,8 +10,9 @@ this step is byte-for-byte identical to the no-anchor form.
 
 - `--repo <owner>/<repo>`: out-of-repo anchor for `gh` PR calls. Validate that
   `<owner>` and `<repo>` each contain only alphanumerics, hyphens, underscores,
-  and dots (one `/` separator). Store as `$EXPLICIT_REPO`. If invalid, report
-  the error and stop.
+  and dots (one `/` separator), and that neither segment begins with `-` (so
+  `--repo -x/repo` is rejected as an option-injection attempt). Store as
+  `$EXPLICIT_REPO`. If invalid, report the error and stop.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
@@ -52,10 +53,11 @@ specify the same thing as `<number> --repo <owner>/<repo>`.
 Numeric and Otherwise cases in the dispatch below:
 
 - **Shorthand** — the token matches, in its entirety, the anchored regex
-  `^[A-Za-z0-9._][A-Za-z0-9._-]*/[A-Za-z0-9._-]+#[0-9]+$`: an `<owner>`
-  segment whose first character is not a hyphen (so a leading-dash token like
-  `-x/repo#1` can never match and can never reach a downstream shell call as an
-  option), a `/`, a `<repo>` segment, a literal `#`, then one or more digits.
+  `^[A-Za-z0-9._][A-Za-z0-9._-]*/[A-Za-z0-9._][A-Za-z0-9._-]*#[0-9]+$`: an
+  `<owner>` segment, a `/`, a `<repo>` segment — the first character of each is
+  not a hyphen, so a leading-dash token like `-x/repo#1` can never match and can
+  never reach a downstream shell call as an option — a literal `#`, then one or
+  more digits.
   Because the regex admits only this exact safe shape, it is its own
   validation — no separate character-gate and no `git`/`gh` call is needed to
   classify the token, and it cannot match a token containing shell
@@ -98,7 +100,15 @@ to set `$REPO` first.
 
 - **Empty / no args**: Current branch vs base. Run `$GIT diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
 - **Numeric** (e.g. `42`): PR number. Run `gh pr diff <target>$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
-- **Otherwise**: Branch name. Run `$GIT diff $BASE...<target>`. Set `$PR_NUMBER` to empty.
+- **Otherwise**: Branch name. First reject the target if it begins with `-`
+  (report an error and stop) — this prevents a leading-dash target from being
+  taken by `git` as an option. Then run `$GIT diff "$BASE...$target"`, passing
+  the target to `git` as a single literal argument: the `$BASE...$target` refspec
+  is one quoted argv token and must **not** be string-concatenated into a shell
+  command that could evaluate metacharacters. A branch name containing shell
+  metacharacters (e.g. `$(touch /tmp/x)`) is therefore handed to `git` inertly as
+  one argument — `git` treats it as a nonexistent ref and errors cleanly — never
+  evaluated by a shell. Set `$PR_NUMBER` to empty.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 

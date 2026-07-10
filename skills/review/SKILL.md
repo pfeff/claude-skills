@@ -65,9 +65,11 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
 
 The anchors only change *where* the diff is fetched from; the target itself is
 still a PR number, a git ref, or the `owner/repo#number` shorthand. Plain PR
-numbers and branch names are passed through as-is (no character restriction);
-only the `owner/repo#number` shorthand is matched by shape, via an anchored
-regex that admits only that safe form.
+numbers and branch names are passed through without a character allowlist — a
+branch target beginning with `-` is rejected (option-injection guard) and any
+metacharacters are passed to `git` inertly as one quoted argument rather than
+evaluated; only the `owner/repo#number` shorthand is matched by shape, via an
+anchored regex that admits only that safe form.
 
 ## Execution Flow
 
