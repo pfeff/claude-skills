@@ -53,14 +53,17 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
   reviewing an out-of-repo PR.
 - `<owner>/<repo>#<number>` — shorthand equivalent to `<number> --repo <owner>/<repo>`;
   the standard GitHub cross-reference syntax for a PR in another repo, parsed into
-  the same `$REPO` and PR-number values.
+  the same `$REPO` and PR-number values. If the target token happens to name an
+  existing branch (branch names may legally contain `/` and `#`), the
+  branch-existence check wins and the token is diffed as that branch instead.
 - `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
   or current-branch target diffs against that worktree instead of cwd. Use when
   the target branch lives in a different checkout. `--repo` may be combined to
   also anchor the inline-comment posting step.
 
 The anchors only change *where* the diff is fetched from; the target value
-itself is still constrained to a safe PR number or git ref.
+itself is still constrained to a safe PR number, git ref, or the
+`owner/repo#number` shorthand.
 
 ## Execution Flow
 

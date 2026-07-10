@@ -15,25 +15,40 @@ this step is byte-for-byte identical to the no-anchor form.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
-Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
-cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
-specify the same thing as `<number> --repo <owner>/<repo>`. If the remaining
-target token (after removing `--repo`/`--worktree`) matches
-`<owner>/<repo>#<number>` — same owner/repo character validation as above (one
-`/` separator), then a literal `#`, then digits — split it into its
-`<owner>/<repo>` and `<number>` parts. Store the `<owner>/<repo>` part in
-`$REPO` (same variable the `--repo` flag populates) and replace the target
-token with the bare `<number>` so it falls through to the Numeric case in
-"Parse arguments" below. If an explicit `--repo` flag was also given and its
-value disagrees with the `<owner>/<repo>` parsed from this shorthand, report a
-conflicting-input error and stop.
-
 Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
-token is the target (PR number, branch name, or empty). Derive two prefixes used
-below:
+token is the target (PR number, branch name, owner/repo#number shorthand, or
+empty). Derive two prefixes used below:
 
 - `$REPO_FLAG` = ` --repo $REPO` when `$REPO` is set, otherwise empty.
 - `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
+
+Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
+cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
+specify the same thing as `<number> --repo <owner>/<repo>`.
+
+**Branch-existence check wins over shorthand interpretation.** Git branch
+names may legally contain both `/` and `#`, so a local or remote branch
+literally named `pfeff/dotfiles#247` is possible — and if such a branch
+exists, it must not be silently reinterpreted as an out-of-repo PR reference.
+Before treating the target token as shorthand, check whether it already
+resolves to an existing branch or ref: run `$GIT rev-parse --verify --quiet
+<target-token>` (discarding output, checking only the exit code). If it
+succeeds, the token is an existing branch — treat it as the Branch case in
+"Parse arguments" below, unchanged, and skip shorthand parsing entirely.
+
+Only when the branch-existence check fails (the token does not resolve to an
+existing branch or ref) do the following: if the target token matches, in
+its entirety (anchored — no unvalidated leading or trailing characters:
+`^<owner>/<repo>#<number>$`), the pattern `<owner>/<repo>#<number>` — same
+owner/repo character validation as above (one `/` separator), then a literal
+`#`, then one or more digits — split it into its `<owner>/<repo>` and
+`<number>` parts. Store the `<owner>/<repo>` part in `$REPO` (same variable
+the `--repo` flag populates) and replace the target token with the bare
+`<number>` so it falls through to the Numeric case in "Parse arguments"
+below. If an explicit `--repo` flag was also given and its value disagrees
+with the `<owner>/<repo>` parsed from this shorthand — compared
+case-insensitively, since GitHub owner/repo segments are case-insensitive —
+report a conflicting-input error and stop.
 
 ### Detect base branch
 
