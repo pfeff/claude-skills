@@ -84,24 +84,44 @@ Derive `$REPO_FLAG` here, after shorthand parsing has set `$REPO`: `$REPO_FLAG`
 
 **Dispatch** on the (possibly shorthand-rewritten) target token. Across all
 three cases, hold every ref/target value in a shell variable and reference it
-only as a quoted variable expansion — never inline a raw target value as
-literal characters into a command string.
+only as a quoted variable expansion (`"$target"`) — never inline a raw target
+value as literal characters into a command string. The assignment that captures
+the value is itself an injection surface, so quoting the expansion alone is not
+enough: the value must **never** appear as the unquoted right-hand side of an
+assignment (`target=<value>` is forbidden — a value like `x;id` renders as
+`target=x;id`, which runs `target=x` and then executes `id` at assignment time,
+before any `"$target"` expansion occurs). Always capture the value as an inert
+literal, using either a **single-quoted RHS** (`target='<value>'`) or a
+non-evaluating read (`IFS= read -r target <<< '<value>'`). Both the assignment
+and every expansion must be quoted.
 
 - **Empty / no args**: Current branch vs base. Run `$GIT diff "$BASE...HEAD"`
   (`$BASE` referenced as a variable). Set `$PR_NUMBER` to empty.
-- **Numeric** (e.g. `42`): PR number. Assign the numeric target to a shell
-  variable (`target=<value>`) and run `gh pr diff "$target"$REPO_FLAG`. Set
-  `$PR_NUMBER` to the numeric value.
+- **Numeric** (e.g. `42`): PR number. Capture the numeric target as an inert
+  literal with a single-quoted RHS (`target='<value>'`, e.g. `target='42'`) and
+  run `gh pr diff "$target"$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
 - **Otherwise**: Branch name. First reject the target if it begins with `-`
   (report an error and stop) — this prevents a leading-dash target from being
-  taken by `git` as an option. Assign the raw target to a shell variable (e.g.
-  `target=<value>` via the parsed argument, not by interpolating it into other
-  command text); reference it only as `"$target"`. Then run
-  `$GIT diff "$BASE...$target"`. Because command substitution is not re-triggered
-  on the contents of an expanded variable, a branch name containing `$(...)` or
-  backticks is passed to git as inert literal text (git reports an unknown ref),
-  never executed. Do NOT construct the diff command by pasting the literal
-  target string into it. Set `$PR_NUMBER` to empty.
+  taken by `git` as an option. Then capture the raw target as an inert literal:
+  use a **single-quoted RHS** (`target='<value>'`) or a non-evaluating read
+  (`IFS= read -r target <<< '<value>'`). Never write it as an unquoted
+  assignment (`target=<value>` is forbidden), and never interpolate it into
+  other command text. Reference it only as `"$target"`. Then run
+  `$GIT diff "$BASE...$target"`.
+
+  **Worked example** — a hostile branch named `x;id` (branch names are
+  attacker-controlled when reviewing an external contributor's PR). Written
+  unsafely as `target=x;id`, the shell runs `target=x` and then executes the
+  trailing `;id` at assignment time — the attacker's command runs before any
+  expansion. Written safely as `target='x;id'` (or
+  `IFS= read -r target <<< 'x;id'`), the entire string `x;id` is stored
+  verbatim and `id` is never executed. `$GIT diff "$BASE...$target"` then hands
+  git the literal ref `x;id`, which git rejects as an unknown ref. Likewise,
+  because command substitution is not re-triggered on the contents of an
+  expanded variable, a branch name containing `$(...)` or backticks is passed
+  to git as inert literal text (git reports an unknown ref), never executed. Do
+  NOT construct the diff command by pasting the literal target string into it.
+  Set `$PR_NUMBER` to empty.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
