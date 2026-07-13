@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Engineering skills for Claude Code: task orchestration, goal trees, git workflows, TDD, Diataxis documentation, CI feedback loops, knowledge capture, sprint planning, code review, and structured planning workflows",
-    "version": "2.9.0"
+    "version": "2.10.0"
   },
   "plugins": [
     {
@@ -33,12 +33,14 @@
         "./skills/lessons-learned",
         "./skills/lN-lifecycle-doctrine",
         "./skills/lN-review-doctrine",
+        "./skills/medical-records",
         "./skills/operator-interview",
         "./skills/operator-interview-doctrine",
         "./skills/planning-workflow",
         "./skills/pull-task",
         "./skills/ralph-wiggum",
         "./skills/review",
+        "./skills/scan-document",
         "./skills/self-improvement",
         "./skills/self-verify",
         "./skills/skillify",
