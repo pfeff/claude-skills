@@ -47,17 +47,32 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
    so the two paths don't produce two `raw/` notes for the same source.
 4. **Write the raw artifact** via the `obsidian-notes` skill (`create`), preserving origin
    metadata and highlights/notes unmodified (AC-1.1). Schema below.
-   - **Compose the frontmatter with `fm-emit.py`, not by hand.** `title` and `author` routinely
-     contain a bare `: ` (e.g. "Claude Sonnet 5 vs Opus 4.8: Which Model…"), plus `#`, `[`, or a
-     leading `@` — unquoted, any of these breaks the `---`...`---` block, and the Obsidian CLI
-     writes `create`'s `content=` unvalidated, so the corruption is silent. Build the frontmatter
-     via `$HOME/.claude/skills/obsidian-notes/scripts/fm-emit.py key=value [...]` (or `--json` for
-     the full field set) and splice its output into `content=` rather than hand-rolling the YAML.
-   - **Validate after writing.** Run
-     `$HOME/.claude/skills/obsidian-notes/scripts/fm-emit.py --validate <path>` against the note
-     just created. On failure, surface it as `[obsidian-notes] <message>` per the skill's
-     non-blocking failure contract (report the source as unstaged) rather than leaving a
-     silently-corrupt `raw/` note.
+   - **Compose the frontmatter with `fm-emit.py` when it's installed, not by hand.** `title` and
+     `author` routinely contain a bare `: ` (e.g. "Claude Sonnet 5 vs Opus 4.8: Which Model…"),
+     plus `#`, `[`, or a leading `@` — unquoted, any of these breaks the `---`...`---` block, and
+     the Obsidian CLI writes `create`'s `content=` unvalidated, so the corruption is silent. Check
+     for the helper first:
+
+     ```bash
+     FM_EMIT="$HOME/.claude/skills/obsidian-notes/scripts/fm-emit.py"
+     [[ -x "$FM_EMIT" ]] || FM_EMIT=""
+     ```
+
+     - **If present**: build the frontmatter via `fm-emit.py key=value [...]` and splice its
+       output into `content=` rather than hand-rolling the YAML. `key=value` can't express
+       list-valued keys (`reader_tags`, `tags`) — every arg becomes a string scalar — so use
+       `fm-emit.py --json` for any source carrying those fields.
+     - **If absent** (the companion `fm-emit.py` install hasn't landed on this host yet):
+       hand-compose the frontmatter, but YAML-quote every string scalar per the rule below
+       (double-quote `title`, `author`, `url`, `category`, `captured`, `source_key`, and each
+       `reader_tags` element — anything with a bare `: `, `#`, `[`, or leading `@`), and write
+       list-valued keys as a quoted YAML flow list (e.g. `reader_tags: ["ai", "agents"]`) rather
+       than a bare comma string. Skip the validate sub-step below and emit the non-blocking note
+       `[obsidian-notes] fm-emit.py not installed — composed frontmatter manually, quoted scalars`.
+   - **Validate after writing** (only when `fm-emit.py` was used to compose). Run
+     `fm-emit.py --validate <path>` against the note just created. On failure, surface it as
+     `[obsidian-notes] <message>` per the skill's non-blocking failure contract (report the source
+     as unstaged) rather than leaving a silently-corrupt `raw/` note.
 5. **Write boundary** — the only write target is `raw/<key>.md`; capture writes nowhere else
    (AC-1.5). `raw/` is a verbatim staging area, the only KB-specific folder. **A source's own
    Reader tags go in the `reader_tags` key, never in `tags`** — so captured content can never
@@ -72,14 +87,14 @@ hardcoded). One note per source, filename `raw/<source_key>.md`:
 ```markdown
 ---
 type: kb-raw
-source_key: readwise-<id>
+source_key: "readwise-<id>"
 readwise_book_id: <book id>   # highlighted sources  (OR: reader_id: <id> for tagged/named docs)
-url: <source_url>
+url: "<source_url>"
 title: "<title>"
 author: "<author>"
-category: <category>
-captured: <ISO-8601 date>
-reader_tags: [<tag>, ...]
+category: "<category>"
+captured: "<ISO-8601 date>"
+reader_tags: ["<tag>", ...]
 tags: [kb-raw]
 ---
 
@@ -99,7 +114,8 @@ tags: [kb-raw]
   (`reference`/`zettel`) and carrying no `project: knowledge-base` routing, so it is never
   mistaken for compiled KB output.
 - Every string scalar (`title`, `author`, and any other free text) MUST be YAML-quoted, as
-  shown above — compose the block with `fm-emit.py` (Step 4) rather than hand-rolling it.
+  shown above — compose the block with `fm-emit.py` when available (Step 4), or by hand with
+  the same quoting rule when it isn't.
 - Highlights and notes are copied **verbatim** (AC-1.1) — capture does not summarize.
 
 ## Acceptance Criteria (SPEC §2.1)
