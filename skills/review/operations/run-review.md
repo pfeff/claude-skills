@@ -105,7 +105,7 @@ literal characters into a command string.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
-Carry `$REPO` forward to Step 10 so the inline-comment posting step targets the same repo.
+Carry `$REPO` forward to Step 10 so the verdict-comment posting step targets the same repo.
 
 ## Step 2: Check Diff Size
 
@@ -278,14 +278,14 @@ Rules:
 
 Present the contents of `.claude/reviews/latest.md` to the user (without the YAML frontmatter).
 
-## Step 10: Post Inline PR Comments
+## Step 10: Post Verdict Comment
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 
-When `$PR_NUMBER` is set, automatically post findings as inline PR review
-comments by executing the `operations/post-review.md` operation. Pass both
-`$PR_NUMBER` and `$REPO` (from Step 1) into that operation — `$REPO` is
-post-review.md's documented input and is what makes its `gh` calls target the
-out-of-repo PR rather than cwd's repo. When `$REPO` is empty, post-review.md
-runs in its identical in-repo form. This posts line-level comments on the PR
-diff and a summary review comment.
+When `$PR_NUMBER` is set, execute the `operations/post-review.md` operation, passing
+both `$PR_NUMBER` and `$REPO` (from Step 1). `$REPO` is post-review.md's documented
+out-of-repo anchor — it makes the operation's `gh` calls target the named PR rather
+than cwd's repo; when `$REPO` is empty the operation runs in its identical in-repo
+form. This upserts a single sticky verdict comment on the PR (edited in place on
+re-run, never appended) and, unless reviewing your own PR, submits a
+`REQUEST_CHANGES`/`APPROVE` event.

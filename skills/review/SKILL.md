@@ -19,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.6.0
+version: 0.7.0
 ---
 
 # Review Skill
@@ -59,7 +59,7 @@ worktree. When neither anchor is given, behavior is **exactly** as above.
 - `--worktree <path>` — anchors `git` diff calls via `git -C <path>` so a branch
   or current-branch target diffs against that worktree instead of cwd. Use when
   the target branch lives in a different checkout. `--repo` may be combined to
-  also anchor the inline-comment posting step.
+  also anchor the verdict-comment posting step.
 
 The anchors only change *where* the diff is fetched from; the target itself is
 still a PR number, a git ref, or the `owner/repo#number` shorthand. Plain PR
@@ -77,7 +77,7 @@ anchored regex that admits only that safe form.
 4. **Synthesize and classify findings** (blocking vs advisory)
 5. **Persist results** to `.claude/reviews/latest.md`
 6. **Display results** to user
-7. **Post inline PR comments** — when reviewing a PR, automatically post findings as line-level review comments via the GitHub API
+7. **Post sticky verdict comment** — when reviewing a PR, upsert a single review comment (edited in place on re-run, never appended) and, unless it is the reviewer's own PR, submit a formal `REQUEST_CHANGES`/`APPROVE` event
 
 **Implementation**: Load `operations/run-review.md` for full orchestration logic.
 
@@ -111,6 +111,8 @@ BLOCKING is restricted to **correctness failures, security vulnerabilities, and 
 **File**: `operations/post-review.md`
 **When**: Automatically called at the end of `run-review` when the target is a PR number. Can also be invoked independently after PR creation. Requires `$PR_NUMBER`.
 
+Posts a single **sticky verdict comment** (marked with `<!-- review:metadata -->`) that is edited in place on every re-run — never appended. The comment's verdict line and marker are the authoritative cross-operator artifact (`l1-review` reads the marker). When the reviewer is not the PR author, it also submits a lightweight `REQUEST_CHANGES`/`APPROVE` event, dismissing its own prior blocking review so nothing stacks. On a self-PR the event is skipped (GitHub blocks it); the comment stands alone.
+
 ## Agent Prompts
 
 Loaded by the orchestrator and passed to Task tool agents:
@@ -123,3 +125,5 @@ Loaded by the orchestrator and passed to Task tool agents:
 ## Findings Format
 
 Each agent returns a markdown report with findings organized by severity (critical > warning > info). The orchestrator classifies findings as blocking (critical) or advisory (warning/info), saves structured output to `.claude/reviews/latest.md` with YAML frontmatter, then displays results to the user.
+
+When the target is a PR, findings are also rendered into the sticky verdict comment (see Post Review) — grouped under `🚫 Blocking` and `💡 Advisory` headings for readability, one entry per finding as ``**`file:line`** · category`` followed by the description.
