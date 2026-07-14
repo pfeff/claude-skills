@@ -105,7 +105,7 @@ literal characters into a command string.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
-Carry `$REPO` forward to Step 10 so the inline-comment posting step targets the same repo.
+Carry `$REPO` forward to Step 10 so the verdict-comment posting step targets the same repo.
 
 ## Step 2: Check Diff Size
 
