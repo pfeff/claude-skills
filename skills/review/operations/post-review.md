@@ -59,9 +59,10 @@ Each finding line in `latest.md` follows:
 - **file:line** — [agent] _category_ (severity) — Description
 ```
 
-For each, extract `file`, `line`, `agent`, `category`, and `description`. `(severity)`
-may be absent on blocking findings — treat as `critical`. If a line doesn't match,
-keep its raw text and render it verbatim (never drop a finding). Track which section
+For each, extract `file`, `line`, `category`, and `description` (the `[agent]` tag is
+not rendered in the readable comment, so it can be ignored). `(severity)` may be absent
+on blocking findings — treat as `critical`. If a line doesn't match, keep its raw text
+and render it verbatim (never drop a finding). Track which section
 (`### Blocking` / `### Advisory`) each finding came from.
 
 ## Step 5: Compose the Comment Body
