@@ -47,6 +47,17 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
    so the two paths don't produce two `raw/` notes for the same source.
 4. **Write the raw artifact** via the `obsidian-notes` skill (`create`), preserving origin
    metadata and highlights/notes unmodified (AC-1.1). Schema below.
+   - **Compose the frontmatter with `fm-emit.py`, not by hand.** `title` and `author` routinely
+     contain a bare `: ` (e.g. "Claude Sonnet 5 vs Opus 4.8: Which Model…"), plus `#`, `[`, or a
+     leading `@` — unquoted, any of these breaks the `---`...`---` block, and the Obsidian CLI
+     writes `create`'s `content=` unvalidated, so the corruption is silent. Build the frontmatter
+     via `$HOME/.claude/skills/obsidian-notes/scripts/fm-emit.py key=value [...]` (or `--json` for
+     the full field set) and splice its output into `content=` rather than hand-rolling the YAML.
+   - **Validate after writing.** Run
+     `$HOME/.claude/skills/obsidian-notes/scripts/fm-emit.py --validate <path>` against the note
+     just created. On failure, surface it as `[obsidian-notes] <message>` per the skill's
+     non-blocking failure contract (report the source as unstaged) rather than leaving a
+     silently-corrupt `raw/` note.
 5. **Write boundary** — the only write target is `raw/<key>.md`; capture writes nowhere else
    (AC-1.5). `raw/` is a verbatim staging area, the only KB-specific folder. **A source's own
    Reader tags go in the `reader_tags` key, never in `tags`** — so captured content can never
@@ -64,8 +75,8 @@ type: kb-raw
 source_key: readwise-<id>
 readwise_book_id: <book id>   # highlighted sources  (OR: reader_id: <id> for tagged/named docs)
 url: <source_url>
-title: <title>
-author: <author>
+title: "<title>"
+author: "<author>"
 category: <category>
 captured: <ISO-8601 date>
 reader_tags: [<tag>, ...]
@@ -87,6 +98,8 @@ tags: [kb-raw]
 - `type: kb-raw` marks this as the staging queue — deliberately not a compiled-note type
   (`reference`/`zettel`) and carrying no `project: knowledge-base` routing, so it is never
   mistaken for compiled KB output.
+- Every string scalar (`title`, `author`, and any other free text) MUST be YAML-quoted, as
+  shown above — compose the block with `fm-emit.py` (Step 4) rather than hand-rolling it.
 - Highlights and notes are copied **verbatim** (AC-1.1) — capture does not summarize.
 
 ## Acceptance Criteria (SPEC §2.1)
