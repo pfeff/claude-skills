@@ -64,21 +64,15 @@ dispatch is either **subscription** (no extra cost) or **metered** (API
 list rates, per-user cap, no rollover). This gate always runs — there is
 no skip case, only which bucket the job falls in.
 
-**Classification** (the test is behavioral — does the job invoke a
-metered runtime anywhere in its execution path? — not a fixed tool list):
-
-- **Metered**: `claude -p`/`--print`, the Agent SDK, GitHub Actions, `/schedule`/`CronCreate`/`RemoteTrigger`,
-  or an eval/benchmark harness that spawns any of those internally.
-- **Subscription**: interactive `claude` TUI, Claude.ai/Cowork, in-session
-  `Agent`-tool subagents, tick delivery via `tmux send-keys` into an
-  interactive pane.
+**Trigger**: Does the job invoke a metered runtime (directly, or via a
+harness that spawns one) anywhere in its execution path?
 
 - If **subscription**: proceed to Step 1. No annotation needed.
 - If **metered**: **stop and ask the operator** for explicit sign-off —
   name the metered runtime/harness and warn that metered spend has no
   per-operation cap and no rollover if unused. Record the sign-off as a
-  checkbox in the criteria discussion and as a Metered Sign-off Annotation
-  in the task-context file (see `references/metered-gate.md` format).
+  Metered Sign-off Annotation in the task-context file (see
+  `references/metered-gate.md` format).
 - If the operator declines: do not dispatch. No task-context file is
   written.
 
@@ -154,8 +148,10 @@ fill heuristic, not by this override path.
   Override annotation below the four fields (not a field — see the
   annotation format in that same reference). If Step 0.5 required a
   metered sign-off, append the Metered Sign-off Annotation below the
-  four fields as well (see `references/metered-gate.md`); if both
-  annotations apply, stack them in the order the gates ran.
+  four fields as well (see `references/metered-gate.md`); if more than
+  one annotation applies, stack them per
+  `../self-verify/references/task-context.md` "Annotation stacking
+  order".
 - **Cross-repo dispatch where the target repo/worktree doesn't exist
   yet**: do NOT provision a worktree or branch. Instead emit the
   **target path spec** — target repo, intended branch name, intended

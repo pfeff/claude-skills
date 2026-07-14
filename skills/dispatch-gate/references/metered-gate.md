@@ -50,9 +50,8 @@ canonical examples, not the full enumeration — if a new tool or harness
 turns out to call `claude -p`/the Agent SDK/Actions internally, it is
 metered even if it isn't named here.
 
-**When uncertain**: default to metered and ask. A false "subscription"
-classification is the failure mode this gate exists to prevent; a false
-"metered" classification just costs one confirmation question.
+**When uncertain**: default to metered and ask — see "Case 2: Dispatcher
+misjudges the classification" below for the reasoning and an example.
 
 ## Procedure
 
@@ -76,8 +75,7 @@ a policy gate, independent of both privacy and task readiness.
      Step 1. Silence or an ambiguous "sure, go ahead" on an unrelated
      question does not count — the sign-off must be a direct answer to
      the metered-cost question.
-   - If approved: record the sign-off as a checkbox-style line in the
-     four-field criteria discussion and as a Metered Sign-off Annotation
+   - If approved: record the sign-off as a Metered Sign-off Annotation
      in `.claude/task-context.md` (see format below).
    - If declined: do not dispatch. No `.claude/task-context.md` is
      written. Suggest a workaround (see Failure Cases).
@@ -86,8 +84,9 @@ a policy gate, independent of both privacy and task readiness.
 
 When the operator approves a metered dispatch, record the decision in
 `.claude/task-context.md` immediately below the four fields (same
-placement as the Override and Privacy Gate annotations — stacked in the
-order the gates ran, if more than one applies).
+placement as the Override and Privacy Gate annotations; see
+`../../self-verify/references/task-context.md` "Annotation stacking
+order" for how multiple annotations combine).
 
 Format:
 
@@ -103,9 +102,9 @@ Example:
 > operator approved metered spend (no cap, no rollover) on 2026-07-13.
 ```
 
-This annotation makes the sign-off durable and reviewable by `self-verify`
-and the human review layer, the same way the Override and Privacy Gate
-annotations do.
+This annotation makes the sign-off durable and available for operator
+review before merge, the same way the Override and Privacy Gate
+annotations are recorded.
 
 ## Failure Cases
 
@@ -148,9 +147,9 @@ annotations do.
   pool does this land on, and did the operator approve it?"
 - **dispatch-gate Steps 1–5** (existing): task-readiness gate — "is the
   task well-specified?"
-- **self-verify** (review layer): catches any metered-gate violations that
-  slipped through (mis-classified job, missing sign-off); flags them for
-  operator review pre-merge.
+- **Operator review** (pre-merge): intended to catch any metered-gate
+  violations that slipped through (mis-classified job, missing sign-off)
+  — self-verify has no metered-gate-specific check today.
 
 All applicable gates must pass. They are independent of each other.
 
@@ -172,7 +171,9 @@ work:
 - `privacy-gate.md` — sibling policy gate (Step 0), same
   placement and annotation pattern
 - `../../self-verify/references/task-context.md` — "Override annotation"
-  section, the shared placement convention (appended below the four
-  fields, never a fifth field) this gate's annotation follows
-- `../../self-verify/SKILL.md` — review layer that catches any
-  violations
+  section for the shared placement convention (appended below the four
+  fields, never a fifth field) this gate's annotation follows, and
+  "Annotation stacking order" for how multiple annotations combine
+- `../../self-verify/SKILL.md` — general review layer; has no
+  metered-gate-specific check today (see "Relationship to Other Gates"
+  above)
