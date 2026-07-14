@@ -1,11 +1,11 @@
 ---
 name: dispatch-gate
-description: Dispatch-readiness gate for background jobs. Before the operator launches a background agent (worktree job, subagent, or cross-repo dispatch), this skill checks the privacy gate (public destination + sensitive context?), verifies the four slice-complete criteria — objective, acceptance test, scope/blast-radius bound, affected surface — runs a short clarifying dialogue on any gap, and writes the .claude/task-context.md the job will run against. Invoke when the operator asks to dispatch background work, or via /dispatch-gate.
+description: Dispatch-readiness gate for background jobs. Before the operator launches a background agent (worktree job, subagent, or cross-repo dispatch), this skill checks the privacy gate (public destination + sensitive context?), classifies the job's billing pool (subscription vs metered — e.g. claude -p/Agent SDK/GitHub Actions — and requires explicit operator sign-off if metered), verifies the four slice-complete criteria — objective, acceptance test, scope/blast-radius bound, affected surface — runs a short clarifying dialogue on any gap, and writes the .claude/task-context.md the job will run against. Invoke when the operator asks to dispatch background work, or via /dispatch-gate.
 allowed-tools:
   - Bash
   - Read
   - Write
-version: 1.0.1
+version: 1.1.0
 ---
 
 # dispatch-gate — dispatch-readiness gate
@@ -56,6 +56,34 @@ to sensitive context?
 destinations (GitHub public repos, published docs, shared Slack), sensitive
 context (financial, health, private URLs, vault excerpts), the dispatcher's
 decision logic, and the annotation format.
+
+### Step 0.5 — Metered-work gate
+
+Before checking task readiness, classify the job's billing pool: every
+dispatch is either **subscription** (no extra cost) or **metered** (API
+list rates, per-user cap, no rollover). This gate always runs — there is
+no skip case, only which bucket the job falls in.
+
+The metered pool was announced for ~2026-06-15 but is currently paused /
+under review (see `references/metered-gate.md` "Status of the underlying
+split"), so this step is a forward-looking safeguard rather than a gate
+against an already-active billing regime.
+
+**Trigger**: Does the job invoke a metered runtime (directly, or via a
+harness that spawns one) anywhere in its execution path?
+
+- If **subscription**: proceed to Step 1. No annotation needed.
+- If **metered**: **stop and ask the operator** for explicit sign-off —
+  name the metered runtime/harness and warn that metered spend has no
+  per-operation cap and no rollover if unused. Record the sign-off as a
+  Metered Sign-off Annotation in the task-context file (see
+  `references/metered-gate.md` format).
+- If the operator declines: do not dispatch. No task-context file is
+  written.
+
+**Details**: See `references/metered-gate.md` — it defines the
+subscription/metered classification with canonical examples, the
+dispatcher's decision logic, and the annotation format.
 
 ### Step 1 — Check the four slice-complete criteria
 
@@ -123,7 +151,12 @@ fill heuristic, not by this override path.
   `../self-verify/references/task-context.md` — point at that format,
   do not duplicate it here. If Step 3's override applies, append the
   Override annotation below the four fields (not a field — see the
-  annotation format in that same reference).
+  annotation format in that same reference). If Step 0.5 required a
+  metered sign-off, append the Metered Sign-off Annotation below the
+  four fields as well (see `references/metered-gate.md`); if more than
+  one annotation applies, stack them per
+  `../self-verify/references/task-context.md` "Annotation stacking
+  order".
 - **Cross-repo dispatch where the target repo/worktree doesn't exist
   yet**: do NOT provision a worktree or branch. Instead emit the
   **target path spec** — target repo, intended branch name, intended
@@ -215,6 +248,9 @@ moment.
 - `references/privacy-gate.md` — privacy-gate procedure (Step 0), definition
   of public destinations and sensitive context, and Privacy Gate Annotation
   format.
+- `references/metered-gate.md` — metered-work gate procedure (Step 0.5),
+  the subscription/metered classification with canonical examples, and
+  the Metered Sign-off Annotation format.
 - `references/example-transcript.md` — illustrative ready and refuse
   dialogue transcripts.
 - `references/sample-runs.md` — real recorded dispatch-gate cycles

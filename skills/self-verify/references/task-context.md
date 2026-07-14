@@ -83,6 +83,14 @@ Example:
 fields are evaluated as known gaps, not silently treated as complete
 (see Axis 1 in `../SKILL.md`).
 
+## Annotation stacking order
+
+`dispatch-gate` may append more than one annotation below the four
+fields (Privacy Gate, Metered Sign-off, Override) when more than one
+gate fires on the same dispatch. When it does, annotations stack in the
+order the gates ran — each remains its own blockquote paragraph appended
+below the four fields, never a fifth field.
+
 ## Fallback order when absent
 
 If `.claude/task-context.md` is not present, self-verify falls back to the
