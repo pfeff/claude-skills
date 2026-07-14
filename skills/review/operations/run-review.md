@@ -10,17 +10,22 @@ this step is byte-for-byte identical to the no-anchor form.
 
 - `--repo <owner>/<repo>`: out-of-repo anchor for `gh` PR calls. Validate that
   `<owner>` and `<repo>` each contain only alphanumerics, hyphens, underscores,
-  and dots (one `/` separator). Store as `$REPO`. If invalid, report the error
-  and stop.
+  and dots (one `/` separator), and that neither segment begins with `-` (so
+  `--repo -x/repo` is rejected as an option-injection attempt). Store as
+  `$REPO`. If invalid, report the error and stop.
 - `--worktree <path>`: out-of-repo anchor for `git` diff calls. Store as
   `$WORKTREE`.
 
 Remove the parsed flags (and their values) from `$ARGUMENTS`; the remaining
-token is the target (PR number, branch name, or empty). Derive two prefixes used
-below:
+token is the target (PR number, branch name, owner/repo#number shorthand, or
+empty). Plain PR numbers and branch names pass through with no character
+restriction — exactly as before shorthand support existed; only the shorthand
+case below imposes a shape, and it does so via a self-validating anchored regex.
 
-- `$REPO_FLAG` = ` --repo $REPO` when `$REPO` is set, otherwise empty.
-- `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
+`$REPO` may be empty (in-repo behavior). Shorthand parsing in "Parse arguments"
+below may set it. Passing both a `--repo` flag and the `owner/repo#N` shorthand that disagree is a conflicting-input error.
+
+Derive `$GIT` = `git -C "$WORKTREE"` when `$WORKTREE` is set, otherwise `git`.
 
 ### Detect base branch
 
@@ -33,11 +38,70 @@ Store the result as `$BASE`.
 
 ### Parse arguments
 
-Parse the remaining target token to determine the review target:
+Also recognize the shorthand `<owner>/<repo>#<number>` (standard GitHub
+cross-reference syntax, e.g. `pfeff/dotfiles#247`) as an alternative way to
+specify the same thing as `<number> --repo <owner>/<repo>`.
 
-- **Empty / no args**: Current branch vs base. Run `$GIT diff $BASE...HEAD`. Set `$PR_NUMBER` to empty.
-- **Numeric** (e.g. `42`): PR number. Run `gh pr diff <target>$REPO_FLAG`. Set `$PR_NUMBER` to the numeric value.
-- **Otherwise**: Branch name. Run `$GIT diff $BASE...<target>`. Set `$PR_NUMBER` to empty.
+**Classify the target token.** Run this shorthand case first, before the
+Numeric and Otherwise cases in the dispatch below:
+
+- **Shorthand** — the token matches, in its entirety, the anchored regex
+  `^[A-Za-z0-9._][A-Za-z0-9._-]*/[A-Za-z0-9._][A-Za-z0-9._-]*#[0-9]+$`: an
+  `<owner>` segment, a `/`, a `<repo>` segment — the first character of each is
+  not a hyphen, so a leading-dash token like `-x/repo#1` can never match and can
+  never reach a downstream shell call as an option — a literal `#`, then one or
+  more digits.
+  Because the regex admits only this exact safe shape, it is its own
+  validation — no separate character-gate and no `git`/`gh` call is needed to
+  classify the token, and it cannot match a token containing shell
+  metacharacters. (See the Precedence note below for how this shape wins over a
+  same-named branch.)
+
+  Split the token into its `<owner>/<repo>` part and bare `<number>`. If `$REPO`
+  was already set by an explicit `--repo` flag and its value differs from this
+  shorthand's `<owner>/<repo>` compared case-insensitively (GitHub owner/repo is
+  case-insensitive), report a conflicting-input error and stop — the same
+  report-and-stop the `--repo` validation above uses on malformed input.
+  Otherwise store the shorthand's `<owner>/<repo>` in `$REPO` and replace the
+  target token with the bare `<number>` so it falls through to the Numeric case
+  below.
+
+- **Not shorthand** — anything else, including plain PR numbers like `42` and
+  ordinary branch names (even those containing git-legal characters such as
+  `!`, `@`, `+`, `%`, `(`, `)`): pass it through unchanged, with no character
+  restriction and no git call, to the dispatch below — exactly as before
+  shorthand support existed.
+
+**Precedence:** a token shaped exactly like `<owner>/<repo>#<number>` is always
+interpreted as the out-of-repo shorthand, never as a branch. Git branch names
+may legally contain `/` and `#`, so a local branch literally named
+`owner/repo#N` is theoretically possible, but such a branch is not reviewable
+by that bare name through this skill — review it another way (e.g. rename it,
+or pass an explicit branch/worktree target).
+
+Derive `$REPO_FLAG` here, after shorthand parsing has set `$REPO`: `$REPO_FLAG`
+= ` --repo $REPO` when `$REPO` is set, otherwise empty.
+
+**Dispatch** on the (possibly shorthand-rewritten) target token. Across all
+three cases, hold every ref/target value in a shell variable and reference it
+only as a quoted variable expansion — never inline a raw target value as
+literal characters into a command string.
+
+- **Empty / no args**: Current branch vs base. Run `$GIT diff "$BASE...HEAD"`
+  (`$BASE` referenced as a variable). Set `$PR_NUMBER` to empty.
+- **Numeric** (e.g. `42`): PR number. Assign the numeric target to a shell
+  variable (`target=<value>`) and run `gh pr diff "$target"$REPO_FLAG`. Set
+  `$PR_NUMBER` to the numeric value.
+- **Otherwise**: Branch name. First reject the target if it begins with `-`
+  (report an error and stop) — this prevents a leading-dash target from being
+  taken by `git` as an option. Assign the raw target to a shell variable (e.g.
+  `target=<value>` via the parsed argument, not by interpolating it into other
+  command text); reference it only as `"$target"`. Then run
+  `$GIT diff "$BASE...$target"`. Because command substitution is not re-triggered
+  on the contents of an expanded variable, a branch name containing `$(...)` or
+  backticks is passed to git as inert literal text (git reports an unknown ref),
+  never executed. Do NOT construct the diff command by pasting the literal
+  target string into it. Set `$PR_NUMBER` to empty.
 
 Capture the diff output. If the diff is empty, inform the user and stop.
 
@@ -218,4 +282,10 @@ Present the contents of `.claude/reviews/latest.md` to the user (without the YAM
 
 **Skip this step** if `$PR_NUMBER` is empty (branch-only reviews).
 
-When `$PR_NUMBER` is set, automatically post findings as inline PR review comments by executing the `operations/post-review.md` operation with the current `$PR_NUMBER` (and `$REPO` from Step 1, if set, so the comments post to the out-of-repo PR). This posts line-level comments on the PR diff and a summary review comment.
+When `$PR_NUMBER` is set, automatically post findings as inline PR review
+comments by executing the `operations/post-review.md` operation. Pass both
+`$PR_NUMBER` and `$REPO` (from Step 1) into that operation — `$REPO` is
+post-review.md's documented input and is what makes its `gh` calls target the
+out-of-repo PR rather than cwd's repo. When `$REPO` is empty, post-review.md
+runs in its identical in-repo form. This posts line-level comments on the PR
+diff and a summary review comment.

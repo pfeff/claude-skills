@@ -55,7 +55,7 @@ allowed-prompts:
     prompt: write metrics log
   - tool: Bash
     prompt: sleep for backoff between retries
-version: 1.7.0
+version: 1.8.0
 ---
 
 # Task Workflow Skill
@@ -88,6 +88,18 @@ Each workspace contains:
 - Task ID: Short identifier (e.g., `DO-242`, `skills-workflow`)
 - Epic: Category slug (e.g., `ad-hoc`, `tooling`, `platform`)
 - Slug: 2-3 word concise identifier from headline
+
+**Meta Workspaces** (lightweight kind): `~/src/work/meta/<name>/`
+
+Created via `create-workspace.sh --meta --name NAME [--headline "HEADLINE"] [--repos REPOS]`.
+A minimal tracked directory for cases that don't warrant full task-workspace
+ceremony — ephemeral background-agent worktree isolation, or an interactive
+session's working directory. Gets only a one-line DESIGN.md stub (`# NAME: Headline`,
+same format `close-workspace.sh` already parses) and, optionally, a git worktree
+per repo on branch `meta/NAME`. No CLAUDE.md, `.envrc`, `.claude/settings.json`,
+or tmuxp session is created. `--headline` defaults to `NAME` when omitted. Torn
+down the same way as any other workspace via `close-workspace.sh`, and discovered
+by `/list-workspaces` the same way (DESIGN.md scan) — no separate tooling needed.
 
 ## Operations
 

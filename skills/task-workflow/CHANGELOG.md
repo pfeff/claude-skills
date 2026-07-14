@@ -2,6 +2,13 @@
 
 All notable changes to the **task-workflow** skill will be documented in this file.
 
+## [1.8.0] - 2026-07-10
+
+### Added
+- `create-workspace.sh --meta --name NAME` — a lightweight, non-task-tree workspace kind at `~/src/work/meta/<name>/`. Auto-seeds a one-line DESIGN.md stub in the same `# ID: Headline` format `close-workspace.sh` already parses, and optionally creates a git worktree per `--repos` entry on branch `meta/NAME`. No CLAUDE.md, `.envrc`, `.claude/settings.json`, or tmuxp session — capability only, no existing dispatch/session is migrated to use it.
+
+**Reasoning**: Two needs fell between the existing `task`/`node` modes (full ceremony) and freehand directories (invisible to `close-workspace.sh`/`list-workspaces` tooling): ephemeral background-agent worktree isolation, and interactive dual-pane session working directories. Both want a tracked, cleanup-participating directory without DESIGN.md-authoring burden, tmuxp requirement, or goal-tree scaffolding.
+
 ## [1.7.0] - 2026-06-11
 
 ### Added

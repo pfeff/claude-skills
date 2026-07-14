@@ -17,6 +17,16 @@
 #                 sonnet, haiku, or full model IDs). Defaults to "sonnet" when
 #                 omitted.
 #
+# Meta mode (lightweight, non-task-tree workspace):
+#   create-workspace.sh --meta --name NAME [--headline "HEADLINE"] [--repos REPOS]
+#
+# Creates a tracked directory at ~/src/work/meta/NAME with a minimal DESIGN.md
+# stub (so close-workspace.sh can tear it down) and, optionally, a git worktree
+# per repo on branch "meta/NAME". No tmuxp session, CLAUDE.md, .envrc, or
+# goal-tree scaffolding is created. Intended for ephemeral background-agent
+# worktree isolation and interactive-session working directories that don't
+# warrant full task-workspace ceremony. --headline defaults to NAME.
+#
 # Exit codes:
 #   0 - Success
 #   1 - Invalid arguments
@@ -56,6 +66,9 @@ NODE_DB_ID=""
 PROJECT_DIR=""
 PROJECT_BRANCH=""
 
+# Meta mode values
+META_NAME=""
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -88,6 +101,10 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --node)
+      if [[ -n "$MODE" ]]; then
+        echo "Error: --node cannot be combined with --$MODE" >&2
+        exit 1
+      fi
       MODE="node"
       shift
       ;;
@@ -105,6 +122,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --project-branch)
       PROJECT_BRANCH="$2"
+      shift 2
+      ;;
+    --meta)
+      if [[ -n "$MODE" ]]; then
+        echo "Error: --meta cannot be combined with --$MODE" >&2
+        exit 1
+      fi
+      MODE="meta"
+      shift
+      ;;
+    --name)
+      META_NAME="$2"
       shift 2
       ;;
     *)
@@ -141,6 +170,81 @@ if [[ "$MODE" == "node" ]]; then
   fi
   if [[ -z "$HEADLINE" ]]; then
     HEADLINE="Node $NODE_ID"
+  fi
+elif [[ "$MODE" == "meta" ]]; then
+  # Meta mode validation — lightweight, non-task-tree workspace
+  if [[ -z "$META_NAME" ]]; then
+    echo "Error: --name is required for meta mode" >&2
+    exit 1
+  fi
+  # --meta is a distinct, lightweight mode; its only legitimate flags are
+  # --name, --headline, and --repos. Reject every task/node-mode flag so a
+  # confused invocation fails loudly instead of silently dropping the flag.
+  # Each entry pairs the variable a value-carrying flag sets with the flag's
+  # spelling; a non-empty value means that flag was passed. (The bare
+  # mode-setting flag --node is caught by the mode-conflict guard at parse
+  # time.)
+  for _pair in \
+    "TASK_ID:--task-id" \
+    "EPIC:--epic" \
+    "MODEL:--model" \
+    "ISSUE_REF:--issue" \
+    "DESCRIPTION:--description" \
+    "NODE_ID:--node-id" \
+    "NODE_DB_ID:--node-db-id" \
+    "PROJECT_DIR:--project-dir" \
+    "PROJECT_BRANCH:--project-branch"; do
+    _var="${_pair%%:*}"
+    _flag="${_pair#*:}"
+    if [[ -n "${!_var}" ]]; then
+      echo "Error: --meta cannot be combined with $_flag (only --name, --headline, --repos apply in meta mode)" >&2
+      exit 1
+    fi
+  done
+  # META_NAME is interpolated into a filesystem path ($HOME/src/work/meta/NAME)
+  # and a git branch name (meta/NAME), so it must be safe for both. Enforce a
+  # positive allowlist rather than enumerating hazards: only permit ASCII
+  # letters, digits, '.', '_', '-', with an alphanumeric first character. The
+  # allowlist governs the character SET: it excludes every path-traversal
+  # component separator ('/'), every git ref-name metacharacter (~ ^ : ? * [ \
+  # and @{), whitespace, and control characters — and the alphanumeric-first
+  # rule rejects a leading '-' (reads as a flag) and a leading '.' (hidden
+  # dir / invalid ref) in the same check.
+  if [[ ! "$META_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "Error: --name may contain only ASCII letters, digits, '.', '_', '-' and must start with a letter or digit (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  # The allowlist alone still permits three character SEQUENCES that are legal
+  # in a filename but illegal in a git ref name (git-check-ref-format), so
+  # meta/NAME would fail late at `git worktree add` (exit 4, partial workspace
+  # left behind). Reject them up front here. Given the allowlist already fixes
+  # the alphabet to [A-Za-z0-9._-] with an alphanumeric first char, these are
+  # the ONLY residual ref-name rules a passing name could still violate — so
+  # allowlist + these three form a complete guard for meta/NAME.
+  if [[ "$META_NAME" == *..* ]]; then
+    echo "Error: --name must not contain '..' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == *. ]]; then
+    echo "Error: --name must not end with '.' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ "$META_NAME" == *.lock ]]; then
+    echo "Error: --name must not end with '.lock' (illegal in a git ref name) (rejected: '$META_NAME')" >&2
+    exit 1
+  fi
+  if [[ -z "$HEADLINE" ]]; then
+    HEADLINE="$META_NAME"
+  fi
+  # HEADLINE is embedded verbatim as the DESIGN.md first line (parsed by
+  # close-workspace.sh and list-tasks.sh's unrestricted DESIGN.md scan).
+  # Reject embedded newlines/control characters so a crafted --headline can't
+  # forge a second, spoofed line in that scan. Spaces/colons/slashes are fine
+  # here — unlike META_NAME, HEADLINE is never used as a path or branch
+  # segment.
+  if [[ "$HEADLINE" == *[[:cntrl:]]* ]]; then
+    echo "Error: --headline must not contain control characters (rejected: '$HEADLINE')" >&2
+    exit 1
   fi
 else
   # Task mode validation
@@ -418,6 +522,50 @@ install_worktree_branch_hook() {
 }
 
 #------------------------------------------------------------------------------
+# create_git_worktree - Create a git worktree with the standard 3-way fallback
+# chain, then install the worktree-branch alignment hook. Shared by
+# create_task_workspace, create_node_workspace, and create_meta_workspace —
+# extracted once the same ~20-line block appeared a third time (Rule of
+# Three).
+#
+# Fallback order:
+#   1. New branch off origin's default branch (the common case).
+#   2. Existing branch, no -b (branch already exists locally).
+#   3. New branch from current HEAD, no origin ref (local-only repo).
+#
+# Usage: create_git_worktree <worktree_path> <branch_name> <repo_path>
+# Returns 0 on success, 1 if all three attempts failed (caller decides how to
+# report/exit — messages and exit codes differ slightly by call site).
+#
+# Side channel: sets WORKTREE_DEFAULT_BRANCH to the resolved default branch,
+# since create_task_workspace needs it afterward to detect a worktree left on
+# the default branch. Bash functions can't return strings, so this is the
+# established pattern for a secondary output alongside a status return code.
+#------------------------------------------------------------------------------
+
+create_git_worktree() {
+  local worktree_path="$1"
+  local branch_name="$2"
+  local repo_path="$3"
+
+  cd "$repo_path"
+  WORKTREE_DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+  git fetch origin "$WORKTREE_DEFAULT_BRANCH" --quiet 2>/dev/null || true
+
+  if ! git worktree add "$worktree_path" -b "$branch_name" "origin/$WORKTREE_DEFAULT_BRANCH" 2>/dev/null; then
+    if ! git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
+      if ! git worktree add "$worktree_path" -b "$branch_name" 2>/dev/null; then
+        return 1
+      fi
+    fi
+  fi
+
+  echo "    Created worktree"
+  install_worktree_branch_hook "$worktree_path"
+  return 0
+}
+
+#------------------------------------------------------------------------------
 # create_task_workspace - Create a task workspace (original behavior)
 #------------------------------------------------------------------------------
 
@@ -687,22 +835,13 @@ if [[ -n "$REPOS" ]]; then
     echo "    Worktree: $worktree_path"
     echo "    Branch: $branch_name"
 
-    # Update main/master branch before creating worktree
-    cd "$repo_path"
-    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-    git fetch origin "$default_branch" --quiet 2>/dev/null || true
-
-    # Create worktree
-    if ! git worktree add "$worktree_path" -b "$branch_name" "origin/$default_branch" 2>/dev/null; then
-      # Branch might already exist, try without -b
-      if ! git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
-        # Local-only repo (no origin): create new branch from current HEAD
-        if ! git worktree add "$worktree_path" -b "$branch_name" 2>/dev/null; then
-          echo "Error: Failed to create worktree for $repo" >&2
-          exit 4
-        fi
-      fi
+    # Update main/master branch and create the worktree (shared 3-way
+    # fallback chain + hook install; see create_git_worktree).
+    if ! create_git_worktree "$worktree_path" "$branch_name" "$repo_path"; then
+      echo "Error: Failed to create worktree for $repo" >&2
+      exit 4
     fi
+    default_branch="$WORKTREE_DEFAULT_BRANCH"
 
     # Verify worktree is on a feature branch, not the default branch
     actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
@@ -717,11 +856,6 @@ if [[ -n "$REPOS" ]]; then
         exit 4
       fi
     fi
-
-    echo "    Created worktree"
-
-    # Install pre-commit hook for worktree-branch alignment (REC-001)
-    install_worktree_branch_hook "$worktree_path"
   done
 fi
 
@@ -1004,24 +1138,10 @@ EOF
     echo "    Worktree: $worktree_path"
     echo "    Branch: $NODE_BRANCH"
 
-    cd "$repo_path"
-    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-    git fetch origin "$default_branch" --quiet 2>/dev/null || true
-
-    if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" "origin/$default_branch" 2>/dev/null; then
-      # Branch might already exist
-      if ! git worktree add "$worktree_path" "$NODE_BRANCH" 2>/dev/null; then
-        # Local-only repo (no origin): create new branch from current HEAD
-        if ! git worktree add "$worktree_path" -b "$NODE_BRANCH" 2>/dev/null; then
-          echo "Error: Failed to create worktree for $repo_basename" >&2
-          exit 4
-        fi
-      fi
+    if ! create_git_worktree "$worktree_path" "$NODE_BRANCH" "$repo_path"; then
+      echo "Error: Failed to create worktree for $repo_basename" >&2
+      exit 4
     fi
-    echo "    Created worktree"
-
-    # Install pre-commit hook for worktree-branch alignment (REC-001)
-    install_worktree_branch_hook "$worktree_path"
   done
 
   # Step 6: Render .claude/settings.json (envsubst for MODEL variable)
@@ -1133,6 +1253,183 @@ EOF
 }
 
 #------------------------------------------------------------------------------
+# create_meta_workspace - Create a lightweight, non-task-tree workspace
+#
+# Minimal ceremony: a tracked directory under ~/src/work/meta/<name> with a
+# one-line DESIGN.md stub (so close-workspace.sh can tear it down) and,
+# optionally, a git worktree per repo. No CLAUDE.md, .envrc, settings.json,
+# or tmuxp session — this kind exists purely to be a discoverable, cleanup-
+# tracked directory for ephemeral background-agent worktree isolation or
+# interactive-session working directories.
+#------------------------------------------------------------------------------
+
+create_meta_workspace() {
+  echo "Creating meta workspace '$META_NAME'..."
+
+  WORKSPACE_PATH="$HOME/src/work/meta/$META_NAME"
+  BRANCH_NAME="meta/$META_NAME"
+
+  echo "  Path: $WORKSPACE_PATH"
+
+  #----------------------------------------------------------------------------
+  # Step 1: Check prerequisites
+  #----------------------------------------------------------------------------
+
+  if [[ -d "$WORKSPACE_PATH" ]]; then
+    echo "Error: Meta workspace already exists: $WORKSPACE_PATH" >&2
+    echo "Delete it first or use a different --name." >&2
+    exit 2
+  fi
+
+  if [[ -n "$REPOS" ]]; then
+    IFS=',' read -ra REPO_ARRAY <<< "$REPOS"
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      if ! resolve_repo_path "$repo" &>/dev/null; then
+        echo "Error: Repository not found: $repo" >&2
+        echo "Searched in ~/src/github and ~/src/azdevops" >&2
+        exit 2
+      fi
+    done
+
+    # Worktree paths are derived from basename only ($WORKSPACE_PATH/<basename>),
+    # not the owner, so two --repos entries resolving to different owners but
+    # the same repo basename (e.g. org1/tools, org2/tools) would target the
+    # same path — the second `git worktree add` would fail after the first
+    # had already been created, aborting with no rollback. Detect the
+    # collision upfront and fail clearly before creating anything.
+    declare -A seen_basenames
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      if [[ -n "${seen_basenames[$repo_basename]:-}" ]]; then
+        echo "Error: --repos entries '${seen_basenames[$repo_basename]}' and '$repo' both resolve to basename '$repo_basename'; they would collide at $WORKSPACE_PATH/$repo_basename" >&2
+        exit 2
+      fi
+      seen_basenames[$repo_basename]="$repo"
+    done
+  fi
+
+  #----------------------------------------------------------------------------
+  # Step 2: Create workspace directory and DESIGN.md stub
+  #----------------------------------------------------------------------------
+
+  echo "Creating workspace directory..."
+  mkdir -p "$WORKSPACE_PATH"
+  echo "  Created: $WORKSPACE_PATH"
+
+  echo "# $META_NAME: $HEADLINE" > "$WORKSPACE_PATH/DESIGN.md"
+  echo "  DESIGN.md: created (stub)"
+
+  #----------------------------------------------------------------------------
+  # Step 3: Create git worktrees (optional)
+  #----------------------------------------------------------------------------
+
+  if [[ -n "$REPOS" ]]; then
+    echo "Creating git worktrees..."
+
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      worktree_path="$WORKSPACE_PATH/$repo_basename"
+
+      echo "  $repo_basename:"
+      echo "    Source: $repo_path"
+      echo "    Worktree: $worktree_path"
+      echo "    Branch: $BRANCH_NAME"
+
+      if ! create_git_worktree "$worktree_path" "$BRANCH_NAME" "$repo_path"; then
+        echo "Error: Failed to create worktree for $repo" >&2
+        exit 4
+      fi
+    done
+  fi
+
+  #----------------------------------------------------------------------------
+  # Step 4: Verification
+  #----------------------------------------------------------------------------
+
+  echo ""
+  echo "Running verification checks..."
+  VERIFICATION_FAILED=0
+
+  if [[ -d "$WORKSPACE_PATH" ]]; then
+    verify_check "Workspace directory exists" "pass"
+  else
+    verify_check "Workspace directory exists" "fail"
+  fi
+
+  EXPECTED_FIRST_LINE="# $META_NAME: $HEADLINE"
+  if [[ -f "$WORKSPACE_PATH/DESIGN.md" ]]; then
+    ACTUAL_FIRST_LINE=$(head -1 "$WORKSPACE_PATH/DESIGN.md")
+    if [[ "$ACTUAL_FIRST_LINE" == "$EXPECTED_FIRST_LINE" ]]; then
+      verify_check "DESIGN.md first line format" "pass"
+    else
+      verify_check "DESIGN.md first line format" "fail"
+    fi
+  else
+    verify_check "DESIGN.md first line format" "fail"
+  fi
+
+  if [[ -n "$REPOS" ]]; then
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      worktree_path="$WORKSPACE_PATH/$repo_basename"
+      if [[ -d "$worktree_path/.git" ]] || [[ -f "$worktree_path/.git" ]]; then
+        actual_branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ "$actual_branch" == "$BRANCH_NAME" ]]; then
+          verify_check "Git worktree $repo_basename on correct branch" "pass"
+        else
+          verify_check "Git worktree $repo_basename on correct branch" "fail"
+        fi
+      else
+        verify_check "Git worktree $repo_basename exists" "fail"
+      fi
+    done
+  fi
+
+  if [[ $VERIFICATION_FAILED -eq 1 ]]; then
+    echo ""
+    echo "Error: One or more verification checks failed" >&2
+    exit 7
+  fi
+
+  echo ""
+  echo "All verification checks passed!"
+
+  #----------------------------------------------------------------------------
+  # Summary
+  #----------------------------------------------------------------------------
+
+  echo ""
+  echo "=========================================="
+  echo "Meta workspace created successfully!"
+  echo "=========================================="
+  echo ""
+  echo "  Path: $WORKSPACE_PATH"
+  echo ""
+  echo "Files created:"
+  echo "  - DESIGN.md (stub)"
+  if [[ -n "$REPOS" ]]; then
+    echo ""
+    echo "Git worktrees:"
+    for repo in "${REPO_ARRAY[@]}"; do
+      repo=$(echo "$repo" | xargs)
+      repo_path=$(resolve_repo_path "$repo")
+      repo_basename=$(basename "$repo_path")
+      echo "  - $repo_basename (branch: $BRANCH_NAME)"
+    done
+  fi
+  echo ""
+  echo "Next steps:"
+  echo "  cd \"$WORKSPACE_PATH\""
+}
+
+#------------------------------------------------------------------------------
 # Mode dispatcher
 #------------------------------------------------------------------------------
 
@@ -1142,5 +1439,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   case "$MODE" in
     task) create_task_workspace ;;
     node) create_node_workspace ;;
+    meta) create_meta_workspace ;;
   esac
 fi

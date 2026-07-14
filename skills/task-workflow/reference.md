@@ -60,6 +60,24 @@ Examples:
 - Descriptive and unique within epic
 - Algorithm: Extract nouns/verbs, remove articles/prepositions, join with hyphens
 
+### Meta Workspaces (Lightweight Kind)
+
+`~/src/work/meta/<name>/` — a sibling root to the epic/task tree, for cases
+that don't warrant full task-workspace ceremony (ephemeral background-agent
+worktree isolation, interactive-session working directories).
+
+**Create**: `create-workspace.sh --meta --name NAME [--headline "HEADLINE"] [--repos REPOS]`
+
+Contents are minimal by design:
+- **DESIGN.md**: One-line stub (`# NAME: Headline`), same format the standard
+  layout uses, so `close-workspace.sh` tears it down with no special-casing
+- **Git worktree(s)** (optional, one per `--repos` entry, branch `meta/NAME`)
+
+No CLAUDE.md, `.envrc`, `.claude/settings.json`, or tmuxp session is created.
+`--headline` defaults to `NAME` when omitted. Discovered by `/list-workspaces`
+via the same unrestricted `DESIGN.md` scan (`list-tasks.sh`) used for every
+other workspace — no separate registration mechanism.
+
 ---
 
 ## Task Creation
@@ -261,12 +279,12 @@ Discover and open existing workspace.
 
 **With Epic**:
 ```bash
-find ~/src/work/<epic> -maxdepth 1 -type d -name "<task-id>-*"
+find ~/src/work/<epic> -maxdepth 1 -type d -iname "<task-id>-*"
 ```
 
 **Without Epic**:
 ```bash
-find ~/src/work -maxdepth 2 -type d -name "<task-id>-*"
+find ~/src/work -maxdepth 2 -type d -iname "<task-id>-*"
 ```
 
 **Utility Script**: `scripts/workspace-locator.sh <task-id> [epic]`

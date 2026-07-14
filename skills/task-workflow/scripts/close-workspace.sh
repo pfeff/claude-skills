@@ -10,7 +10,8 @@
 #
 # Arguments:
 #   WORKSPACE_PATH  Path to workspace directory (defaults to CWD)
-#   TASK_ID         Task identifier (e.g., "94") to search for in ~/src/work
+#   TASK_ID         Task identifier to search for in ~/src/work: numeric
+#                   (e.g., "94") or Jira-style (e.g., "DO-649", case-insensitive)
 #
 # Options:
 #   --no-archive       Skip archiving before removal
@@ -29,7 +30,6 @@
 set -euo pipefail
 
 # Script location
-# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Exit codes
@@ -59,7 +59,8 @@ usage() {
   echo ""
   echo "Arguments:"
   echo "  WORKSPACE_PATH  Path to workspace directory (defaults to CWD)"
-  echo "  TASK_ID         Numeric task identifier to search for in ~/src/work"
+  echo "  TASK_ID         Numeric or Jira-style (e.g., DO-649, case-insensitive)"
+  echo "                  task identifier to search for in ~/src/work"
   echo ""
   echo "Options:"
   echo "  --no-archive       Skip archiving before removal"
@@ -146,12 +147,13 @@ if [[ -z "$WORKSPACE_PATH" ]]; then
 elif [[ -d "$WORKSPACE_PATH" ]]; then
   # Explicit path: resolve to absolute
   WORKSPACE_PATH="$(cd "$WORKSPACE_PATH" && pwd)"
-elif [[ "$WORKSPACE_PATH" =~ ^[0-9]+$ ]]; then
-  # Numeric task-id: search ~/src/work
-  found=$(find ~/src/work -maxdepth 2 -type d -name "${WORKSPACE_PATH}-*" 2>/dev/null | head -1)
-  if [[ -z "$found" ]]; then
-    echo "Error: No workspace found for task-id: $WORKSPACE_PATH" >&2
-    echo "Searched: ~/src/work/*/${WORKSPACE_PATH}-*" >&2
+elif [[ "$WORKSPACE_PATH" =~ ^([0-9]+|[A-Za-z][A-Za-z0-9]*-[0-9]+)$ ]]; then
+  # Numeric or Jira-style task-id: resolve via the canonical workspace-locator
+  # utility, which searches ~/src/work case-insensitively and errors out on
+  # no-match or multiple-match rather than silently guessing.
+  # Note: the locator's failure modes (no-match exit 1, ambiguous-match exit 1)
+  # are intentionally collapsed into a single EXIT_WORKSPACE_NOT_FOUND here.
+  if ! found=$("$SCRIPT_DIR/workspace-locator.sh" "$WORKSPACE_PATH"); then
     exit "$EXIT_WORKSPACE_NOT_FOUND"
   fi
   WORKSPACE_PATH="$found"
