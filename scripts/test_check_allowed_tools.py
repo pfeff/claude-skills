@@ -247,6 +247,28 @@ class TestFindMandatoryRefs(unittest.TestCase):
         ):
             self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
 
+    def test_negation_does_not_swallow_other_tool_mandate_same_line(self):
+        # Regression: a negation for one tool must exempt only that tool —
+        # not the whole line. A genuine mandate for a DIFFERENT tool later
+        # on the same line must still be flagged (the exact defect class
+        # this validator exists to catch).
+        refs = check_allowed_tools.find_mandatory_refs(
+            "MUST NOT use the Bash tool here; use the Edit tool instead.\n"
+        )
+        tools = {r[1] for r in refs}
+        self.assertIn("Edit", tools)
+        self.assertNotIn("Bash", tools)
+
+    def test_reuse_misuse_prose_not_flagged(self):
+        # Regression: TOOL_IMPERATIVE_RE must not substring-match "use"
+        # inside larger words like "reuses"/"misuse" — it needs a word
+        # boundary before the imperative verb.
+        for line in (
+            "This helper reuses the Bash tool internally.\n",
+            "This misuse the Bash tool example is illustrative.\n",
+        ):
+            self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
+
 
 if __name__ == "__main__":
     unittest.main()

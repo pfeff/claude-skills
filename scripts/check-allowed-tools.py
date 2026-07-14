@@ -26,9 +26,10 @@ A tool reference counts as "mandatory" — and is checked against
                            (Task/Agent tool)").
   4. A MUST/SHALL line that also names a known tool on that same line.
 
-A prohibition line ("MUST NOT use the X tool", "never invoke the X tool")
-is the opposite of a mandate and is skipped entirely — flagging it would be
-a false positive.
+A prohibition ("MUST NOT use the X tool", "never invoke the X tool") is the
+opposite of a mandate and is exempted — but only for the specific tool it
+names. A genuine mandate for a DIFFERENT tool later on the same line is
+still flagged; prohibitions do not blank out the whole line.
 
 Deliberately NOT flagged: a bare "the X tool" mention without an imperative
 verb or parentheses (e.g. task-workflow's "the Task tool description
@@ -76,17 +77,20 @@ CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")
 # before "<Tool> tool". Tool names stay case-sensitive so ordinary lowercase
 # words ("use the read below") are not mistaken for the Read tool.
 TOOL_IMPERATIVE_RE = re.compile(
-    r"(?:[Ii]nvoke[sd]?|[Ii]nvoking|[Uu]se[sd]?|[Uu]sing|[Vv]ia)"
+    r"\b(?:[Ii]nvoke[sd]?|[Ii]nvoking|[Uu]se[sd]?|[Uu]sing|[Vv]ia)"
     r"\s+(?:[Tt]he\s+)?(" + TOOLS_GROUP + r")\s+tool\b"
 )
 # Parenthetical tool tag: "(Task/Agent tool)" — the PR #223 defect shape.
 TOOL_PAREN_RE = re.compile(r"\((" + TOOLS_GROUP + r")\s+tool\)")
 MODAL_RE = re.compile(r"\bMUST\b|\bSHALL\b")
-# Prohibition, not a mandate: "MUST NOT use the X tool", "never invoke ...".
+# Prohibition, not a mandate: "MUST NOT use the X tool", "never invoke the X
+# tool". Captures the specific tool named so only that tool is exempted —
+# not the whole line (a different, genuinely-mandated tool later on the same
+# line must still be flagged).
 NEGATION_RE = re.compile(
-    r"\b(?:MUST|SHALL)\s+(?:NOT|NEVER)\b"
-    r"|\b(?:do not|don't|does not|doesn't|never|cannot|can't)\s+"
-    r"(?:invoke|use|call|run)\b",
+    r"\b(?:(?:MUST|SHALL)\s+(?:NOT|NEVER)|do not|don't|does not|doesn't|"
+    r"never|cannot|can't)\s+\b(?:invoke|use|call|run)\s+"
+    r"(?:the\s+)?(" + TOOLS_GROUP + r")\s+tool\b",
     re.IGNORECASE,
 )
 TOOL_TOKEN_RE = re.compile(r"\b(" + TOOL_ALT + r")\b")
@@ -201,8 +205,13 @@ def find_mandatory_refs(text):
     references. Returns a list of (line_no, tool_name, line_text)."""
     refs = []
     for line_no, line in enumerate(text.splitlines(), start=1):
-        if NEGATION_RE.search(line):
-            continue  # a prohibition is not a mandatory invocation
+        # Tools named in a prohibition on this line ("MUST NOT use the Bash
+        # tool") are exempted individually — not the whole line, so a real
+        # mandate for a different tool later on the same line still flags.
+        negated_tools = set()
+        for m in NEGATION_RE.finditer(line):
+            for name in re.split(r"\s*/\s*", m.group(1)):
+                negated_tools.add(name)
 
         seen_on_line = set()
 
@@ -218,7 +227,7 @@ def find_mandatory_refs(text):
             for m in TOOL_TOKEN_RE.finditer(line):
                 seen_on_line.add(m.group(1))
 
-        for name in sorted(seen_on_line):
+        for name in sorted(seen_on_line - negated_tools):
             refs.append((line_no, name, line.strip()))
 
     return refs
