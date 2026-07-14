@@ -44,18 +44,19 @@ Keep the recognized text; it feeds both classification and any handler.
 
 ## Phase 2 — Classify
 
-Read the recognized text and decide the document type. Judgment call, not a model — look at headers, issuer, and structure. Known classes today:
+This router carries no domain vocabulary of its own. Read the recognized text, then check it against each **registered handler's** own declared trigger signals — read from that handler's `## Trigger signals` section in its `SKILL.md` (see the registry below) — not from any list kept here. If a handler's signals match, the document belongs to that handler. If no registered handler's signals match, fall through to generic capture.
 
-| Class | Signals | Route to |
-|---|---|---|
-| `medical.after-visit-summary` | "After Visit Summary", MRN, vitals, provider/clinic, follow-up | **`medical-records`** handler |
-| _(unknown / everything else)_ | no known handler matches | **generic capture** (below) |
+**Handler registry (v1):**
 
-This table is the extension point: as new handler skills are added, add a row. Only `medical.after-visit-summary` has a handler in v1.
+| Handler | See its trigger signals at |
+|---|---|
+| `medical-records` | `medical-records` `SKILL.md` → `## Trigger signals` |
+
+This registry is the extension point: as new handler skills are added, add a row naming the handler — the recognition vocabulary itself lives and stays in that handler's own skill file, never here.
 
 ## Phase 3 — Route
 
-**If a handler exists for the class:** invoke it via the Skill tool, passing the original file path and the recognized text. Example: for `medical.after-visit-summary`, invoke `medical-records`. The handler owns filing, schema, and archival — do not duplicate its work here.
+**If a handler's trigger signals match:** invoke it via the Skill tool, passing the original file path and the recognized text. Example: if the text matches `medical-records`' declared signals, invoke `medical-records`. The handler owns filing, schema, and archival — do not duplicate its work here.
 
 **If no handler matches (generic capture):**
 1. Resolve the host vault via the `obsidian-notes` skill's host-config (or `~/.claude/hosts/<hostname>.md`). Bail with a clear message if no vault is configured.

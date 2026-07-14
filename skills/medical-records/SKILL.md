@@ -20,6 +20,18 @@ A handler skill: turns the text of a medical After Visit Summary into a structur
 - Invoked by `scan-document` for class `medical.after-visit-summary`.
 - Direct: "file this doctor visit", "capture this after-visit summary", "log my visit vitals".
 
+## Trigger signals (how scan-document recognizes this)
+
+This handler owns its own recognition vocabulary — `scan-document`'s router does not hardcode these; it reads this section to decide whether a scan belongs here. A document is an After Visit Summary when the recognized text shows several of:
+
+- Header/title text: "After Visit Summary"
+- An MRN (medical record number)
+- Vitals (blood pressure, weight, pulse, temperature, BMI, oxygen saturation, etc.)
+- A provider/clinic/institution name
+- A follow-up date or discharge instructions
+
+One signal alone may be coincidental (e.g. a phone number that looks like an MRN); several together are a confident match. Ambiguous cases should be confirmed with the user rather than guessed.
+
 ## Inputs
 
 - Path to the source scan (PDF/image).
