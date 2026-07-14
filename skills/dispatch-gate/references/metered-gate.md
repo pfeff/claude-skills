@@ -169,7 +169,7 @@ work:
 
 - `../SKILL.md` Step 0.5 — where this gate is invoked in dispatch-gate
   workflow
-- `references/privacy-gate.md` — sibling policy gate (Step 0), same
+- `privacy-gate.md` — sibling policy gate (Step 0), same
   placement and annotation pattern
 - `../../self-verify/references/task-context.md` — "Override annotation"
   section, the shared placement convention (appended below the four
