@@ -39,9 +39,9 @@ sign-off until the tier's agent reviews are done and posted.
    agent-review verdicts from `/review` (+ `/l1-review`/`/l2-review`), linking their
    markers. Keep it proportionate to the change.
 3. **Drive decisions through AskUserQuestion, not prose** — the operator decides
-   from selectable options. One decision per question; batch related ones (≤4
-   questions/call, ≤4 options each); every question carries exactly one recommended
-   default, placed first.
+   from selectable options. One decision per question; batch related ones per the
+   AskUserQuestion batch rules in `operator-interview-doctrine`; every question
+   carries exactly one recommended default, placed first.
 4. **Chunk large items for approval** (e.g. a full spec: Problem+Decisions /
    Requirements+Acceptance / Deferred+E2E), approving each chunk before the final
    explicit sign-off.
