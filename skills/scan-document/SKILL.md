@@ -1,6 +1,6 @@
 ---
 name: scan-document
-description: "Capture a scanned document (PDF or image) into text, classify what it is, and route it to the right follow-up workflow. This is the front door for any scan the user drops in — after-visit summaries, lab results, receipts, letters, contracts, statements. OCRs natively on macOS (Vision framework, no tesseract/poppler), classifies the document from the recognized text, and either hands off to a specialized handler skill (e.g. medical-records for an after-visit summary) or does a generic vault capture when no handler matches. Use when the user says 'scan this', 'OCR this', 'capture/archive this document', 'what is this scan', or points at a PDF/image and wants it read and filed."
+description: "Capture a scanned document (PDF or image) into text, classify what it is, and route it to the right follow-up workflow. This is the front door for any scan the user drops in — after-visit summaries, lab results, receipts, letters, contracts, statements. OCRs natively on macOS (Vision framework as the core engine; an optional pdftotext fast-path when that binary happens to be present), classifies the document from the recognized text, and either hands off to a specialized handler skill (e.g. medical-records for an after-visit summary) or does a generic vault capture when no handler matches. Use when the user says 'scan this', 'OCR this', 'capture/archive this document', 'what is this scan', or points at a PDF/image and wants it read and filed."
 argument-hint: "<path to a PDF or image file>"
 allowed-tools:
   - Read
@@ -29,12 +29,14 @@ A path to a `.pdf`, `.png`, `.jpg`/`.jpeg`, or `.heic`. If no path is given, ask
 
 ## Phase 1 — OCR (extract text)
 
-1. **Text-layer fast path (PDF only):** `pdftotext -layout <file> -` . If it returns non-trivial text, use it — the PDF already has a text layer; skip OCR.
-2. **Native OCR fallback:** if the fast path is empty (a true scan) or the input is an image, run the bundled Swift script:
+**Command safety (applies to every command below):** the file path comes from the user or the filesystem and must be treated as untrusted input. Always pass it as a single quoted argument (e.g. `"$file"`, never unquoted interpolation) and reject/validate it before invocation if it contains shell metacharacters (`; | & $ \` ( ) < > newline`) — do not construct a command by string-concatenating an unvalidated path into bash.
+
+1. **Text-layer fast path (PDF only):** if a `pdftotext` binary is present, try `pdftotext -layout "<file>" -`. Distinguish "command not found" (skip straight to the Vision fallback, no error) from "ran but returned empty" (a true scan — also fall back to Vision). This is an optional accelerator, not a dependency: stock macOS does not ship `pdftotext` (it's part of poppler), so treat its absence as the common case, not an error.
+2. **Native OCR fallback:** if the fast path is unavailable/empty or the input is an image, run the bundled Swift script:
    ```
-   swift <skill-dir>/scripts/ocr.swift <file>
+   swift <skill-dir>/scripts/ocr.swift "<file>"
    ```
-   It rasterizes PDF pages via PDFKit and recognizes text with Vision (`VNRecognizeTextRequest`, accurate + language correction). Output is page-delimited (`===== PAGE n =====`). Fully native — no tesseract or poppler. First run may take a few seconds per page.
+   It rasterizes PDF pages via PDFKit and recognizes text with Vision (`VNRecognizeTextRequest`, accurate + language correction). Output is page-delimited (`===== PAGE n =====`); a page with no recognized text emits no header — see "Empty OCR" below. This is the sole OCR engine — no tesseract, no bundled poppler binary. First run may take a few seconds per page.
 
 Keep the recognized text; it feeds both classification and any handler.
 
@@ -55,18 +57,19 @@ This table is the extension point: as new handler skills are added, add a row. O
 
 **If no handler matches (generic capture):**
 1. Resolve the host vault via the `obsidian-notes` skill's host-config (or `~/.claude/hosts/<hostname>.md`). Bail with a clear message if no vault is configured.
-2. Copy the source file into `<vault>/Attachments/` with a slugged, content-descriptive name.
-3. Create a dated note in `<vault>/Notes/YYYY/MM/`:
-   - Filename prefix = **today's date** (the write date — the prefix is a de-dupe / partition key, not the document's own date). Slug from a short description of the document.
+2. **Path safety:** any `slug` or date value derived from OCR'd text is untrusted and must be sanitized before it is used to build an `Attachments/` or `Notes/` path — never write those values into a path unvalidated. Constrain `slug` to `[a-z0-9-]` (lowercase, strip/replace anything else, collapse repeats) and constrain any document date used in a path to strict ISO `YYYY-MM-DD` (reject or reformat anything else). This blocks path traversal (`../`, absolute paths, embedded separators) from OCR text riding into a filesystem path.
+3. Copy the source file into `<vault>/Attachments/` with a slugged, content-descriptive name (sanitized per above).
+4. Create a dated note in `<vault>/Notes/YYYY/MM/`:
+   - Filename prefix = **today's date** (the write date — the prefix is a de-dupe / partition key, not the document's own date). Slug from a short description of the document, sanitized per above.
    - Frontmatter: `type` (best guess, e.g. `receipt`, `letter`, `statement`), `tags: [scan]` plus a type tag, `captured: <today>`, `source: "[[<attachment filename>]]"`, and any obvious dated field as its own property (e.g. `doc_date`).
    - Body: a one-line summary, the recognized text under a `## Text` heading, and the embedded source (`![[<attachment filename>]]`).
-4. Report where it landed.
+5. Report where it landed.
 
 ## Edge cases
 
 - **Ambiguous class:** if the text plausibly fits a handler but you're not sure, ask the user (AskUserQuestion) before routing rather than guessing into the wrong handler.
 - **Multi-document scan:** if one file clearly contains several distinct documents, say so and ask whether to split or treat as one.
-- **Empty OCR:** if both the fast path and Vision return nothing (blank/failed scan), report it — don't create an empty note.
+- **Empty OCR:** `ocr.swift` omits the `===== PAGE n =====` header entirely for any page where Vision recognized no text, so a missing page number in the output (or fully empty stdout) is the empty signal — not a header followed by blank text. If both the fast path and Vision return nothing recognizable (blank/failed scan, or every page suppressed), report it — don't create an empty note.
 - **Sensitive content:** medical, financial, and legal scans are private by nature. Capture into the local vault only; never send content to an external service without explicit operator say-so.
 
 ## Composition

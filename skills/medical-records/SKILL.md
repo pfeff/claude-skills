@@ -23,7 +23,9 @@ A handler skill: turns the text of a medical After Visit Summary into a structur
 ## Inputs
 
 - Path to the source scan (PDF/image).
-- The recognized text. If not supplied (direct invocation), OCR it first: `pdftotext -layout` fast path, else `swift <scan-document-dir>/scripts/ocr.swift <file>`.
+- The recognized text. If not supplied (direct invocation), OCR it first: `pdftotext -layout "<file>" -` fast path (only if the `pdftotext` binary is present — it is not part of stock macOS; treat "command not found" as "skip to Vision," not an error), else `swift <scan-document-dir>/scripts/ocr.swift "<file>"`.
+
+**Command safety:** the file path is untrusted input (user- or filesystem-derived). Always pass it as a single quoted argument to any shell command — never interpolate it unquoted — and reject/validate it if it contains shell metacharacters (`; | & $ \` ( ) < > newline`) before invocation.
 
 ## Steps
 
@@ -33,14 +35,16 @@ A handler skill: turns the text of a medical After Visit Summary into a structur
 
 2. **Resolve the vault** via the `obsidian-notes` host-config (`~/.claude/hosts/<hostname>.md`). Bail clearly if none is configured.
 
-3. **Archive the scan:** copy the source file into `<vault>/Attachments/` named `<visit_date>-<slug>.<ext>` (e.g. `2026-06-03-osu-sleep-avs.pdf`). The attachment is a source artifact — name it by the document's own date for findability. Verify the filename is unique in the vault (the embed resolves by filename).
+3. **Path safety:** `slug` and `visit_date` are both derived from OCR'd text and are therefore untrusted — sanitize both before using them to build any `Attachments/` or `Notes/` path. Constrain `slug` to `[a-z0-9-]` (lowercase, strip/replace anything else, collapse repeats). Validate `visit_date` as strict ISO `YYYY-MM-DD`; if it doesn't match, treat it as unrecoverable and fall through to the "ambiguous visit date" edge case rather than using the raw value in a path. Never write an unvalidated `slug` or `visit_date` into a filesystem path — this blocks path traversal (`../`, absolute paths, embedded separators) riding in through OCR text.
 
-4. **Write the note** at `<vault>/Notes/<write-year>/<write-month>/<write-date>-<slug>.md`:
+4. **Archive the scan:** copy the source file into `<vault>/Attachments/` named `<visit_date>-<slug>.<ext>` (e.g. `2026-06-03-osu-sleep-avs.pdf`), using the sanitized values from step 3. The attachment is a source artifact — name it by the document's own date for findability. Verify the filename is unique in the vault (the embed resolves by filename).
+
+5. **Write the note** at `<vault>/Notes/<write-year>/<write-month>/<write-date>-<slug>.md` (sanitized `slug`):
    - **Filename prefix = today's write date**, NOT the visit date. The prefix is a de-dupe / folder-partition key; the visit date lives in frontmatter as `visit_date`.
    - Frontmatter — the schema (see below). **Vitals are flat, top-level, Number-typed properties.** This is deliberate and load-bearing (see "Why this schema").
    - Body: visit header, a human-readable vitals table, plan & follow-up, a condensed instructions summary (keep patient-specific guidance; the full text lives in the embedded PDF), and the embedded source (`![[<attachment>]]`).
 
-5. **Report** where the note and attachment landed, and note that it will appear in the Medical Vitals base.
+6. **Report** where the note and attachment landed, and note that it will appear in the Medical Vitals base.
 
 ## Frontmatter schema
 
@@ -94,3 +98,4 @@ Records feed `<vault>/Areas/Health/Medical Vitals.base` — a table filtered to 
 - **Ambiguous visit date:** if the appointment date isn't clearly recoverable, ask (AskUserQuestion) rather than guessing; it is the semantic key.
 - **Non-AVS medical doc** (lab result, imaging, immunization): out of scope for v1 — say so and fall back to the router's generic capture. Those get their own handlers later.
 - **Height unchanged across visits:** fine to carry it each time; it makes each record self-contained.
+- **Sensitive content:** these records carry MRN and vitals — private medical data by nature. Capture into the local vault only; never send content (including the file, extracted text, or any field) to an external service without explicit operator say-so.
