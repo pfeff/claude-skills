@@ -44,20 +44,35 @@ func ocr(_ cg: CGImage, orientation: CGImagePropertyOrientation = .up) -> String
     return ordered.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
 }
 
+// Upper bound on either rendered dimension. A PDF's /MediaBox is
+// attacker-influenceable (a malicious file can declare an enormous page);
+// without a cap, w*h*4 bytes are allocated for the CGContext with no limit,
+// which can OOM the process. Oversized pages get their scale reduced to fit
+// within this bound instead of being rejected outright.
+let maxRenderDim: CGFloat = 10000
+
 func renderPDFPage(_ page: PDFPage, scale: CGFloat) -> CGImage? {
     let bounds = page.bounds(for: .mediaBox)
     let rotation = ((page.rotation % 360) + 360) % 360
     let rotated = rotation == 90 || rotation == 270
     let pageWidth = rotated ? bounds.height : bounds.width
     let pageHeight = rotated ? bounds.width : bounds.height
-    let w = Int(pageWidth * scale), h = Int(pageHeight * scale)
+    // Clamp: if the requested scale would produce a dimension beyond
+    // maxRenderDim, shrink the scale proportionally so normal-sized pages
+    // are rendered exactly as before and only oversized ones are affected.
+    var effectiveScale = scale
+    let rawMaxDim = max(pageWidth, pageHeight) * scale
+    if rawMaxDim > maxRenderDim {
+        effectiveScale = scale * (maxRenderDim / rawMaxDim)
+    }
+    let w = Int(pageWidth * effectiveScale), h = Int(pageHeight * effectiveScale)
     guard w > 0, h > 0,
           let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
               bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
               bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else { return nil }
     ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
     ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-    ctx.scaleBy(x: scale, y: scale)
+    ctx.scaleBy(x: effectiveScale, y: effectiveScale)
     // page.draw(with:to:) applies the page's /Rotate attribute itself; the
     // context above is sized for the post-rotation (visual) dimensions so
     // rotated pages aren't clipped.

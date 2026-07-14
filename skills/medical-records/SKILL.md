@@ -39,14 +39,18 @@ A handler skill: turns the text of a medical After Visit Summary into a structur
 
 4. **Archive the scan:** copy the source file into `<vault>/Attachments/` named `<visit_date>-<slug>.<ext>` (e.g. `2026-06-03-osu-sleep-avs.pdf`), using the sanitized values from step 3. The attachment is a source artifact — name it by the document's own date for findability. Verify the filename is unique in the vault (the embed resolves by filename).
 
-5. **Write the note** at `<vault>/Notes/<write-year>/<write-month>/<write-date>-<slug>.md` (sanitized `slug`):
+5. **YAML safety:** `title`, `provider`, `department`, `department_phone`, each `visit_reason` item, `referral`, and `medications` are all derived from OCR'd text and are therefore untrusted — never write any of them into frontmatter unquoted. Emit every OCR-derived scalar as a double-quoted YAML string with internal `"` escaped as `\"` and `\` escaped as `\\` (or as a YAML block scalar for long/multi-line values). A stray `:`, a leading `-`, an embedded newline, or a line that merely resembles `---` or `key: value` in the source text can otherwise break the YAML frontmatter block or inject extra properties — and medical text is full of colons (times, ratios, dosages). This applies to every scalar in the schema below sourced from OCR text, not just the ones named here.
+
+6. **Write the note** at `<vault>/Notes/<write-year>/<write-month>/<write-date>-<slug>.md` (sanitized `slug`):
    - **Filename prefix = today's write date**, NOT the visit date. The prefix is a de-dupe / folder-partition key; the visit date lives in frontmatter as `visit_date`.
    - Frontmatter — the schema (see below). **Vitals are flat, top-level, Number-typed properties.** This is deliberate and load-bearing (see "Why this schema").
    - Body: visit header, a human-readable vitals table, plan & follow-up, a condensed instructions summary (keep patient-specific guidance; the full text lives in the embedded PDF), and the embedded source (`![[<attachment>]]`).
 
-6. **Report** where the note and attachment landed, and note that it will appear in the Medical Vitals base.
+7. **Report** where the note and attachment landed, and note that it will appear in the Medical Vitals base.
 
 ## Frontmatter schema
+
+**Every OCR-derived scalar below (`title`, `provider`, `department`, `department_phone`, `visit_reason` items, `referral`, `medications`) MUST be written as a quoted, YAML-safe string — see "YAML safety" in Steps above. Do not write raw OCR text into frontmatter.**
 
 ```yaml
 ---
