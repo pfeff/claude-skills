@@ -42,7 +42,7 @@ Extract task-id/path and flags from user input.
 **Valid formats**:
 - `/close-workspace`
 - `/close-workspace 94`
-- `/close-workspace ~/src/work/guardian/94-make-workspace-closure/`
+- `/close-workspace ~/src/work/acme/94-make-workspace-closure/`
 - `/close-workspace 94 --no-archive`
 - `/close-workspace --no-close-issue`
 
@@ -132,7 +132,7 @@ Workspace: ~/src/work/platform/TOOS-24-fix-auth
   Task:     TOOS-24 - Fix authentication bug
   Epic:     platform
   Task Dir: TOOS-24-fix-auth
-  GitHub Issue: pfeff/guardian#24
+  GitHub Issue: acme/webapp#24
 
 Inventorying components...
   Worktrees:        Dev-Stacks
@@ -140,13 +140,13 @@ Inventorying components...
 
 Archiving to: ~/src/work/.archive/platform/TOOS-24-fix-auth.tar.gz
 Removing worktree: Dev-Stacks
-Closing GitHub issue: pfeff/guardian#24
+Closing GitHub issue: acme/webapp#24
 Removing workspace directory
 
 All verification checks passed!
 
 Workspace closed successfully!
-GitHub issue: pfeff/guardian#24 closed
+GitHub issue: acme/webapp#24 closed
 ```
 
 ### Close without closing the issue

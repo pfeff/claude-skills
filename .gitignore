@@ -1,0 +1,16 @@
+# Local L{N}-review verdict artifacts — never committed to git.
+.claude/reviews/
+
+# Per-job dispatch manifest (dispatch-gate) — ephemeral, never committed.
+# Has leaked into main twice already (PR #136, and the stray copy this repo
+# carried before it was git-rm'd from PR #143); ignore at the root cause.
+.claude/task-context.md
+
+# Host-local private-hostname blocklist for scripts/check-host-agnostic.sh.
+# Contains private machine hostnames; must never be committed. Template:
+# scripts/.private-tokens.example
+scripts/.private-tokens
+
+# Python test/byte-compile artifacts (skills/*/scripts test harnesses).
+__pycache__/
+*.pyc

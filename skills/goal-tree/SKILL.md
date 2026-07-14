@@ -101,6 +101,7 @@ Ready work dispatches immediately, in parallel. Minimize blocking. Be decisive d
 - Dispatch ready nodes immediately. Conversation about node B does NOT block dispatching node A if A's spec is clear and dependencies are met.
 - During execution, propose and act — checkpoints belong at phase boundaries (spec confirmation, tree approval, dispatch rounds), not after every thought. State assumptions and proceed; the user will redirect if needed.
 - Auto-continue the OODA loop. When ready nodes are exhausted in an open-ended project, immediately run `operations/next-cycle.md`. Do not stop and ask "what next?"
+- **Risk ordering is a tie-break, not a gate.** When several ready nodes could dispatch in the same round and their relative order is a free choice, list/dispatch the reversible or low-blast-radius ones ahead of irreversible or high-blast-radius ones (destructive infra changes, state migrations, anything that can't be cleanly rolled back via `git`). This only orders nodes within the round — every ready node still dispatches immediately per the rule above; it is never a reason to hold one back pending another's review.
 
 ## Layer Model
 
@@ -126,9 +127,9 @@ No coordinator schema change is needed — layer is derived from parent_id chain
 
 **Coordinator as backend**: The `coord` CLI (`scripts/coord`) is the interface. Reads and writes go through it. Env: `COORDINATOR_URL` (default `http://localhost:4000`), `COORDINATOR_TOKEN` (required).
 
-**Bootstrap mode**: When the coordinator is unavailable OR a TCETRA hostname is detected, use GOAL.md + TodoWrite for task tracking. All other conventions still apply — worktrees, scripted sessions, parallel dispatch via workspace sessions. Once the coordinator is running (non-TCETRA only), register the remaining tree and switch to the normal loop.
+**Bootstrap mode**: When the coordinator is unavailable OR the host opts into the bootstrap backend (`GOAL_TREE_BACKEND=work`), use GOAL.md + TodoWrite for task tracking. All other conventions still apply — worktrees, scripted sessions, parallel dispatch via workspace sessions. Once the coordinator is running (coordinator-backed hosts), register the remaining tree and switch to the normal loop.
 
-**Environment detection**: Operations should check the environment before selecting a backend. Use `scripts/detect-env.sh` which outputs "work" (TCETRA → GOAL.md) or "personal" (coordinator). See `lib/env-detection.md` for details.
+**Environment detection**: Operations should check the environment before selecting a backend. Use `scripts/detect-env.sh` which outputs "work" (bootstrap → GOAL.md) or "personal" (coordinator). See `lib/env-detection.md` for details.
 
 **Worktree isolation**: Every task gets a node workspace with repo worktrees on a per-node branch. Source repos are never modified directly.
 

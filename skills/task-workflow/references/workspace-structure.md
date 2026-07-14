@@ -96,7 +96,7 @@ Obsidian access is handled by the `obsidian-notes` skill (host-resolved CLI). Th
 
 ## Solution Documentation
 
-Solution retrieval runs through QMD over the Obsidian vault. `init-workspace` step 9 writes (and overwrites on re-run) a `## Prior Context (QMD)` section into `DESIGN.md` containing the top-3 matches for the task's title + first paragraph — see `operations/init-workspace.md` and `references/solution-search.md` for the protocol.
+Solution retrieval runs through QMD over the Obsidian vault. `init-workspace` step 10 writes (and overwrites on re-run) a `## Prior Context (QMD)` section into `DESIGN.md` containing the top-3 matches for the task's title + first paragraph — see `operations/init-workspace.md` and `references/solution-search.md` for the protocol.
 
 Capture new solution knowledge via `/claude-skills:compound` (writes a `type=solution` note to the vault using the `Solution` template), `/finish`'s session-journal step, or a direct Obsidian note. `docs/solutions/` in existing repos is treated as read-only historical material — no new writes there.
 

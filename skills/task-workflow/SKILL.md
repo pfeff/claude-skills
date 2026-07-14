@@ -55,7 +55,7 @@ allowed-prompts:
     prompt: write metrics log
   - tool: Bash
     prompt: sleep for backoff between retries
-version: 1.6.2
+version: 1.8.0
 ---
 
 # Task Workflow Skill
@@ -88,6 +88,18 @@ Each workspace contains:
 - Task ID: Short identifier (e.g., `DO-242`, `skills-workflow`)
 - Epic: Category slug (e.g., `ad-hoc`, `tooling`, `platform`)
 - Slug: 2-3 word concise identifier from headline
+
+**Meta Workspaces** (lightweight kind): `~/src/work/meta/<name>/`
+
+Created via `create-workspace.sh --meta --name NAME [--headline "HEADLINE"] [--repos REPOS]`.
+A minimal tracked directory for cases that don't warrant full task-workspace
+ceremony — ephemeral background-agent worktree isolation, or an interactive
+session's working directory. Gets only a one-line DESIGN.md stub (`# NAME: Headline`,
+same format `close-workspace.sh` already parses) and, optionally, a git worktree
+per repo on branch `meta/NAME`. No CLAUDE.md, `.envrc`, `.claude/settings.json`,
+or tmuxp session is created. `--headline` defaults to `NAME` when omitted. Torn
+down the same way as any other workspace via `close-workspace.sh`, and discovered
+by `/list-workspaces` the same way (DESIGN.md scan) — no separate tooling needed.
 
 ## Operations
 
@@ -129,7 +141,7 @@ Populates workspace with issue/ticket content, enriches CLAUDE.md and DESIGN.md,
 
 **Implementation**: Load `operations/init-workspace.md` for detailed steps.
 
-**Quick summary**: Auto-detects issue source (GitHub/Jira) from workspace files, fetches issue content, enriches CLAUDE.md and DESIGN.md with requirements, interviews user only when gaps exist, creates task list from DESIGN.md. Idempotent — safe to re-run.
+**Quick summary**: Auto-detects issue source (GitHub/Jira) from workspace files, fetches issue content, enriches CLAUDE.md and DESIGN.md with requirements, formalizes a checkable `## Acceptance Criteria` contract (AC-N checkboxes) that drives decomposition and the completion gate, interviews user (leading with AC confirm/amend) only when gaps exist, creates an AC-traced task list from DESIGN.md. Idempotent — safe to re-run.
 
 ### 5. Workspace Opening
 
@@ -221,9 +233,9 @@ Autonomously cycles through the task list: pick next task → implement → vali
 
 **Implementation**: Load `operations/auto-advance.md` for detailed steps.
 
-**Driver**: Self-driving by default; a session may optionally be driven by native `/goal <condition>; stop after N turns` as a within-session turn budget. `/goal` is only a driver — the authoritative completion gate stays the tool-based complete-check (all native Tasks completed + validation + commit/PR), never `/goal`'s transcript evaluator. A `/goal` halt with pending tasks / unpushed commits / dirty tree means re-drive, not done. See `operations/auto-advance.md` → "Within-Session Driver (`/goal`)".
+**Driver**: Self-driving by default; a session may optionally be driven by native `/goal <condition>; stop after N turns` as a within-session turn budget. `/goal` is only a driver — the authoritative completion gate stays the tool-based complete-check (all native Tasks completed + validation + ACs checked/deferred + commit/PR), never `/goal`'s transcript evaluator. A `/goal` halt with pending tasks / open ACs / unpushed commits / dirty tree means re-drive, not done. See `operations/auto-advance.md` → "Within-Session Driver (`/goal`)".
 
-**Quick summary**: Entry guard checks task list state (zero tasks, all blocked, in-progress resume). Loop body: TaskList → pick next unblocked → implement → validate-implementation → git commit → TaskUpdate(completed) → loop. Transient errors (rate limits, timeouts, 5xx) at any step are retried with exponential backoff via `references/error-classification.md` and `references/retry-with-backoff.md`. On all-tasks-complete: commits remaining changes, creates PR via `/gh-pr-create` (with `Closes #N` issue linking), waits for CI checks, and reports status. Pauses on: CI failure, validation failure after retries, transient retries exhausted, ambiguous decision, or commit failure. Pause messages include retry history when applicable. No PR created when blocked tasks remain.
+**Quick summary**: Entry guard checks task list state (zero tasks, all blocked, in-progress resume). Loop body: TaskList → pick next unblocked → implement → validate-implementation → git commit → TaskUpdate(completed) → AC check-off (step 5a: re-verify and flip DESIGN.md checkboxes for ACs whose tracing tasks all completed) → loop. Transient errors (rate limits, timeouts, 5xx) at any step are retried with exponential backoff via `references/error-classification.md` and `references/retry-with-backoff.md`. On all-tasks-complete: AC gate (no PR while an undeferred AC is unchecked), commits remaining changes, creates PR via `/gh-pr-create` (with `Closes #N` issue linking and the AC checklist in the body), waits for CI checks, and reports status. Pauses on: CI failure, validation failure after retries, transient retries exhausted, ambiguous decision, commit failure, or an AC that cannot be satisfied autonomously. Pause messages include retry history when applicable. No PR created when blocked tasks remain.
 
 ### 14. Resume
 

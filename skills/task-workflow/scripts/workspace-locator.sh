@@ -16,21 +16,34 @@ fi
 
 # Search with epic filter
 if [ -n "$epic" ]; then
-  workspace=$(find ~/src/work/"$epic" -maxdepth 1 -type d -name "$task_id-*" 2>/dev/null | head -1)
+  matches=$(find ~/src/work/"$epic" -maxdepth 1 -type d -iname "$task_id-*" 2>/dev/null)
+  if [ -z "$matches" ]; then
+    match_count=0
+  else
+    match_count=$(echo "$matches" | grep -c "^" || true)
+  fi
 
-  if [ -z "$workspace" ]; then
+  if [ "$match_count" -eq 0 ]; then
     echo "Error: No workspace found for task $task_id in epic $epic" >&2
     echo "Searched in: ~/src/work/$epic/" >&2
     exit 1
+  elif [ "$match_count" -gt 1 ]; then
+    echo "Error: Multiple workspaces found for $task_id in epic $epic:" >&2
+    echo "$matches" >&2
+    exit 1
   fi
 
-  echo "$workspace"
+  echo "$matches"
   exit 0
 fi
 
 # Search without epic filter
-matches=$(find ~/src/work -maxdepth 2 -type d -name "$task_id-*" 2>/dev/null)
-match_count=$(echo "$matches" | grep -c "^" || true)
+matches=$(find ~/src/work -maxdepth 2 -type d -iname "$task_id-*" 2>/dev/null)
+if [ -z "$matches" ]; then
+  match_count=0
+else
+  match_count=$(echo "$matches" | grep -c "^" || true)
+fi
 
 if [ "$match_count" -eq 0 ]; then
   echo "Error: No workspace found for task $task_id" >&2

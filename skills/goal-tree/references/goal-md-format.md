@@ -74,9 +74,9 @@ Description paragraph explaining the goal or task.
 Can span multiple lines.
 
 **Acceptance Criteria**:
-- [ ] Criterion one
-- [x] Criterion two (completed)
-- [ ] Criterion three
+- [ ] **AC-1**: Criterion one _(verify: <method>)_
+- [x] **AC-2**: Criterion two (completed) _(verify: <method>)_
+- [ ] **AC-3**: Criterion three _(verify: <method>)_
 
 **result**: Summary of what was accomplished (only present when completed)
 ```
@@ -210,9 +210,9 @@ Implement OAuth endpoints and token management.
 Add JWT validation middleware for protected routes.
 
 **Acceptance Criteria**:
-- [x] Validates JWT signature
-- [x] Checks token expiry
-- [x] Returns 401 for invalid tokens
+- [x] **AC-1**: Validates JWT signature _(verify: test output)_
+- [x] **AC-2**: Checks token expiry _(verify: test output)_
+- [x] **AC-3**: Returns 401 for invalid tokens _(verify: curl the endpoint)_
 
 **result**: Added JWTAuthMiddleware with full RS256 validation.
 
@@ -223,9 +223,9 @@ Add JWT validation middleware for protected routes.
 Implement /auth/google and /auth/github callback handlers.
 
 **Acceptance Criteria**:
-- [ ] Google OAuth flow works end-to-end
-- [ ] GitHub OAuth flow works end-to-end
-- [ ] Tokens stored securely in database
+- [ ] **AC-1**: Google OAuth flow works end-to-end _(verify: manual sign-in)_
+- [ ] **AC-2**: GitHub OAuth flow works end-to-end _(verify: manual sign-in)_
+- [ ] **AC-3**: Tokens stored securely in database _(verify: db row audit)_
 
 ### A.3 Token refresh [status: pending]
 
@@ -234,8 +234,8 @@ Implement /auth/google and /auth/github callback handlers.
 Implement refresh token rotation.
 
 **Acceptance Criteria**:
-- [ ] Refresh endpoint issues new access token
-- [ ] Old refresh tokens are invalidated
+- [ ] **AC-1**: Refresh endpoint issues new access token _(verify: curl the endpoint)_
+- [ ] **AC-2**: Old refresh tokens are invalidated _(verify: test output)_
 
 ## B. Frontend Integration [status: pending]
 
@@ -249,8 +249,8 @@ Add OAuth buttons and handle authentication state.
 Add Google and GitHub sign-in buttons.
 
 **Acceptance Criteria**:
-- [ ] Buttons redirect to OAuth provider
-- [ ] Callback updates auth state
+- [ ] **AC-1**: Buttons redirect to OAuth provider _(verify: manual sign-in)_
+- [ ] **AC-2**: Callback updates auth state _(verify: manual sign-in)_
 
 ### B.2 Auth state management [status: pending]
 
@@ -259,8 +259,8 @@ Add Google and GitHub sign-in buttons.
 Store and refresh tokens in frontend.
 
 **Acceptance Criteria**:
-- [ ] Token stored in secure cookie
-- [ ] Auto-refresh before expiry
+- [ ] **AC-1**: Token stored in secure cookie _(verify: db row audit)_
+- [ ] **AC-2**: Auto-refresh before expiry _(verify: test output)_
 
 ---
 ## Results Log
@@ -310,7 +310,15 @@ repos:      /^\*\*repos\*\*:\s*(.+)$/m → split by comma, trim
 depends_on: /^\*\*depends_on\*\*:\s*(.+)$/m → split by comma, trim
 jira_ref:   /^\*\*jira_ref\*\*:\s*(\S+)$/m → capture issue key
 result:     /^\*\*result\*\*:\s*(.+)$/m → capture text
-criteria:   /^- \[([ x])\] (.+)$/gm → list of {checked, text}
+criteria:   /^- \[([ x])\] (.+)$/gm → list of {checked, id, text, verify}
+  Tolerant parse — accepts BOTH formats; capture rest after the box as RAW:
+    - canonical: `**AC-{N}**: {text} _(verify: {method})_`
+                 → id = N (int), text = {text}, verify = {method}
+                 The `_(verify: …)_` suffix is optional; verify = null when absent.
+    - legacy plain: `{text}`  → id = null, text = RAW, verify = null
+  Strip a trailing `_(verify: …)_` from text when present. Both forms must
+  keep parsing — never reject a legacy plain `- [ ]` line.
+  AC-N ids are stable once assigned: preserve captured ids; never renumber.
 description: remaining paragraph text (not matching above patterns)
 ```
 
@@ -393,12 +401,17 @@ def write_node(node, depth):
         print(node.description)
         print()
 
-    # Acceptance criteria
+    # Acceptance criteria — emit canonical form (NEW output only).
+    # Canonical: - [{mark}] **AC-{i}**: {text}{verify_hint}
+    #   i           = 1-based stable id (preserve c.id if already assigned)
+    #   verify_hint = " _(verify: {c.verify})_" when c.verify set, else ""
     if node.criteria:
         print("**Acceptance Criteria**:")
-        for c in node.criteria:
+        for i, c in enumerate(node.criteria, start=1):
             mark = 'x' if c.checked else ' '
-            print(f"- [{mark}] {c.text}")
+            ac_id = c.id if c.id else i
+            verify_hint = f" _(verify: {c.verify})_" if c.verify else ""
+            print(f"- [{mark}] **AC-{ac_id}**: {c.text}{verify_hint}")
         print()
 
     # Result

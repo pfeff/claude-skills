@@ -109,33 +109,33 @@ Never use these when reporting contradictions or gaps:
 
 ### 4. Layer 3 — Strategic docs
 
-Locate the guardian meta-repo by searching for a "Project Documentation" link in the repo's CLAUDE.md:
+Locate the strategic meta-repo by searching for a "Project Documentation" link in the repo's CLAUDE.md:
 
 ```
-# Search repo CLAUDE.md for guardian path or URL
+# Search repo CLAUDE.md for strategic meta-repo path or URL
 Grep: pattern="Project Documentation" path="<resolved_repo_root>/CLAUDE.md" output_mode="content"
 ```
 
-If the grep finds a GitHub URL (e.g., `https://github.com/org/guardian`), check for a local clone at the conventional path (`../../<org>/guardian` relative to the repo root, or search common checkout locations). If found, read the strategic docs:
+If the grep finds a GitHub URL (e.g., `https://github.com/<org>/<strategic-repo>`), check for a local clone at the conventional path (`../../<org>/<strategic-repo>` relative to the repo root, or search common checkout locations). If found, read the strategic docs:
 
 ```
-Read: file_path="<resolved_guardian_path>/REQUIREMENTS.md"
-Read: file_path="<resolved_guardian_path>/ARCHITECTURE.md"
-Read: file_path="<resolved_guardian_path>/PROJECT.md"
+Read: file_path="<strategic_repo_path>/REQUIREMENTS.md"
+Read: file_path="<strategic_repo_path>/ARCHITECTURE.md"
+Read: file_path="<strategic_repo_path>/PROJECT.md"
 ```
 
-If the guardian repo cannot be located locally, report "Strategic docs not found — skipping layer 3" and proceed to step 5.
+If the strategic meta-repo cannot be located locally, report "Strategic docs not found — skipping layer 3" and proceed to step 5.
 
 **Check for contradictions**:
 
 | Strategic Doc | DESIGN.md Section | Contradiction Signal |
 |---------------|-------------------|---------------------|
-| REQUIREMENTS.md | Requirements | DESIGN.md requirements conflict with or duplicate guardian requirements |
-| ARCHITECTURE.md | Architecture | DESIGN.md architecture contradicts guardian architecture decisions |
+| REQUIREMENTS.md | Requirements | DESIGN.md requirements conflict with or duplicate strategic requirements |
+| ARCHITECTURE.md | Architecture | DESIGN.md architecture contradicts strategic architecture decisions |
 | PROJECT.md (OKRs, scope) | Requirements, Architecture | DESIGN.md scope falls outside project boundaries or misaligns with strategic priorities |
 
 **Check for gaps**:
-- Guardian requirements that this task should reference but DESIGN.md doesn't
+- Strategic requirements that this task should reference but DESIGN.md doesn't
 - Architectural patterns or components in ARCHITECTURE.md relevant to this task but absent from DESIGN.md
 
 For strategic findings, mark the conflict direction as `bidirectional` — the resolution may flow down (update DESIGN.md) or up (flag strategic doc update).
@@ -241,7 +241,7 @@ Upstream flags are surfaced in the plan summary so they aren't lost.
 
 Task: "Add retry logic to the webhook handler"
 
-DESIGN.md describes webhook handler architecture, requirements for retry behavior, and decision to use exponential backoff. Problem validation confirms this matches the developer's intent. Repo docs and guardian architecture align.
+DESIGN.md describes webhook handler architecture, requirements for retry behavior, and decision to use exponential backoff. Problem validation confirms this matches the developer's intent. Repo docs and strategic architecture align.
 
 ```markdown
 ## DESIGN.md Reconciliation
@@ -292,7 +292,7 @@ None
 
 Task: "Replace webhook handler with event streaming"
 
-DESIGN.md proposes event streaming architecture, but guardian ARCHITECTURE.md defines webhook-based integration for this component.
+DESIGN.md proposes event streaming architecture, but the strategic meta-repo ARCHITECTURE.md defines webhook-based integration for this component.
 
 ```markdown
 ## DESIGN.md Reconciliation
@@ -315,7 +315,7 @@ Aligned.
 
 ### Missing docs (graceful degradation)
 
-Task in a repo without guardian context.
+Task in a repo without strategic-docs context.
 
 ```markdown
 ## DESIGN.md Reconciliation
@@ -327,7 +327,7 @@ Aligned.
 Skipped — no docs/ directory found.
 
 ### Layer 3: Strategic Docs
-Skipped — guardian repo not found.
+Skipped — strategic meta-repo not found.
 
 ### Upstream Flags
 None
@@ -344,8 +344,8 @@ DESIGN.md confirmed aligned at layer 1. Layers 2-3 skipped (docs unavailable).
 | DESIGN.md has only placeholders | Report, skip reconciliation, produce minimal output |
 | Repo CLAUDE.md not found | Skip layer 2, note in output |
 | Repo docs/ not found | Skip layer 2, note in output |
-| Guardian repo not found | Skip layer 3, note in output |
-| Guardian docs partially available | Check available docs, skip missing ones |
+| Strategic meta-repo not found | Skip layer 3, note in output |
+| Strategic docs partially available | Check available docs, skip missing ones |
 | User declines all changes | Proceed with original DESIGN.md, note in output |
 | Edit tool fails | Warn user, include proposed change in output for manual application |
 

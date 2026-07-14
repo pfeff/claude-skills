@@ -7,6 +7,11 @@ reviewer is not the PR author, it also submits a lightweight formal review event
 
 **Requires**: PR number passed as `$PR_NUMBER`. Must be a positive integer.
 
+**Optional**: `$REPO` (`<owner>/<repo>`) — out-of-repo anchor passed by `run-review.md`.
+When set, the PR lives in a repo other than cwd. Derive `$REPO_FLAG` = ` --repo $REPO`
+when `$REPO` is set, otherwise empty. When `$REPO` is empty, every command below is
+identical to the in-repo form.
+
 ## Design
 
 - **One comment, updated in place.** A single issue comment carries the full,
@@ -42,12 +47,16 @@ clean on re-review) and, when applicable, submits an `APPROVE`.
 ## Step 3: Get Repository and Identity Context
 
 ```bash
-read -r owner repo <<<"$(gh repo view --json owner,name -q '.owner.login + " " + .name')"
+read -r owner repo <<<"$(gh repo view $REPO --json owner,name -q '.owner.login + " " + .name')"
 reviewer=$(gh api user -q .login)
-pr_author=$(gh pr view "$PR_NUMBER" --json author -q .author.login)
+pr_author=$(gh pr view "$PR_NUMBER"$REPO_FLAG --json author -q .author.login)
 ```
 
-Validate `owner` and `repo` contain only alphanumerics, hyphens, and underscores.
+(`gh repo view` takes the repo **positionally** — pass `$REPO` directly, not
+`$REPO_FLAG`; it falls back to cwd's repo when `$REPO` is empty. The resulting
+`$owner`/`$repo` then flow into the `/repos/$owner/$repo/...` API paths below, so those
+target the correct repo without further flags.) Validate `owner` and `repo` contain
+only alphanumerics, hyphens, and underscores.
 Validate `$PR_NUMBER` is a positive integer. Set `IS_SELF_PR=true` when `$reviewer`
 equals `$pr_author`.
 

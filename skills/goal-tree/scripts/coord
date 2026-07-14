@@ -526,7 +526,7 @@ Subcommands:
   create    Create a new goal tree
               --title <title>              (required)
               --context <description>
-              --guardian-issue <ref>        e.g. pfeff/guardian#187
+              --guardian-issue <ref>        e.g. <owner>/<repo>#187
               --status <status>            default: active
 
   list      List all goal trees
@@ -612,7 +612,7 @@ Exit codes:
   3  Connection failure
 
 Examples:
-  coord tree create --title "My Project" --guardian-issue "pfeff/guardian#187"
+  coord tree create --title "My Project" --guardian-issue "<owner>/<repo>#187"
   coord --id-only tree create --title "My Project"    # outputs just the ID
   coord tree list
   coord tree show 1

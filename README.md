@@ -1,6 +1,6 @@
 # claude-skills
 
-A Claude Code plugin with seven engineering skills for git workflows, code review, test-driven development, documentation, CI automation, knowledge capture, and structured planning.
+A Claude Code plugin with engineering skills for git workflows, code review, test-driven development, documentation, CI automation, knowledge capture, structured planning, and an LLM knowledge base over an Obsidian vault.
 
 ## Installation
 
@@ -16,13 +16,23 @@ claude --plugin-dir /path/to/claude-skills
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **git** | `/claude-skills:git` | Git usage patterns and conventions. Compact commit messages, conventional commits, incremental commit heuristic, worktree-aware PR merges, and branch guards. |
-| **testing-without-mocks** | `/claude-skills:testing-without-mocks` | TDD using the Testing Without Mocks pattern language. Nullables instead of mocking frameworks. Supports Python, Go, and Elixir. |
-| **diataxis** | `/claude-skills:diataxis` | Project documentation using the Diataxis methodology. Scaffold, write, or audit docs by type (tutorial, how-to, reference, explanation). |
-| **compound** | `/claude-skills:compound` | Capture solved problems as searchable solution documents with YAML frontmatter for agent discovery. |
-| **review** | `/claude-skills:review` | Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. |
-| **ci-feedback-loop** | `/claude-skills:ci-feedback-loop` | Monitor PR check status after push, auto-diagnose CI failures, attempt fixes, and escalate when unable to resolve. |
-| **planning-workflow** | `/claude-skills:planning-workflow` | Structured planning that validates the problem, reconciles DESIGN.md, searches past solutions, calibrates research depth, analyzes edge cases via SpecFlow, and generates living plans with checkable criteria. |
+| **git** | `/mbp:git` | Git usage patterns and conventions. Compact commit messages, conventional commits, incremental commit heuristic, worktree-aware PR merges, and branch guards. |
+| **testing-without-mocks** | `/mbp:testing-without-mocks` | TDD using the Testing Without Mocks pattern language. Nullables instead of mocking frameworks. Supports Python, Go, and Elixir. |
+| **diataxis** | `/mbp:diataxis` | Project documentation using the Diataxis methodology. Scaffold, write, or audit docs by type (tutorial, how-to, reference, explanation). |
+| **compound** | `/mbp:compound` | Capture solved problems as searchable solution documents with YAML frontmatter for agent discovery. |
+| **review** | `/mbp:review` | Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. |
+| **ci-feedback-loop** | `/mbp:ci-feedback-loop` | Monitor PR check status after push, auto-diagnose CI failures, attempt fixes, and escalate when unable to resolve. |
+| **planning-workflow** | `/mbp:planning-workflow` | Structured planning that validates the problem, reconciles DESIGN.md, searches past solutions, calibrates research depth, analyzes edge cases via SpecFlow, and generates living plans with checkable criteria. |
+| **skillify** | `/mbp:skillify` | Fast-capture entrypoint: drafts a lite SKILL.md from the workflow just performed in conversation, confirms before writing, and hands off to skill-creator's full interview/eval/benchmark loop when the pattern warrants it. |
+| **kb** (capture/compile/lint) | `/mbp:kb-capture` · `/mbp:kb-compile` · `/mbp:kb-lint` | LLM Knowledge Base over an Obsidian vault: capture Readwise Reader sources to `raw/`, compile into `type:`-routed summary + concept notes in `Notes/` (cross-linked to `Keywords/`, surfaced via a KB MOC), and lint for health. Bounded writes (git-reviewed, no fence); shared logic in `kb-core`. Interactive-only (subscription billing). |
+| **scan-document** | `/mbp:scan-document <file>` | Front door for scanned documents: OCRs a PDF or image natively on macOS (Vision framework as the core engine; optional `pdftotext` fast-path when that binary is present), classifies the document from the recognized text, then routes it to a handler skill (e.g. `medical-records`) or a generic vault capture. Owns the reusable `ocr.swift` primitive. |
+| **medical-records** | `/mbp:medical-records` | Files a medical After Visit Summary into the Obsidian vault as a structured record: extracts vitals + visit metadata into flat Number frontmatter (Bases/Dataview-trendable, BP pre-split), archives and embeds the source scan. Usually invoked by `scan-document`. |
+| **dispatch-gate** | `/mbp:dispatch-gate` | Dispatch-readiness gate for background jobs. Checks the four slice-complete criteria (objective, acceptance test, scope/blast-radius bound, affected surface) before the operator launches a background agent, clarifies gaps, and writes the `.claude/task-context.md` the job runs against. |
+| **l1-supervisor** | `/mbp:l1-supervisor` (or tell a session "you are L1") | Adopts the L1 supervisor role for a goal tree: identity, source-of-truth precedence, tick procedure, permission/escalation rubrics, stop signal, and orient triggers. Sits above `goal-tree`'s operations and binds them into a coherent role. |
+| **l2-supervisor** | `/mbp:l2-supervisor` (or tell a session "you are L2") | Adopts the L2 supervisor role for a goal tree: a KPI-driven controller that keeps Progress, Budget, and Health in band by proposing intervention L1s to the operator for approval. Does not write code, dispatch L0 work, or act unilaterally. |
+| **operator-interview** | `/mbp:operator-interview <topic>` | Interviews an operator to elicit a buildable specification via a hybrid funnel (open questions, scoping batches, gap probes, clarification gate, playback, sign-off), then writes it as a signed-off spec note in the vault. Gates build/dispatch on `status: signed-off`. |
+| **operator-interview-doctrine** | *(reference, loaded by `operator-interview`)* | Shared doctrine for the question taxonomy, ask-vs-default rule, adaptive-depth rubric, stop conditions, spec-note schema, and sign-off protocol. No operations of its own — keeps operator-confirmed rules in one place rather than inlined into consumer skills. |
+| **self-verify** | *(invoked by dispatched jobs, not operator-facing)* | Self-verification for a job before it reports "done": checks its own change against the 3-axis review doctrine (Conformance / Process / Objective-Advancement) using existing review tooling and tests, and emits a structured annotation artifact for the operator's review. |
 
 ## Attribution
 

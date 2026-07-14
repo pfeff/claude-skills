@@ -8,7 +8,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Lessons Learned Skill
@@ -185,3 +185,6 @@ Load operation details on-demand:
 - `/claude-skills:compound` - Document solved problems as searchable solution docs (Phase 3d bridge target)
 - `/claude-skills:self-improvement` - Apply recommendations to skills
 - `self-improvement/references/improvement-workflow.md` - Complete improvement cycle
+- `improvement-loop` - Reads this skill's retro artifacts as one of its
+  experience sources and hands actionable findings to `self-improvement` as
+  PR-gated changes

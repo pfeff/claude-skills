@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-allowed-tools
+        name: check-allowed-tools (skill allowed-tools lint)
+        description: >-
+          Flags SKILL.md workflow steps that mandate a tool not declared in
+          that skill's own allowed-tools frontmatter.
+        entry: python3 scripts/check-allowed-tools.py
+        language: system
+        files: ^skills/.*/(SKILL\.md|operations/.*\.md)$

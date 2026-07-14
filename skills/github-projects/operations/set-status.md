@@ -4,7 +4,7 @@ Change an item's Status field on the project board via GraphQL mutation.
 
 ## Parameters
 
-- `owner_repo` (required): Repository in `owner/repo` format (e.g., `pfeff/guardian`)
+- `owner_repo` (required): Repository in `owner/repo` format (e.g., `<owner>/<repo>`)
 - `issue_number` (required): Issue number
 - `target_status` (required): Status option name (e.g., `In Progress`, `Done`, `Planned`)
 
@@ -60,7 +60,7 @@ After mutation, optionally sync cache and verify:
 
 ```bash
 project-board-helper sync
-sqlite3 ~/Library/Caches/guardian/project-board.db "
+sqlite3 ~/Library/Caches/<project>/project-board.db "
   SELECT sv.value
   FROM items i
   JOIN item_field_values sv ON i.item_id = sv.item_id

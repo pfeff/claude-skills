@@ -12,8 +12,8 @@ Eliminates the context-switch to the browser when starting new work. Replaces ma
 
 Extract project owner and number. Check these sources in order:
 
-1. **Defaults**: owner=`pfeff`, project=`Guardian` (#4, ID `PVT_kwHNa8POARiyqQ`)
-2. **Workspace CLAUDE.md**: If in a workspace, read `GitHub Issue:` field to extract the owner (e.g. `pfeff` from `pfeff/guardian#77`)
+1. **Defaults**: owner=`<owner>`, project=`<project>` (project number + ID from config)
+2. **Workspace CLAUDE.md**: If in a workspace, read `GitHub Issue:` field to extract the owner (e.g. `pfeff` from `<owner>/<repo>#77`)
 3. **Ask user**: Only if defaults don't apply and no workspace context
 
 If defaults match, skip project discovery and proceed directly to step 2.
@@ -85,7 +85,7 @@ Sort filtered items by these criteria (highest priority first):
 
 Build a ranked list with these display fields per item:
 - Title
-- Repository (short form: `repo` from `content.repository`, e.g. `pfeff/guardian` → `guardian`)
+- Repository (short form: `repo` from `content.repository`, e.g. `acme/webapp` → `webapp`)
 - Issue number
 - Sprint
 - Labels (comma-separated)
@@ -107,7 +107,7 @@ AskUserQuestion:
   question: "Which task would you like to pull?"
   options:
     - label: "#78: Unified workspace setup"
-      description: "guardian | Sprint 1 (Feb 17-21) | enhancement | H1"
+      description: "webapp | Sprint 1 (Feb 17-21) | enhancement | H1"
     - label: "#34: Execute Integration Tests"
       description: "agent-orchestrator | Backlog | enhancement | H1"
     - label: "#55: Multi-model support"

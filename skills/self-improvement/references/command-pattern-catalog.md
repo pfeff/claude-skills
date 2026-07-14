@@ -25,7 +25,7 @@ These patterns are inherently complex due to what they accomplish. Simplificatio
 
 ### NC-3: GraphQL Mutations via gh api
 
-**Location**: `github-projects/operations/*`, `guardian-sync/references/project-field-ids.md`
+**Location**: `github-projects/operations/*`, `<project>-sync/references/project-field-ids.md`
 **Pattern**: `gh api graphql -f query='mutation(...)' -f proj=... -f item=... -f field=... -f opt=...`
 **Why necessary**: GitHub Projects V2 requires GraphQL. The gh CLI's `-f` flag approach is the recommended method. Inline queries are unavoidable for one-off mutations. For repeated mutations, use `set-project-field` script.
 
