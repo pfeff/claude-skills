@@ -86,7 +86,7 @@ fields are evaluated as known gaps, not silently treated as complete
 ## Annotation stacking order
 
 `dispatch-gate` may append more than one annotation below the four
-fields (Override, Privacy Gate, Metered Sign-off) when more than one
+fields (Privacy Gate, Metered Sign-off, Override) when more than one
 gate fires on the same dispatch. When it does, annotations stack in the
 order the gates ran — each remains its own blockquote paragraph appended
 below the four fields, never a fifth field.

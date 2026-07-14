@@ -14,6 +14,16 @@ background work can still fire hundreds of metered invocations internally
 (e.g. a benchmark or eval harness that calls out to `claude -p` in a loop).
 The classification has to be made explicitly, not inferred from vibes.
 
+**Status of the underlying split**: a subscription/metered billing split
+for Claude Code was announced for ~2026-06-15, but per Anthropic's support
+article it is currently **paused / under review**
+(https://support.claude.com/en/articles/15036540) — it has never applied
+to in-session subagents. This gate is therefore a **forward-looking
+safeguard**: it protects against the split activating (or a metered
+runtime being invoked directly, which is possible regardless of the split)
+rather than gating an already-active billing regime today. See
+"Classification" below for what's asserted vs. sourced.
+
 ## Trigger Condition
 
 The gate always runs — every dispatch gets classified as subscription or
@@ -27,13 +37,23 @@ the only question is which bucket the job falls in.
 - Interactive `claude` TUI sessions
 - Claude.ai, Cowork
 - In-session `Agent`-tool subagents (foreground or background) launched
-  from an interactive session — these still deliver work via the
-  session's own interactive context
+  from an interactive session, and Workflow subagents — these still
+  deliver work via the session's own interactive context
 - Tick delivery via `tmux send-keys` into an interactive pane (the
   L0/L1/L2 supervision fleet's mechanism)
 
+  *Sourcing*: the Claude Code "Manage costs effectively" docs
+  (https://code.claude.com/docs/en/costs) attribute subagent usage to
+  plan limits, state Max/Pro usage is "included in their subscription,"
+  and say background sessions "draw down your subscription usage the
+  same as interactive sessions." No single sentence there says
+  "in-session subagents are subscription" verbatim — this is a strong
+  inference from that cost-attribution language, not a quoted policy
+  statement.
+
 **Metered** (API list rates, per-user cap, no rollover — billed against the
-metered credit pool):
+metered credit pool, *if/when this pool is active — see "Status of the
+underlying split" above*):
 
 - `claude -p` / `claude --print` (headless invocation)
 - The Agent SDK, called directly or from a script
@@ -43,6 +63,14 @@ metered credit pool):
 - An eval/benchmark harness that spawns any of the above internally —
   the harness's own framing (e.g. "run the skill-creator benchmark") does
   not exempt it if it fires `claude -p` under the hood
+
+  *Sourcing*: this pool and the 2026-06-15 effective date come from
+  secondary reporting on Anthropic's announcement; it is currently
+  **paused / under review** per
+  https://support.claude.com/en/articles/15036540, and never included
+  in-session subagents. Treat the metered bucket as a named-but-inactive
+  category to gate against proactively, not a confirmed, currently-billed
+  regime.
 
 **The test is behavioral, not a fixed tool list**: does the job, anywhere
 in its execution path, invoke a metered runtime? The bullets above are
@@ -68,9 +96,11 @@ a policy gate, independent of both privacy and task readiness.
 2. **If subscription**: proceed to Step 1. No annotation needed.
 3. **If metered**:
    - Stop and tell the operator plainly: "This job invokes [metered
-     runtime/harness] — that runs on the metered credit pool, not the
-     subscription. Metered spend has **no per-operation cap and no
-     rollover** if unused. Do you approve dispatching it?"
+     runtime/harness] — that's classified as metered credit pool, not
+     subscription (see 'Status of the underlying split' — that pool is
+     currently paused/under review, so treat this as a forward-looking
+     check). If/when it's active, metered spend has **no per-operation
+     cap and no rollover** if unused. Do you approve dispatching it?"
    - **Operator must approve explicitly** before the gate proceeds to
      Step 1. Silence or an ambiguous "sure, go ahead" on an unrelated
      question does not count — the sign-off must be a direct answer to

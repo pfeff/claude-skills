@@ -64,6 +64,11 @@ dispatch is either **subscription** (no extra cost) or **metered** (API
 list rates, per-user cap, no rollover). This gate always runs — there is
 no skip case, only which bucket the job falls in.
 
+The metered pool was announced for ~2026-06-15 but is currently paused /
+under review (see `references/metered-gate.md` "Status of the underlying
+split"), so this step is a forward-looking safeguard rather than a gate
+against an already-active billing regime.
+
 **Trigger**: Does the job invoke a metered runtime (directly, or via a
 harness that spawns one) anywhere in its execution path?
 
