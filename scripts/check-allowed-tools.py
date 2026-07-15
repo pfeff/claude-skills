@@ -34,10 +34,18 @@ still flagged; prohibitions do not blank out the whole line.
 Deliberately NOT flagged: a bare "the X tool" mention without an imperative
 verb or parentheses (e.g. task-workflow's "the Task tool description
 field", "parallel Task tool invocation"), a plural "X tools" category label,
-and a bare tool-namespace word inside a heading ("### 1. Task Creation").
-These produce real false positives against this repo's own corpus, and per
-this validator's R4 (false positives are worse than missed edge cases) they
-are left unmatched.
+a bare tool-namespace word inside a heading ("### 1. Task Creation"), and a
+call-form token that an exemplification cue — "e.g.", "eg", "for example",
+"such as" — *immediately introduces* (only whitespace, an opening backtick,
+and/or an opening paren may sit between the cue and the "Tool(" token, e.g.
+dispatch-gate's "(e.g. `Agent(isolation: \"worktree\")`)"), which
+illustrates a pattern rather than mandating a step. The cue must directly
+precede the call-form: a cue earlier on a line whose call-form is a genuine
+mandate ("...e.g. the setup, then you MUST invoke `Agent(...)`") is still
+flagged, and bare "like" is excluded as ordinary English ("I would like you
+to invoke Agent(...)"). These produce real false positives against this
+repo's own corpus, and per this validator's R4 (false positives are worse
+than missed edge cases) they are left unmatched.
 
 A skill's `allowed-tools` list is treated as "no restriction" (never
 flagged) when: the key is absent from frontmatter entirely, the value is
@@ -73,6 +81,18 @@ TOOL_ALT = "(?:" + "|".join(TOOL_NAMES) + "|" + MCP_PATTERN + ")"
 TOOLS_GROUP = TOOL_ALT + r"(?:\s*/\s*" + TOOL_ALT + r")*"
 
 CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")
+# Exemplification cue that IMMEDIATELY INTRODUCES a call-form token: the cue
+# ("e.g.", "eg", "for example", "such as") must sit right before the matched
+# "Tool(" token, separated only by whitespace, an opening backtick, and/or an
+# opening paren — e.g. dispatch-gate's "(e.g. `Agent(...)`)" or "such as
+# (Agent(...)". Anchored with `$` so it matches only against the line prefix up
+# to the call-form's start; a cue that merely appears earlier on the line (with
+# a genuine mandate following later) does NOT exempt. Bare "like" is excluded —
+# it is ordinary English ("I would like you to invoke Agent(...)"), not an
+# exemplification marker. Applied only to CALL_FORM matches (see docstring).
+EXEMPLIFICATION_INTRO_RE = re.compile(
+    r"(?:\be\.g\.|\beg\b|\bfor example\b|\bsuch as\b)[\s`(]*$", re.IGNORECASE
+)
 # Imperative phrasing: a directive verb ("invoke/use/via", any case) right
 # before "<Tool> tool". Tool names stay case-sensitive so ordinary lowercase
 # words ("use the read below") are not mistaken for the Read tool.
@@ -216,6 +236,8 @@ def find_mandatory_refs(text):
         seen_on_line = set()
 
         for m in CALL_FORM_RE.finditer(line):
+            if EXEMPLIFICATION_INTRO_RE.search(line[:m.start()]):
+                continue  # cue immediately introduces this call-form: an example
             seen_on_line.add(m.group(1))
 
         for rx in (TOOL_IMPERATIVE_RE, TOOL_PAREN_RE):

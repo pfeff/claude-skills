@@ -187,6 +187,77 @@ class TestParseAllowedTools(unittest.TestCase):
         self.assertTrue(wildcard)
 
 
+class TestExemplifiedCallFormNotFlagged(unittest.TestCase):
+    """Regression: a call-form token that an exemplification cue ("e.g.", "eg",
+    "for example", "such as") *immediately introduces* — only whitespace, an
+    opening backtick, and/or an opening paren between the cue and the "Tool("
+    token — illustrates a pattern rather than mandating a step, and must not be
+    flagged. Canonical repro: dispatch-gate/SKILL.md's
+    "(e.g. `Agent(isolation: \"worktree\")`)"."""
+
+    def test_dispatch_gate_line_shape_not_flagged(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            '- **Tool-level worktree isolation** (e.g. '
+            '`Agent(isolation: "worktree")`):\n'
+        )
+        self.assertEqual(refs, [])
+
+    def test_other_exemplification_cues_not_flagged(self):
+        # Each cue immediately introduces the call-form (only whitespace /
+        # backtick / paren intervening).
+        for line in (
+            "Use a dispatch tool such as Agent(isolation: \"worktree\") "
+            "when appropriate.\n",
+            "Provision it e.g. `Agent(isolation: \"worktree\")` in the "
+            "sandbox.\n",
+            "eg Agent(isolation: \"worktree\") for illustration.\n",
+            "Isolation such as (Agent(isolation: \"worktree\")) applies.\n",
+        ):
+            self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
+
+    def test_genuine_call_form_mandate_still_flagged(self):
+        # Paired positive: a genuine call-form mandate with NO exemplification
+        # cue must still be flagged -- proving the exemption is narrow and
+        # did not blanket-disable call-form detection.
+        refs = check_allowed_tools.find_mandatory_refs(
+            'Run `Agent(isolation: "worktree")` to provision the sandbox.\n'
+        )
+        tools = {r[1] for r in refs}
+        self.assertIn("Agent", tools)
+
+    def test_imperative_mandate_after_exemplified_example_still_flagged(self):
+        # A cue exempts only the call-form it immediately introduces -- a
+        # later, non-exemplified imperative mandate for a different tool on
+        # the same line must still be flagged.
+        refs = check_allowed_tools.find_mandatory_refs(
+            "Provision via e.g. `Agent(isolation: \"worktree\")`; then "
+            "invoke the Bash tool to run it.\n"
+        )
+        tools = {r[1] for r in refs}
+        self.assertNotIn("Agent", tools)
+        self.assertIn("Bash", tools)
+
+    def test_ambiguous_like_is_a_genuine_mandate(self):
+        # "like" is ordinary English, NOT an exemplification marker. This is
+        # a genuine call-form mandate (TOOL_IMPERATIVE_RE misses it because no
+        # literal "tool" word follows, so CALL_FORM is the only detector) and
+        # must be flagged -- the exemption must not swallow it.
+        refs = check_allowed_tools.find_mandatory_refs(
+            'I would like you to invoke Agent(isolation: "worktree") '
+            "to complete the task.\n"
+        )
+        self.assertIn("Agent", {r[1] for r in refs})
+
+    def test_cue_earlier_but_mandate_later_still_flagged(self):
+        # A cue appears earlier on the line but does NOT immediately introduce
+        # this call-form; the call-form is a genuine mandate and must flag.
+        refs = check_allowed_tools.find_mandatory_refs(
+            "Follow e.g. the setup guide, then you MUST invoke "
+            '`Agent(isolation: "worktree")` to proceed.\n'
+        )
+        self.assertIn("Agent", {r[1] for r in refs})
+
+
 class TestFindMandatoryRefs(unittest.TestCase):
     def test_call_form(self):
         refs = check_allowed_tools.find_mandatory_refs("Read(some/path)\n")
