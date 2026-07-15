@@ -34,10 +34,13 @@ still flagged; prohibitions do not blank out the whole line.
 Deliberately NOT flagged: a bare "the X tool" mention without an imperative
 verb or parentheses (e.g. task-workflow's "the Task tool description
 field", "parallel Task tool invocation"), a plural "X tools" category label,
-and a bare tool-namespace word inside a heading ("### 1. Task Creation").
-These produce real false positives against this repo's own corpus, and per
-this validator's R4 (false positives are worse than missed edge cases) they
-are left unmatched.
+a bare tool-namespace word inside a heading ("### 1. Task Creation"), and a
+call-form token introduced by an exemplification cue on the same line —
+"e.g.", "eg", "for example", "such as", "like" (e.g. dispatch-gate's
+"(e.g. `Agent(isolation: \"worktree\")`)"), which illustrates a pattern
+rather than mandating a step. These produce real false positives against
+this repo's own corpus, and per this validator's R4 (false positives are
+worse than missed edge cases) they are left unmatched.
 
 A skill's `allowed-tools` list is treated as "no restriction" (never
 flagged) when: the key is absent from frontmatter entirely, the value is
@@ -73,6 +76,13 @@ TOOL_ALT = "(?:" + "|".join(TOOL_NAMES) + "|" + MCP_PATTERN + ")"
 TOOLS_GROUP = TOOL_ALT + r"(?:\s*/\s*" + TOOL_ALT + r")*"
 
 CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")
+# Exemplification cue: a call-form token preceded on the same line by "e.g.",
+# "eg", "for example", "such as", or "like" is illustrating a pattern, not
+# mandating a step — e.g. dispatch-gate's "(e.g. `Agent(isolation: ...)`)".
+# Narrow and applied only to CALL_FORM matches (see module docstring).
+EXEMPLIFICATION_CUE_RE = re.compile(
+    r"\be\.g\.|\beg\b|\bfor example\b|\bsuch as\b|\blike\b", re.IGNORECASE
+)
 # Imperative phrasing: a directive verb ("invoke/use/via", any case) right
 # before "<Tool> tool". Tool names stay case-sensitive so ordinary lowercase
 # words ("use the read below") are not mistaken for the Read tool.
@@ -216,6 +226,8 @@ def find_mandatory_refs(text):
         seen_on_line = set()
 
         for m in CALL_FORM_RE.finditer(line):
+            if EXEMPLIFICATION_CUE_RE.search(line[:m.start()]):
+                continue  # illustrative example, not a mandate
             seen_on_line.add(m.group(1))
 
         for rx in (TOOL_IMPERATIVE_RE, TOOL_PAREN_RE):

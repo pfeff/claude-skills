@@ -187,6 +187,53 @@ class TestParseAllowedTools(unittest.TestCase):
         self.assertTrue(wildcard)
 
 
+class TestExemplifiedCallFormNotFlagged(unittest.TestCase):
+    """Regression: a call-form token introduced by an exemplification cue
+    ("e.g.", "eg", "for example", "such as", "like") illustrates a pattern
+    rather than mandating a step, and must not be flagged. Canonical repro:
+    dispatch-gate/SKILL.md's "(e.g. `Agent(isolation: \"worktree\")`)"."""
+
+    def test_dispatch_gate_line_shape_not_flagged(self):
+        refs = check_allowed_tools.find_mandatory_refs(
+            '- **Tool-level worktree isolation** (e.g. '
+            '`Agent(isolation: "worktree")`):\n'
+        )
+        self.assertEqual(refs, [])
+
+    def test_other_exemplification_cues_not_flagged(self):
+        for line in (
+            "Use a dispatch tool such as Agent(isolation: \"worktree\") "
+            "when appropriate.\n",
+            "For example, Agent(isolation: \"worktree\") provisions its "
+            "own worktree.\n",
+            "A tool like Agent(isolation: \"worktree\") can help here.\n",
+            "eg Agent(isolation: \"worktree\") for illustration.\n",
+        ):
+            self.assertEqual(check_allowed_tools.find_mandatory_refs(line), [])
+
+    def test_genuine_call_form_mandate_still_flagged(self):
+        # Paired positive: a genuine call-form mandate with NO exemplification
+        # cue must still be flagged -- proving the exemption is narrow and
+        # did not blanket-disable call-form detection.
+        refs = check_allowed_tools.find_mandatory_refs(
+            'Run `Agent(isolation: "worktree")` to provision the sandbox.\n'
+        )
+        tools = {r[1] for r in refs}
+        self.assertIn("Agent", tools)
+
+    def test_imperative_mandate_after_exemplified_example_still_flagged(self):
+        # A cue exempts only the call-form match it precedes -- a later,
+        # non-exemplified imperative mandate for a different tool on the
+        # same line must still be flagged.
+        refs = check_allowed_tools.find_mandatory_refs(
+            "For example, Agent(isolation: \"worktree\") is illustrative; "
+            "invoke the Bash tool to run the command.\n"
+        )
+        tools = {r[1] for r in refs}
+        self.assertNotIn("Agent", tools)
+        self.assertIn("Bash", tools)
+
+
 class TestFindMandatoryRefs(unittest.TestCase):
     def test_call_form(self):
         refs = check_allowed_tools.find_mandatory_refs("Read(some/path)\n")
