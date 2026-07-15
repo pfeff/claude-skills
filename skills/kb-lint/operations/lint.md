@@ -22,12 +22,18 @@ Interactive `/kb-lint` only — no scheduled pass (SPEC v2 §6).
    - Missing data a web search could impute (use `WebSearch`).
    - Candidate new connections / articles (≥1 actionable on a non-trivial vault, AC-6.3).
 3. **Emit a findings report.**
-4. **Apply fixes within the boundary** (INV-1):
-   - A fix may be written **only** when both `kb_core.is_writable(path)` (not off-limits) and
-     `kb_core.is_kb_owned(frontmatter, path)` (a KB-authored note) hold. Auto-fix is
-     reversible (git).
-   - Every other finding — on off-limits zones, or on human/other-agent notes the KB doesn't
-     own — is surfaced as a **proposal only**, never edited.
+4. **Check git-backed state fresh, this run** — call `kb_lint_git.is_git_backed(vault_path)`
+   against the vault's actual path. Do this every invocation; never cache the result or carry
+   forward a prior run's or prior session's determination. If it returns `False`, auto-fix is
+   disabled entirely for this run — every finding, including on KB-owned notes, is surfaced as
+   a proposal only (skip step 5).
+5. **Apply fixes within the boundary** (INV-1) — only reachable when step 4 returned `True`:
+   - A fix may be written **only** when `kb_core.is_writable(path)` (not off-limits) and
+     `kb_core.is_kb_owned(frontmatter, path)` (a KB-authored note) both hold. Auto-fix is
+     reversible (git) because step 4 just verified the vault is git-backed.
+   - Every other finding — on off-limits zones, on human/other-agent notes the KB doesn't own,
+     or (per step 4) when the vault isn't git-backed — is surfaced as a **proposal only**,
+     never edited.
 
 ## Acceptance Criteria (SPEC v2 §2.6)
 
@@ -39,5 +45,7 @@ candidate).
 
 - `kb_core.is_kb_owned`, `kb_core.is_writable`, `kb_core.find_orphans` —
   `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py`
+- `kb_lint_git.is_git_backed` — `${CLAUDE_PLUGIN_ROOT}/skills/kb-lint/scripts/kb_lint_git.py`
+  (re-checked fresh every run; gates whether step 5 is reachable at all)
 - QMD — vault search CLI for connection candidates
 - `obsidian-notes` skill — vault path resolution; reads and KB-owned fixes
