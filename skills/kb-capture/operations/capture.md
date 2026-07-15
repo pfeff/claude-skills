@@ -2,10 +2,11 @@
 
 Stage eligible Readwise Reader documents into the vault's `raw/` queue (SPEC §2.1).
 
-The deterministic core — the eligibility gate (`is_eligible`) and the idempotency key
-(`source_key`) — lives in `kb_core` and is unit-tested (AC-1.2/1.3/1.4/1.6/1.7). The
-Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
-`obsidian-notes` CLI), the same I/O-via-CLI shape as the `compound` skill.
+The deterministic core — the eligibility gate (`is_eligible`), the idempotency key
+(`source_key`), and content-aware re-sync (`highlights_fingerprint`, `new_highlights`) —
+lives in `kb_core` and is unit-tested (AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and the
+vault write are agent-orchestrated here (Readwise MCP + `obsidian-notes` CLI), the same
+I/O-via-CLI shape as the `compound` skill.
 
 ## Inputs
 
@@ -39,14 +40,54 @@ Readwise read and the vault write are agent-orchestrated here (Readwise MCP +
      one non-deterministic input; everything else is mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
    - Record the deciding gate for skipped docs (for the report).
-3. **Idempotency guard** — compute `key = kb_core.source_key(source)` (pass the Readwise
-   `book_id` for highlighted sources, or the Reader `id` for tagged/named docs). The raw
-   artifact path is `raw/<key>.md`. If it already exists (probe with `obsidian-notes` `read`),
-   skip — re-capture is a no-op (AC-1.6). **Dedup:** a source reachable both as a highlighted
-   book and a Reader doc must be captured once — prefer the `book_id` key when it has highlights,
-   so the two paths don't produce two `raw/` notes for the same source.
+3. **Idempotency guard — content-aware, not existence-only.** Compute
+   `key = kb_core.source_key(source)` (pass the Readwise `book_id` for highlighted sources, or
+   the Reader `id` for tagged/named docs). The raw artifact path is `raw/<key>.md`. Probe with
+   `obsidian-notes` `read`.
+   - **Missing** → go to step 4 (full capture).
+   - **Present** → a bare existence check would treat this source as "done" forever, even
+     when the operator later highlights more of it (the historical bug: source `62041720`
+     gained highlights after its first capture and the sweep silently skipped it on every
+     subsequent run, because existence alone can't distinguish "captured" from "captured, now
+     stale"). Instead:
+     1. Compute `current_hash = kb_core.highlights_fingerprint(current_highlights)` over the
+        highlights/notes just fetched for this source.
+     2. Read the existing note's `highlights_hash` frontmatter value (absent on notes written
+        before this fix — treat as unknown and fall through to 3.4).
+     3. `current_hash` matches the stored value → **skip**, true no-op (AC-1.6 preserved for
+        the common case — nothing changed).
+     4. Otherwise → parse the existing note's `## Highlights` section into `existing_texts`
+        (one highlight per `> ` blockquote line, stripped of the prefix), then compute
+        `kb_core.new_highlights(existing_texts, current_highlights)`.
+        - **Empty** → nothing actually changed (e.g. an old note has no `highlights_hash` to
+          compare against yet); skip, but still do the frontmatter-only rewrite in step 3a to
+          backfill `highlights_hash` so the next sweep takes the fast path in 3.3.
+        - **Non-empty** → go to step 3a: fold the new highlight(s) into the existing note.
+   - **Dedup:** a source reachable both as a highlighted book and a Reader doc must be
+     captured once — prefer the `book_id` key when it has highlights, so the two paths don't
+     produce two `raw/` notes for the same source. (See also § Second Readwise pipeline below
+     for the Obsidian-plugin case.)
+
+3a. **Fold-in update** (reached from 3.4 when there's new content, or as a hash-only backfill
+    when there isn't). Read the full existing note (`obsidian-notes` `read`):
+    - Append the new highlight blockquote line(s) — `> <highlight text>` per line, verbatim,
+      same convention as a fresh capture — to the end of the `## Highlights` section. Never
+      reorder, delete, or edit an existing highlight; never touch `## Notes` or any other
+      section.
+    - Replace `highlights_hash` with `current_hash` (add the key if the note predates this
+      fix).
+    - Rewrite the note in full via `create ... overwrite` (the two-call
+      `template:read`-free "read, modify, overwrite" shape — `property:set` cannot target
+      `highlights_hash` because it isn't in the vault's property registry, the same reason
+      `source_key`/`readwise_book_id` are hand-composed rather than `property:set`). Compose
+      the frontmatter with `fm-emit.py` exactly as in step 4, and validate after writing.
+    - Report this source as **updated** (not skipped, not freshly captured) in the sweep
+      summary.
+
 4. **Write the raw artifact** via the `obsidian-notes` skill (`create`), preserving origin
-   metadata and highlights/notes unmodified (AC-1.1). Schema below.
+   metadata and highlights/notes unmodified (AC-1.1). Include `highlights_hash:
+   "<current_hash>"` (from step 3's `kb_core.highlights_fingerprint`) in the frontmatter so a
+   later sweep can take the fast no-op path in step 3.3. Schema below.
    - **Compose the frontmatter with `fm-emit.py` when it's installed, not by hand.** `title` and
      `author` routinely contain a bare `: ` (e.g. "Claude Sonnet 5 vs Opus 4.8: Which Model…"),
      plus `#`, `[`, or a leading `@` — unquoted, any of these breaks the `---`...`---` block, and
@@ -96,6 +137,7 @@ category: "<category>"
 captured: "<ISO-8601 date>"
 reader_tags: ["<tag>", ...]
 tags: [kb-raw]
+highlights_hash: "<sha256 of current highlights, kb_core.highlights_fingerprint>"
 ---
 
 # <title>
@@ -117,16 +159,63 @@ tags: [kb-raw]
   shown above — compose the block with `fm-emit.py` when available (Step 4), or by hand with
   the same quoting rule when it isn't.
 - Highlights and notes are copied **verbatim** (AC-1.1) — capture does not summarize.
+- `highlights_hash` is a backward-compatible addition: existing `raw/` notes written before
+  this field existed simply lack it, and step 3.2 treats that as "unknown" rather than an
+  error. `kb-compile`'s read contract only looks at `source_key`/`type`/`sources:`, so it is
+  unaffected by this field either way (see kb-compile's `operations/compile.md`).
+
+## Re-sync vs. skip
+
+Re-running the sweep over an already-captured source now has three possible outcomes, not
+two — worth calling out explicitly since it changes what "idempotent" means here:
+
+| Outcome | When | Report as |
+|---|---|---|
+| Skip (no-op) | `highlights_hash` matches what was just fetched | "skipped — unchanged" |
+| Fold-in update | fetched highlights include text not yet in the note | "updated — N new highlight(s)" |
+| Fresh capture | `raw/<key>.md` doesn't exist yet | "captured" |
+
+AC-1.6 ("re-capture is a no-op") now means *content-stable* re-capture is a no-op — a source
+whose highlights haven't changed is still skipped exactly as before. A source whose highlights
+*have* changed is no longer silently and permanently skipped (the bug this fixes).
+
+## Second Readwise pipeline (Obsidian "Readwise Official" plugin) — reconciliation, not full integration
+
+The vault also runs the community **Readwise Official** Obsidian plugin
+(`.obsidian/plugins/readwise-official/`), which does its own content-level incremental sync
+of the same Readwise library into a `Readwise/` vault folder, keyed by `book_id` via its own
+`booksIDsMap`. This is a second, currently disconnected pipeline from this MCP-based sweep
+into `raw/`. Fully hybridizing kb-capture to read the plugin's synced folder instead of
+polling `readwise_list_highlights` (letting the plugin, which is free and already running,
+own sync mechanics; kb-capture would then only filter + reformat into `raw/`) is a larger
+rearchitecture deferred as follow-up — it needs the plugin's actual synced-note schema
+inspected against a live vault to key off correctly, which is out of scope for this change
+(see kb-capture `SKILL.md` § Follow-up).
+
+**What's handled now (reconciliation, not integration):** both pipelines already key off the
+same Readwise `book_id` — this sweep's `source_key` is `readwise-<book_id>`, and the plugin's
+`booksIDsMap` is also `book_id`-keyed. As long as any future plugin-folder-based ingestion
+keys off `book_id` (read from the plugin note's own frontmatter, not its title or vault path),
+a source captured via either pipeline maps to the same `raw/<key>.md` identity and there is no
+double-capture risk. No code changes to reconcile identities are needed *yet* because this
+sweep does not read the plugin's folder at all. The manual check for now: before compiling,
+cross-check the `readwise_book_id` values already staged under `raw/*.md` against the
+plugin's `booksIDsMap` (`.obsidian/plugins/readwise-official/data.json`) to confirm no
+existing `raw/` source and plugin-synced note silently drifted onto different book ids for
+what is actually the same source (this would only happen from a Readwise-side id change,
+not from anything this sweep does).
 
 ## Acceptance Criteria (SPEC §2.1)
 
 AC-1.1 (staged with metadata/highlights), AC-1.2 (no-highlight/no-notes skipped),
 AC-1.3 (notes count), AC-1.4 (irrelevant skipped unless tagged), AC-1.5 (zones untouched),
-AC-1.6 (idempotent), AC-1.7 (tagged with zero highlights/notes captured).
+AC-1.6 (idempotent — content-stable re-capture is a no-op; changed sources are updated in
+place, not skipped), AC-1.7 (tagged with zero highlights/notes captured).
 
 ## Integration Points
 
-- `kb_core.is_eligible`, `kb_core.source_key`, `kb_core.CAPTURE_TAG` —
+- `kb_core.is_eligible`, `kb_core.source_key`, `kb_core.CAPTURE_TAG`,
+  `kb_core.highlights_fingerprint`, `kb_core.new_highlights` —
   `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py`
 - Readwise MCP `reader_*` tools — source documents
 - `obsidian-notes` skill — vault path resolution + `raw/` writes
