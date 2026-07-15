@@ -15,7 +15,9 @@ for node_dir in "$PROJECT_DIR"/*/; do
   for repo_dir in "$node_dir"*/; do
     if git -C "$repo_dir" rev-parse --is-inside-work-tree 2>/dev/null; then
       echo "Removing worktree: ${repo_dir}"
-      git -C "$repo_dir" worktree remove "$repo_dir" 2>/dev/null
+      if ! git -C "$repo_dir" worktree remove "$repo_dir" 2>/dev/null; then
+        echo "Warning: could not remove worktree ${repo_dir} (dirty or locked?) — leaving in place" >&2
+      fi
     fi
   done
 done
