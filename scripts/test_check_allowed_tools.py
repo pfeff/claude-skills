@@ -190,15 +190,23 @@ class TestParseAllowedTools(unittest.TestCase):
 class TestExemplifiedCallFormNotFlagged(unittest.TestCase):
     """Regression: a call-form token that an exemplification cue ("e.g.", "eg",
     "for example", "such as") *immediately introduces* — only whitespace, an
-    opening backtick, and/or an opening paren between the cue and the "Tool("
-    token — illustrates a pattern rather than mandating a step, and must not be
-    flagged. Canonical repro: dispatch-gate/SKILL.md's
+    opening backtick, an opening paren, and/or a comma between the cue and
+    the "Tool(" token — illustrates a pattern rather than mandating a step,
+    and must not be flagged. Canonical repro: dispatch-gate/SKILL.md's
     "(e.g. `Agent(isolation: \"worktree\")`)"."""
 
     def test_dispatch_gate_line_shape_not_flagged(self):
         refs = check_allowed_tools.find_mandatory_refs(
             '- **Tool-level worktree isolation** (e.g. '
             '`Agent(isolation: "worktree")`):\n'
+        )
+        self.assertEqual(refs, [])
+
+    def test_comma_separated_cue_not_flagged(self):
+        # A comma between the cue and the call-form -- "For example, `Agent(...)`"
+        # -- is a common illustrative phrasing and must be exempted.
+        refs = check_allowed_tools.find_mandatory_refs(
+            'For example, `Agent(isolation: "worktree")` sets up a sandbox.\n'
         )
         self.assertEqual(refs, [])
 
