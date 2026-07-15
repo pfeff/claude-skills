@@ -38,6 +38,37 @@ choices it already made and cannot see them as an outside reader
 would. A verifier sub-agent outperforms self-critique precisely
 because grading happens in an independent context window.
 
+## Reviewer worktree discipline
+
+A review operates **read-only** on the worktree. Never run mutating
+git in a review worktree — no `stash`, `checkout`, `reset`,
+`restore`, `clean`, `rebase`, or branch switch. This holds even when
+the mutation is meant to be temporary and reverted (e.g. a
+stash/checkout/stash-pop round trip to peek at a prior file state):
+a reviewer explicitly told to make no changes has no standing to
+mutate the worktree at all, and a reverted mutation still carries
+real risk (a `stash pop` conflict can strand work).
+
+To inspect another revision or a prior file state, use non-mutating
+means instead:
+- `git show <rev>:<path>` — read a file as of a given revision.
+- `git diff <rev>[..<rev>] -- <path>` — diff against another
+  revision without touching the working tree.
+- `git log -p` — walk history for a path.
+- A **separate, throwaway** worktree (`git worktree add`) — inspect
+  there, then remove it (`git worktree remove`) when done. Never
+  reuse the worktree under review for this.
+
+If you believe you must mutate the worktree under review to
+complete the review, **stop and report instead** — do not take the
+destructive action.
+
+(Root cause, 2026-07-08: an L{N}-review told "do not modify
+anything" ran `git stash -u && git checkout HEAD~1 -- <path> && ...
+&& git stash pop` in the review worktree to re-inspect a prior test
+state; only the safety classifier stopped it. This section closes
+that gap.)
+
 ## The three axes
 
 Every L{N}-review walks these three axes, in order. Each axis
