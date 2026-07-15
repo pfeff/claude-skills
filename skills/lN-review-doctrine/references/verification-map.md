@@ -1,9 +1,9 @@
-# L{N}-review — work-type → required-verification map
+# Acceptance / Objective review — work-type → required-verification map
 
-Consumed by axis 2 (Process) of the L{N}-review checklist
-(`checklist.md`). For each work type, lists the verification steps
-that MUST have run green for axis 2 to PASS. If a step is missing
-or non-green, axis 2 is FAIL.
+Consumed by axis 2 (Process) of the Acceptance/Objective review
+checklist (`checklist.md`). For each work type, lists the
+verification steps that MUST have run green for axis 2 to PASS. If
+a step is missing or non-green, axis 2 is FAIL.
 
 **Detection**: the review skill picks the work type by inspecting
 the PR's changed-file extensions. The first row whose pattern
@@ -32,10 +32,10 @@ be extended.
 There is no automated verifier for Claude-skills/commands markdown
 — "manual axis-2 check" was the original entry, but per the
 PR #158 review that wording produced an UNCLEAR self-application
-and missed the L1↔L2 contract break the doctrine was meant to
-prevent. The following concrete checklist substitutes. Failure of
-any item emits an axis-2 finding at the listed severity (per
-`checklist.md` severity rules):
+and missed the Acceptance-review/Objective-review contract break
+the doctrine was meant to prevent. The following concrete checklist
+substitutes. Failure of any item emits an axis-2 finding at the
+listed severity (per `checklist.md` severity rules):
 
 1. **Artifact-path consistency** (correctness — **blocking**) —
    For every consumer skill that reads a producer skill's
@@ -61,10 +61,11 @@ any item emits an axis-2 finding at the listed severity (per
    posting protocol is in use — see `checklist.md` "How the
    next layer reads the artifact".)
 
-   This is the rule that would have caught PR #158's L1↔L2
-   contract break (l2-review read `${L1_REVIEW_ARTIFACT_DIR:-...}`
-   but l1-review wrote to `.claude/reviews/l1-latest.md` and
-   stripped frontmatter before posting).
+   This is the rule that would have caught PR #158's
+   Acceptance-review/Objective-review contract break (l2-review read
+   `${L1_REVIEW_ARTIFACT_DIR:-...}` but l1-review wrote to
+   `.claude/reviews/l1-latest.md` and stripped frontmatter before
+   posting).
 2. **Cross-skill reference resolution** (architecture — warning)
    — Every `../<skill>/...` link in SKILL.md and
    `references/<file>.md` link in operations must resolve to an
@@ -145,18 +146,20 @@ When a PR's work type isn't listed:
 Do not silently default new work types to "no verification
 required" — that turns axis 2 into a rubber stamp.
 
-## L{N}-specific notes
+## Layer-specific notes
 
-- **N=1 (l1-review)**: the steps above run on the L0's PR
-  directly. Evidence: GitHub Actions checks (`gh pr checks <PR>`)
-  and/or local commit-message annotations from the L0.
-- **N=2 (l2-review)**: every constituent L0 PR L1 accepted must
-  itself satisfy the steps above. l2-review's axis 2 reads the
-  l1-review comment posted on each constituent PR (via the
-  `<!-- l1-review:metadata -->` marker; see `checklist.md`
-  "Posting protocol") and confirms l1-review's own axis 2
-  PASSed. Transitive: if l1-review missed a required step,
-  l2-review is the second line of defense.
+- **The Acceptance review (`l1-review`, N=1)**: the steps above run
+  on the base-level PR (the Change review's PR) directly. Evidence:
+  GitHub Actions checks (`gh pr checks <PR>`) and/or local
+  commit-message annotations from that PR's author.
+- **The Objective review (`l2-review`, N=2)**: every constituent
+  base-level PR the Acceptance review accepted must itself satisfy
+  the steps above. The Objective review's axis 2 reads the
+  Acceptance-review comment posted on each constituent PR (via the
+  `<!-- l1-review:metadata -->` marker; see `checklist.md` "Posting
+  protocol") and confirms the Acceptance review's own axis 2
+  PASSed. Transitive: if the Acceptance review missed a required
+  step, the Objective review is the second line of defense.
 
 ## When the map is wrong
 
