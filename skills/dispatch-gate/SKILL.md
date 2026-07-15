@@ -241,6 +241,10 @@ has an open PR, also post the same note as a PR comment (`gh pr comment
 durable record even if the operator isn't watching the pane at that
 moment.
 
+See also `../decision-rights-doctrine/SKILL.md` — the broader taxonomy of
+decisions reserved to the operator (not just frozen-manifest drift) that a
+dispatched job must escalate rather than resolve itself.
+
 ## What this skill does NOT do
 
 - Does not launch agents or start the background job.
