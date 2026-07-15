@@ -6,7 +6,7 @@ allowed-tools:
   - Write
   - Edit
   - AskUserQuestion
-version: 1.0.0
+version: 1.0.1
 ---
 
 # skillify — fast-capture entrypoint
@@ -80,13 +80,17 @@ inside this skill, stop — that logic belongs in skill-creator, not here.
 Adding a skill directory under `skills/` is not sufficient for it to
 resolve as a slash command in this repo. It must also be added to the
 `skills` array of the `mbp` plugin entry in
-`.claude-plugin/marketplace.json`, with `metadata.version` there and
-`version` in `.claude-plugin/plugin.json` both bumped (minor bump for a new
-skill, matching the pattern used when `kb-capture`/`kb-compile`/`kb-lint`
-were added). Skipping this step is a real failure mode in this repo:
-PR #133 had to retroactively register six skill directories that had sat
-on disk for a while with no entry in that array, so none of them resolved
-as slash commands despite looking complete.
+`.claude-plugin/marketplace.json` (alphabetical). Skipping this step is a
+real failure mode in this repo: PR #133 had to retroactively register six
+skill directories that had sat on disk for a while with no entry in that
+array, so none of them resolved as slash commands despite looking complete.
+
+Do **not** bump `metadata.version` in `marketplace.json` or `version` in
+`plugin.json` as part of this PR — see `docs/skill-authoring.md` §2. That
+used to be required per-PR and caused concurrent skill-adding PRs to
+silently pile up on the same version number. The version bump is a separate
+maintainer step (`scripts/bump-version.sh`), run once after a batch of
+skill-adding PRs lands.
 
 ## What this is NOT
 
