@@ -12,6 +12,15 @@ operator's review evidence. It is **not** consumed by the lN-review chain
 of that chain and feeds it by ensuring the job's change is in order before
 the L1 reviewer picks it up.
 
+**Not the PR marker.** This schema is a local-file annotation only — it is
+never posted to a PR and has its own lowercase `pass|warn|fail` verdict
+vocabulary (see "Field rules" below). It is a distinct artifact from the
+`<!-- review:metadata -->` / `<!-- l<N>-review:metadata -->` markers that
+`/review` and `l1-review`/`l2-review` post to the PR; for that schema —
+fields, integer-count types, and posting commands — see the "Marker
+emission template" in `../../lN-review-doctrine/references/checklist.md`.
+Do not copy this file's shape when composing that marker.
+
 ---
 
 ## File format

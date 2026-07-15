@@ -398,6 +398,87 @@ layer review) on a different host cannot read that file. All
 cross-operator evidence — including the input that the next
 layer's axis 2 reads — flows through the PR comment.
 
+### Marker emission template
+
+Copy the block for your layer verbatim and fill in only the `<...>`
+placeholders — do not hand-roll the YAML from memory or from prose
+elsewhere in this doc; this is the single source of truth every
+worker brief and review executor should point at instead of
+restating the schema.
+
+**Types, not vocabulary — get these wrong and the marker is invalid:**
+- `blocking`, `warning`, `advisory` are **integer counts** (`0`, `1`, `2`,
+  …) — never list literals (`[]`), never strings.
+- `verdict` is one of the fixed tokens for that layer, **never** `pass`,
+  `ok`, or any other free-form value.
+- **Field name differs by layer: L0 uses `advisory`; L{N} (N=1,2) uses
+  `warning`.** Advisory = warning + info. Do not silently unify the two
+  field names.
+
+**L0 `review:metadata` marker** — posted by `/review` (verdict `CLEAN` or
+`BLOCKING` only):
+
+```
+**<VERDICT>** — <blocking> blocking and <advisory> advisory finding(s).
+
+<per-finding body — Blocking / Advisory sections>
+
+<!-- review:metadata
+verdict: <CLEAN|BLOCKING>
+level: 0
+pr: <PR_NUMBER>
+target: <owner>/<repo>#<PR_NUMBER>
+blocking: <int>
+advisory: <int>
+reviewed_at: <iso8601>
+reviewer: review
+-->
+```
+
+**L{N} `l<N>-review:metadata` marker** — posted by `l1-review` /
+`l2-review` (N = 1 or 2; verdict `CLEAN` / `NEEDS-WORK` / `BLOCKING`):
+
+```
+**<VERDICT>** — <blocking> blocking and <advisory> advisory finding(s).
+
+<per-axis body — Conformance / Process / Objective Advancement>
+
+<!-- l<N>-review:metadata
+verdict: <CLEAN|NEEDS-WORK|BLOCKING>
+level: <N>
+pr: <PR_NUMBER>
+target: <owner>/<repo>#<PR_NUMBER>
+axes: { conformance: <PASS|FAIL|UNCLEAR>, process: <PASS|FAIL|UNCLEAR>, objective: <PASS|FAIL|UNCLEAR> }
+blocking: <int>
+warning: <int>
+reviewed_at: <iso8601>
+reviewer: l<N>-review
+-->
+```
+
+**Posting commands** — post to both surfaces (see "Find-or-update by
+marker" below for the issue-comment upsert mechanics):
+
+```bash
+# (1) PR review — canonical machine-read surface. Append-only.
+gh pr review <PR> --comment --body-file <post-body>
+
+# (2) Issue-comment mirror — update in place if a comment already
+#     carries this layer's marker, else create one. See "Find-or-update
+#     by marker" below for the full find-then-branch procedure.
+gh api --method PATCH "/repos/<owner>/<repo>/issues/comments/<existing_id>" \
+  -F body=@<post-body>
+# ...or, when no existing comment carries the marker:
+gh pr comment <PR> --body-file <post-body>
+```
+
+**DO NOT** post with `gh pr comment <PR> --body "@<post-body>"`. `gh`
+treats `--body` as a literal string — it does **not** expand `@file` the
+way `--body-file` does. That form silently posts the literal text
+`@/path/to/file` as the comment body and the marker never lands (root
+cause: this repo, PR #161). Always use `--body-file <path>` (or
+`gh api ... -F body=@<path>`).
+
 **The chain bottoms out at L0.** L0's `/review` posts the same way:
 a dual-surface PR comment carrying a `<!-- review:metadata -->`
 marker (note: **`review:metadata`, with no `l<N>-` prefix** — it is
@@ -407,27 +488,22 @@ the layer-0 marker, deliberately distinct from the
 axis 2 reads that L0 marker as its authoritative `/review` evidence,
 exactly as l2-review reads the `<!-- l1-review:metadata -->` marker.
 The local `.claude/reviews/latest.md` L0 writes stays the L0's own
-gitignored cache, never the cross-operator evidence. The L0 marker
-block carries `verdict` (`CLEAN|BLOCKING`), `level: 0`, `pr`,
-`target`, `blocking`, `advisory`, `reviewed_at`, and
-`reviewer: review`.
+gitignored cache, never the cross-operator evidence. The L0 marker's
+exact field list is the "Marker emission template" above.
 
-The skill posts the canonical artifact to **two surfaces on the PR**, so
-both the machine-read path and any human / plain-`gh pr view` check find
-the marker:
-
-```bash
-# (1) PR review — the canonical machine-read surface (reviews API).
-#     APPEND-ONLY: a submitted review object cannot be edited in place the
-#     way an issue comment can, and consumers read it most-recent-wins (see
-#     "How the next layer reads the artifact"), so re-running a review adds a
-#     new review object each time. This is intentional and unchanged.
-gh pr review <PR> --comment --body-file <post-body>
-# (2) Issue-comment mirror — UPDATE-IN-PLACE, keyed on this review type's
-#     marker token. Exactly one issue comment per marker type per PR: if a
-#     comment already carries "$marker", PATCH it; else create one. See
-#     "Find-or-update by marker" below.
-```
+The skill posts the canonical artifact to **two surfaces on the PR** (the
+posting commands are in the "Marker emission template" above), so both
+the machine-read path and any human / plain-`gh pr view` check find the
+marker:
+- **(1) PR review** — the canonical machine-read surface (reviews API).
+  **APPEND-ONLY**: a submitted review object cannot be edited in place the
+  way an issue comment can, and consumers read it most-recent-wins (see
+  "How the next layer reads the artifact"), so re-running a review adds a
+  new review object each time. This is intentional and unchanged.
+- **(2) Issue-comment mirror** — **UPDATE-IN-PLACE**, keyed on this review
+  type's marker token. Exactly one issue comment per marker type per PR: if
+  a comment already carries "$marker", PATCH it; else create one. See
+  "Find-or-update by marker" below.
 
 **Never `--request-changes`.** GitHub blocks REQUEST_CHANGES on a
 PR you opened yourself (observed on PR #8 in the DESIGN.md
@@ -526,20 +602,9 @@ positional strip is brittle if a finding ever contains a literal
 2. **Body** — the same per-axis sections as the workspace
    artifact body (Conformance / Process / Objective Advancement).
 3. **Trailing metadata block** — an HTML comment carrying the
-   machine-readable verdict for the next layer to parse:
-   ```
-   <!-- l<N>-review:metadata
-   verdict: <CLEAN|NEEDS-WORK|BLOCKING>
-   level: <N>
-   pr: <number>
-   target: <owner/repo>#<number>
-   axes: { conformance: <PASS|FAIL|UNCLEAR>, process: <PASS|FAIL|UNCLEAR>, objective: <PASS|FAIL|UNCLEAR> }
-   blocking: <count>
-   warning: <count>
-   reviewed_at: <iso8601>
-   reviewer: l<N>-review
-   -->
-   ```
+   machine-readable verdict for the next layer to parse: the L{N}
+   block from the "Marker emission template" above, with `<VERDICT>`,
+   `<N>`, `<PR_NUMBER>`, the axes, and the counts filled in.
 4. **Advisory count assertion (mechanical, before posting)** — count
    the warning-tier and info-tier finding bullets actually present
    in the composed body (step 2 above); their sum is the advisory
