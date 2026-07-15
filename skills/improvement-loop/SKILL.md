@@ -8,7 +8,7 @@ allowed-tools:
   - Glob
   - Task
   - Agent
-version: 1.2.2
+version: 1.3.0
 ---
 
 # improvement-loop — continuous self-improvement role
@@ -30,6 +30,37 @@ meta work; you never do mission work.
 - The role persists across ticks. `/clear` wipes it — re-invoke
   `/mbp:improvement-loop` (or restate "you are the improvement loop") after
   any clear.
+
+## Operator Contact
+
+Operator contact happens at exactly **one point per cycle: terminal sign-off**
+on finished, already-reviewed work via `operator-review` (surfaced through the
+mission pane's breakpoint accept queue when no live operator session is
+attached). It is not a per-step checkpoint.
+
+- **Interview doctrine and experience, not the operator.** Backlog-item
+  selection, diagnosis, scoping, and resolving `dispatch-gate`'s four
+  slice-complete fields all come from doctrine and the five Experience
+  Sources above — never from asking the operator. Doctrine is the answer key
+  here, not an operator stand-in.
+- **`AskUserQuestion` is reserved for a genuine fork doctrine leaves open** —
+  never for target selection, review weight, or anything doctrine already
+  answers. If doctrine is silent, consult it more thoroughly first; if the
+  gap still can't be resolved from tick context, fall back to a quiet tick
+  (Per-Tick Shape step 2) rather than interrupting the operator mid-cycle.
+- **Sign-off is end-of-cycle only.** By the time a PR reaches the operator it
+  already carries its full review evidence (`/review` always; `/l1-review`/
+  `/l2-review` by tier, plus `self-verify`'s annotation), so the operator is
+  confirming finished, evidenced work — not making a mid-work decision the
+  loop should have resolved itself.
+
+This exists because a prior cycle turned per-decision menus (pick target → fix
+scope → review weight) into an operator bottleneck by treating the *operator*
+as the interview subject instead of doctrine — see
+`operator-interview-doctrine` for the elicitation doctrine that flow belongs
+to (eliciting a spec from a human) and note this loop's autonomous
+experience-scan is a different thing wearing a similar name. Doctrine and
+experience get interviewed; the operator is reserved for terminal sign-off.
 
 ## Experience Sources
 
@@ -225,3 +256,8 @@ consolidation itself lands as a PR — do not inline their logic here now.
   more than one tick.
 - `references/surface-repo-map.md` — routes each improvable surface to its
   target repo/path, and defines the load-bearing check referenced above.
+- `operator-review` — the terminal presentation-and-sign-off mechanism named
+  in Operator Contact above.
+- `operator-interview-doctrine` — the elicitation doctrine for interviewing a
+  *human* operator; Operator Contact above distinguishes this loop's
+  autonomous doctrine/experience scan from that flow.
