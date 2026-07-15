@@ -39,6 +39,7 @@
         "./skills/operator-interview-doctrine",
         "./skills/operator-review",
         "./skills/planning-workflow",
+        "./skills/pr-review-fanout",
         "./skills/pull-task",
         "./skills/ralph-wiggum",
         "./skills/review",
