@@ -20,7 +20,9 @@ notes; findings on off-limits zones or non-KB notes are surfaced as proposals on
 
 > **Status:** the deterministic guards are implemented and unit-tested in `kb-core`
 > (`is_kb_owned` — auto-fix confined to KB notes, AC-6.2; `is_writable` — off-limits floor;
-> `find_orphans` — AC-6.3 input). The findings pass is agent-orchestrated per `operations/lint.md`.
+> `find_orphans` — AC-6.3 input), plus `kb-lint`'s own `is_git_backed` (re-checked fresh every
+> run against the vault's live git state; gates whether auto-fix is reachable at all — see
+> `scripts/kb_lint_git.py`). The findings pass is agent-orchestrated per `operations/lint.md`.
 
 ## Billing posture
 
@@ -50,9 +52,18 @@ pass; same rationale as `/kb-compile` (SPEC v2 §6, CLAUDE.md billing guard).
 ## Integration Points
 
 - **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`is_kb_owned` + `is_writable` for the write guard, `find_orphans` for orphan detection).
+- **kb-lint's own scripts** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-lint/scripts/kb_lint_git.py` (`is_git_backed` — re-checked fresh every run, gates auto-apply eligibility).
 - **QMD** — the vault search CLI, for connection-candidate discovery.
 - **obsidian-notes skill / host config** — vault path resolution; reads and KB-owned fixes.
 - **kb-compile** — produces the KB notes this skill audits.
+
+## Tests
+
+```
+cd skills/kb-lint/scripts && python3 -m unittest test_kb_lint_git
+```
+
+Stdlib `unittest` (zero-dependency, matches `kb-core/scripts/test_kb_core.py`).
 
 ## See Also
 
