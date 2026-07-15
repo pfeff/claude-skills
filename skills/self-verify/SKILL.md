@@ -132,6 +132,9 @@ if present; otherwise fall back to DESIGN.md / PLAN.md / dispatch prompt.
 - Is the diff within scope (no out-of-scope files touched)?
 - Is there obvious WIP/debugging debris (console.log, commented-out code)?
 - Minimality: does the diff add the least surface that meets the criteria?
+- Did the job self-resolve a Tier 1 decision (see
+  `../decision-rights-doctrine/SKILL.md`) instead of escalating it to the
+  operator?
 
 If `.claude/task-context.md` carries an Override annotation (see
 `references/task-context.md` "Override annotation") naming unresolved
