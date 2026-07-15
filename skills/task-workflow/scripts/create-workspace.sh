@@ -758,7 +758,7 @@ else
 fi
 
 # Render settings.json (envsubst for MODEL variable)
-MODEL="${MODEL:-sonnet}"
+export MODEL="${MODEL:-sonnet}"
 mkdir -p "$WORKSPACE_PATH/.claude"
 if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
   echo "  .claude/settings.json: created"
@@ -934,7 +934,7 @@ else
 fi
 
 # Check 5: .claude/settings.json exists with permissions and model
-if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json" && grep -q '"model"' "$WORKSPACE_PATH/.claude/settings.json"; then
+if [[ -f "$WORKSPACE_PATH/.claude/settings.json" ]] && grep -q '"permissions"' "$WORKSPACE_PATH/.claude/settings.json" && grep -q '"model": "[^"]' "$WORKSPACE_PATH/.claude/settings.json"; then
   verify_check ".claude/settings.json contains permissions and model" "pass"
 else
   verify_check ".claude/settings.json contains permissions and model" "fail"
@@ -1146,7 +1146,7 @@ EOF
 
   # Step 6: Render .claude/settings.json (envsubst for MODEL variable)
   echo "Rendering settings..."
-  MODEL="${MODEL:-sonnet}"
+  export MODEL="${MODEL:-sonnet}"
   mkdir -p "$WORKSPACE_PATH/.claude"
   if envsubst < "$TEMPLATE_DIR/settings.json.tmpl" > "$WORKSPACE_PATH/.claude/settings.json"; then
     echo "  .claude/settings.json: created"
