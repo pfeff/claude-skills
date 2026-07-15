@@ -37,11 +37,12 @@ field", "parallel Task tool invocation"), a plural "X tools" category label,
 a bare tool-namespace word inside a heading ("### 1. Task Creation"), and a
 call-form token that an exemplification cue — "e.g.", "eg", "for example",
 "such as" — *immediately introduces* (only whitespace, an opening backtick,
-and/or an opening paren may sit between the cue and the "Tool(" token, e.g.
-dispatch-gate's "(e.g. `Agent(isolation: \"worktree\")`)"), which
-illustrates a pattern rather than mandating a step. The cue must directly
-precede the call-form: a cue earlier on a line whose call-form is a genuine
-mandate ("...e.g. the setup, then you MUST invoke `Agent(...)`") is still
+an opening paren, and/or a comma may sit between the cue and the "Tool("
+token, e.g. dispatch-gate's "(e.g. `Agent(isolation: \"worktree\")`)" or
+"For example, `Agent(isolation: \"worktree\")`"), which illustrates a
+pattern rather than mandating a step. The cue must directly precede the
+call-form: a cue earlier on a line whose call-form is a genuine mandate
+("...e.g. do the setup, then you MUST invoke `Agent(...)`") is still
 flagged, and bare "like" is excluded as ordinary English ("I would like you
 to invoke Agent(...)"). These produce real false positives against this
 repo's own corpus, and per this validator's R4 (false positives are worse
@@ -91,7 +92,7 @@ CALL_FORM_RE = re.compile(r"\b(" + TOOL_ALT + r")\(")
 # it is ordinary English ("I would like you to invoke Agent(...)"), not an
 # exemplification marker. Applied only to CALL_FORM matches (see docstring).
 EXEMPLIFICATION_INTRO_RE = re.compile(
-    r"(?:\be\.g\.|\beg\b|\bfor example\b|\bsuch as\b)[\s`(]*$", re.IGNORECASE
+    r"(?:\be\.g\.|\beg\b|\bfor example\b|\bsuch as\b)[\s`(,]*$", re.IGNORECASE
 )
 # Imperative phrasing: a directive verb ("invoke/use/via", any case) right
 # before "<Tool> tool". Tool names stay case-sensitive so ordinary lowercase
