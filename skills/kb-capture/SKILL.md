@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.2.0
+version: 0.3.0
 ---
 
 # KB Capture
@@ -19,9 +19,21 @@ Eligible Readwise Reader documents land in the vault's `raw/` staging queue with
 origin metadata and highlights/notes intact, ready for `/kb-compile`.
 
 > **Status:** complete. The deterministic core is implemented and unit-tested in `kb-core`
-> (`is_eligible`, `source_key` — AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and `raw/`
-> write are agent-orchestrated per `operations/capture.md` (Readwise MCP + `obsidian-notes`
-> CLI), and the full capture→compile→lint flow was verified end-to-end against a live vault.
+> (`is_eligible`, `source_key`, `highlights_fingerprint`, `new_highlights` —
+> AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and `raw/` write are agent-orchestrated per
+> `operations/capture.md` (Readwise MCP + `obsidian-notes` CLI), and the full
+> capture→compile→lint flow was verified end-to-end against a live vault. Idempotency is
+> content-aware, not existence-only: a source that gains highlights after its first capture
+> is folded into the existing `raw/<key>.md` on the next sweep instead of being skipped
+> forever (`operations/capture.md` § Re-sync vs. skip).
+
+> **Follow-up (deferred):** the vault also runs the community "Readwise Official" Obsidian
+> plugin, which does its own content-level sync into a `Readwise/` folder — a second,
+> currently disconnected pipeline from this MCP-based sweep. Rearchitecting kb-capture into a
+> hybrid (plugin owns sync mechanics; kb-capture only filters + reformats from the plugin's
+> folder into `raw/`) needs the plugin's live synced-note schema inspected against a real
+> vault and is out of scope here. See `operations/capture.md` § Second Readwise pipeline for
+> the reconciliation approach landed now (shared `book_id` identity) vs. what's deferred.
 
 ## What it sweeps
 
@@ -44,7 +56,9 @@ A source is captured iff **either**:
 `raw/` is a subtree of the **Obsidian vault** (not this repo). Vault location is resolved
 per-host via the `obsidian-notes` skill / host config — never hardcoded. Each captured
 source is one raw artifact preserving URL, author, capture date, and highlights/notes
-unmodified. Re-capturing the same source is a no-op (keyed via `kb_core.source_key`).
+unmodified. Re-capturing an unchanged source is a no-op (keyed via `kb_core.source_key`,
+compared via `kb_core.highlights_fingerprint`); a source whose highlights changed since its
+last capture is updated in place (`kb_core.new_highlights`) rather than skipped.
 
 ## Invocation
 
@@ -62,7 +76,7 @@ unmodified. Re-capturing the same source is a no-op (keyed via `kb_core.source_k
 ## Integration Points
 
 - **Readwise** — highlighted sources via `readwise_list_highlights` (primary); Reader docs via `reader_*` tools (kb-tag override / named input).
-- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`).
+- **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`, `highlights_fingerprint`, `new_highlights`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
 - **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
 - **kb-compile** — consumes the `raw/` queue this skill fills.

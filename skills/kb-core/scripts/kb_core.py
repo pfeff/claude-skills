@@ -2,14 +2,16 @@
 """Shared library for the LLM Knowledge Base skills (kb-capture, kb-compile, kb-lint).
 
 Holds the deterministic, unit-testable primitives the three skills share (SPEC v2 §1):
-the capture eligibility predicate, the source idempotency key, the off-limits write-guard,
-the KB-ownership check (for lint auto-fix), a concept-slug normalizer, and orphan detection.
+the capture eligibility predicate, the source idempotency key, content-aware re-sync
+(fingerprint + delta), the off-limits write-guard, the KB-ownership check (for lint
+auto-fix), a concept-slug normalizer, and orphan detection.
 
 v2 model: there are no folder-zones and no append-fence. Content is KB-owned (free-edit) or
 off-limits; edit safety is git + review (INV-5). Readwise reads and vault writes are
 agent-orchestrated in the operation docs — no vault I/O happens in this module.
 """
 
+import hashlib
 import re
 
 
@@ -78,6 +80,42 @@ def source_key(source: dict) -> str:
     raw_id = source["id"]
     safe = "".join(c if (c.isalnum() or c in "-_") else "-" for c in str(raw_id))
     return f"readwise-{safe}"
+
+
+# --- Content-aware re-sync (fixes existence-only idempotency) ---------------
+#
+# `source_key`'s presence check (raw/<key>.md exists ⇒ skip) is a *no-recapture* guard, not a
+# *no-recapture-when-unchanged* guard: a source that gains highlights after its first capture
+# (the operator returns to a book and highlights more of it) is silently skipped forever,
+# because existence alone can't distinguish "already captured" from "already captured, but
+# stale." The two primitives below let kb-capture detect and fold in the delta instead.
+
+
+def highlights_fingerprint(highlights) -> str:
+    """Stable content fingerprint over a source's highlights/notes, so a re-sweep can tell
+    whether a previously captured source has changed without diffing text by hand. Order of
+    ``highlights`` doesn't affect the result (re-fetching the same set in a different page
+    order must not look like a change). ``highlights`` is an iterable of dicts with a ``text``
+    key and an optional ``note`` key; both are stripped before hashing so incidental
+    whitespace differences don't either."""
+    parts = []
+    for h in highlights:
+        text = (h.get("text") or "").strip()
+        note = (h.get("note") or "").strip()
+        parts.append(f"{text}\x1f{note}")
+    canonical = "\n".join(sorted(parts))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def new_highlights(existing_texts, current_highlights) -> list:
+    """Given the highlight texts already captured in a `raw/` note (``existing_texts`` —
+    e.g. parsed from its rendered `## Highlights` blockquote lines) and the highlights just
+    fetched for that source (``current_highlights``, dicts with a ``text`` key), return the
+    subset of ``current_highlights`` not already present — the highlights a re-sweep should
+    fold into the existing note. Preserves the order of ``current_highlights``; comparison is
+    on stripped text."""
+    seen = {t.strip() for t in existing_texts}
+    return [h for h in current_highlights if (h.get("text") or "").strip() not in seen]
 
 
 # --- Write boundary + KB ownership (SPEC v2 §1/§2.6) -------------------------

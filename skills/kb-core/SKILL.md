@@ -1,7 +1,7 @@
 ---
 name: kb-core
 description: "Shared library for the LLM Knowledge Base skills (kb-capture, kb-compile, kb-lint). Holds the SPEC v2 §1 primitives — capture predicate, idempotency key, off-limits write-guard, KB-ownership check, concept-slug dedup, orphan detection — in one place so the three skills share one implementation. Reference/infrastructure content, not user-invocable; the three KB skills load its scripts."
-version: 0.2.0
+version: 0.3.0
 ---
 
 # KB Core (shared library)
@@ -19,6 +19,10 @@ and kb-lint:
   (highlight/notes + work-relevance, with the `kb` tag override).
 - **Idempotency** (`source_key`) — stable, filesystem-safe key from the Reader id, so
   re-capture / re-compile are no-ops (INV-4).
+- **Content-aware re-sync** (`highlights_fingerprint`, `new_highlights`) — lets kb-capture
+  tell whether an already-captured source's highlights changed since its last sweep, and
+  compute just the delta to fold in, instead of `source_key` existence alone silently
+  skipping a source forever once it's captured once.
 - **Write boundary** (`is_writable`, `OFF_LIMITS`) — the INV-1 floor: never write under
   `DevOps Documentation/` or `Confluence/`.
 - **KB ownership** (`is_kb_owned`, `KB_PROJECT`) — is a note KB-authored? Confines lint

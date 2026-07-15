@@ -68,6 +68,78 @@ class TestSourceKey(unittest.TestCase):
             source_key({})
 
 
+class TestHighlightsFingerprint(unittest.TestCase):
+    """Content fingerprint that lets a re-sweep detect new highlights on an already-captured
+    source, fixing the existence-only idempotency bug (source `62041720` silently skipped
+    forever after gaining new highlights)."""
+
+    def test_stable_for_same_set(self):
+        from kb_core import highlights_fingerprint
+
+        highlights = [{"text": "a"}, {"text": "b"}]
+        self.assertEqual(
+            highlights_fingerprint(highlights), highlights_fingerprint(highlights)
+        )
+
+    def test_order_independent(self):
+        from kb_core import highlights_fingerprint
+
+        forward = [{"text": "a"}, {"text": "b"}]
+        backward = [{"text": "b"}, {"text": "a"}]
+        self.assertEqual(highlights_fingerprint(forward), highlights_fingerprint(backward))
+
+    def test_changes_when_highlight_added(self):
+        from kb_core import highlights_fingerprint
+
+        before = [{"text": "a"}]
+        after = [{"text": "a"}, {"text": "b"}]
+        self.assertNotEqual(highlights_fingerprint(before), highlights_fingerprint(after))
+
+    def test_note_text_affects_fingerprint(self):
+        from kb_core import highlights_fingerprint
+
+        plain = [{"text": "a"}]
+        annotated = [{"text": "a", "note": "why this matters"}]
+        self.assertNotEqual(highlights_fingerprint(plain), highlights_fingerprint(annotated))
+
+    def test_empty_is_stable(self):
+        from kb_core import highlights_fingerprint
+
+        self.assertEqual(highlights_fingerprint([]), highlights_fingerprint([]))
+
+
+class TestNewHighlights(unittest.TestCase):
+    """AC (kb-capture re-sync): the subset of freshly fetched highlights not yet folded into
+    an existing `raw/<key>.md`, so a re-sweep can append only the delta."""
+
+    def test_returns_only_unseen_highlights(self):
+        from kb_core import new_highlights
+
+        existing_texts = ["a", "b"]
+        current = [{"text": "a"}, {"text": "b"}, {"text": "c"}]
+        self.assertEqual(new_highlights(existing_texts, current), [{"text": "c"}])
+
+    def test_empty_when_nothing_new(self):
+        from kb_core import new_highlights
+
+        existing_texts = ["a", "b"]
+        current = [{"text": "a"}, {"text": "b"}]
+        self.assertEqual(new_highlights(existing_texts, current), [])
+
+    def test_all_new_when_no_existing(self):
+        from kb_core import new_highlights
+
+        current = [{"text": "a"}, {"text": "b"}]
+        self.assertEqual(new_highlights([], current), current)
+
+    def test_whitespace_normalized(self):
+        from kb_core import new_highlights
+
+        existing_texts = ["  a  "]
+        current = [{"text": "a"}]
+        self.assertEqual(new_highlights(existing_texts, current), [])
+
+
 class TestWriteBoundary(unittest.TestCase):
     """SPEC v2 §1 INV-1: the KB never writes the off-limits subtrees (AC-1.5/2.4/6.1)."""
 
