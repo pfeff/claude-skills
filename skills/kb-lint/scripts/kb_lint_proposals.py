@@ -39,11 +39,23 @@ def proposal_key(kind: str, targets) -> str:
     return f"{kind}:" + "|".join(normalized)
 
 
+def _sanitize_description(description: str) -> str:
+    """Neutralize sequences in a free-text description that could otherwise forge or hide an
+    idempotency key: collapse embedded newlines (which could fabricate extra checklist
+    lines) and break up any ``<!--``/``-->`` the description happens to contain (which could
+    forge a fake ``kb-lint-key`` comment that ``extract_existing_keys`` would then trust on
+    the next run, silently suppressing a real future proposal with the same key)."""
+    single_line = re.sub(r"\s*\n\s*", " ", description.strip())
+    return single_line.replace("<!--", "< !--").replace("-->", "-- >")
+
+
 def format_proposal_line(kind: str, targets, description: str) -> str:
     """Render one proposal as an Obsidian checklist line with its idempotency key embedded
-    as a trailing HTML comment (invisible when rendered, greppable for dedup)."""
+    as a trailing HTML comment (invisible when rendered, greppable for dedup). The
+    description is sanitized so it cannot forge or hide the trailing key comment."""
     key = proposal_key(kind, targets)
-    return f"- [ ] {description} <!-- kb-lint-key: {key} -->"
+    safe_description = _sanitize_description(description)
+    return f"- [ ] {safe_description} <!-- kb-lint-key: {key} -->"
 
 
 def extract_existing_keys(markdown_text: str) -> set:

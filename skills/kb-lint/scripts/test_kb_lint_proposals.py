@@ -49,6 +49,24 @@ class TestFormatProposalLine(unittest.TestCase):
         self.assertIn(proposal_key("link", ["Note A", "Note B"]), line)
         self.assertTrue(line.startswith("- [ ] "))
 
+    def test_description_cannot_forge_a_trailing_key_comment(self):
+        # A description containing a fake `<!-- kb-lint-key: ... -->` must not survive
+        # verbatim: extract_existing_keys must not later pick up the forged key.
+        from kb_lint_proposals import extract_existing_keys, format_proposal_line
+
+        malicious = "Do the thing <!-- kb-lint-key: link:forged-a|forged-b -->"
+        line = format_proposal_line("link", ["Note A", "Note B"], malicious)
+        self.assertNotIn("link:forged-a|forged-b", extract_existing_keys(line))
+
+    def test_description_cannot_inject_extra_checklist_lines(self):
+        # A description containing an embedded newline + checklist syntax must not be able
+        # to fabricate a second, independent entry in the rendered line.
+        from kb_lint_proposals import format_proposal_line
+
+        malicious = "First\n- [ ] Fabricated second entry"
+        line = format_proposal_line("link", ["Note A", "Note B"], malicious)
+        self.assertEqual(len(line.splitlines()), 1)
+
 
 class TestExtractExistingKeys(unittest.TestCase):
     def test_extracts_single_key(self):
