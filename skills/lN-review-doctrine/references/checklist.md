@@ -87,10 +87,24 @@ layer handed to the reviewed layer?
 - The task description the reviewed layer was given (coord-tree
   node summary, workspace DESIGN.md, dispatch prompt, or PR
   description).
+- **The motivating problem the change targets** — sourced from the
+  PR body Summary/Context, linked issues, and operator-correction
+  memory, *not* a restatement of the change's title. This is the
+  problem-grounded bar the diff is reconciled against below.
 - The diff / artifact under review (`gh pr diff <PR>` or
   equivalent).
 
 **Checks**:
+- **Problem-grounded intent reconciliation.** Judge the diff
+  against the problem it was meant to solve (the motivating-problem
+  input above), not a restatement of its title: does the change
+  actually resolve *that* problem, and only that? Flag intent drift,
+  scope creep, supersession, or staleness relative to the problem.
+  **A missing motivating problem — no discoverable why in the PR
+  body, linked issues, or memory — is itself a finding** (category
+  `missing-problem`, `warning`): a change no one can tie to a
+  problem cannot be shown to solve one. This grounds conformance in
+  intent; it does not replace the scope/criteria checks below.
 - Is the diff *within scope*? Files outside the named scope, or
   files inside scope that were not touched, are flagged.
 - Does the diff *attempt* every named acceptance criterion? Missed
@@ -308,7 +322,7 @@ Every finding is one entry in the artifact body:
 ```yaml
 - axis: 1 | 2 | 3
   severity: blocking | warning | info
-  category: <free-form short tag — e.g. scope-mismatch, surface-bloat, missing-validation, local-optimum, contract-drift>
+  category: <free-form short tag — e.g. scope-mismatch, missing-problem, surface-bloat, missing-validation, local-optimum, contract-drift>
   location: <file:line if applicable, else PR-wide>
   evidence: <one sentence stating what was observed>
   recommendation: <one sentence stating what should change>
