@@ -474,7 +474,7 @@ verify_check() {
 
 install_worktree_branch_hook() {
   local worktree_path="$1"
-  local actual_git hooks_dir hook_file assert_script
+  local actual_git hooks_dir hook_file assert_script cache_base hook_body
 
   # Resolve the hooks directory. For git worktrees, .git is a file
   # "gitdir: <path>" pointing to <main>/.git/worktrees/<name>. Git reads
@@ -501,20 +501,55 @@ install_worktree_branch_hook() {
     return 0
   fi
 
+  # Derive the version-independent plugin-cache base (.../pfeff/mbp) from
+  # assert_script's resolved path. $SCRIPT_DIR bakes in whichever plugin
+  # version happens to be installed right now (.../pfeff/mbp/<version>/...);
+  # pinning that absolute path into the generated hook means the hook 404s
+  # the moment the plugin upgrades and the version directory disappears.
+  # Emit a resolver that globs across installed versions and execs the
+  # newest instead. Falls back to the literal path when run from a
+  # non-cache location (e.g. a dev checkout with no /mbp/<version>/
+  # segment), so dev usage is unaffected.
+  cache_base=""
+  case "$assert_script" in
+    */pfeff/mbp/*/skills/task-workflow/scripts/assert-worktree-branch.sh)
+      cache_base="${assert_script%/*/skills/task-workflow/scripts/assert-worktree-branch.sh}"
+      ;;
+  esac
+
+  if [[ -n "$cache_base" ]]; then
+    hook_body=$(cat <<EOF
+# Version-agnostic: resolve the newest installed assert-worktree-branch.sh
+# (a pinned plugin-version path breaks on upgrade).
+_glob=($cache_base/*/skills/task-workflow/scripts/assert-worktree-branch.sh)
+_script="\$(printf '%s\n' "\${_glob[@]}" | sort -V | tail -1)"
+if [[ -x "\$_script" ]]; then
+  exec "\$_script"
+fi
+echo "pre-commit: assert-worktree-branch.sh not found in plugin cache; skipping branch guard" >&2
+exit 0
+EOF
+)
+  else
+    hook_body="\"$assert_script\""
+  fi
+
   if [[ -f "$hook_file" ]]; then
-    # Append only if not already present (idempotent)
-    if ! grep -qF "$assert_script" "$hook_file"; then
+    # Append only if not already present (idempotent). Detect either the
+    # legacy pinned-path line or the version-agnostic resolver marker, so
+    # re-runs after upgrading past this fix still don't append duplicates.
+    if ! grep -qF "$assert_script" "$hook_file" && ! grep -qF '_glob=(' "$hook_file"; then
       {
         echo ""
         echo "# worktree-branch alignment check (task-workflow REC-001)"
-        echo "\"$assert_script\""
+        echo "$hook_body"
       } >> "$hook_file"
     fi
   else
     {
       echo "#!/bin/bash"
       echo "# Auto-installed by create-workspace.sh (task-workflow REC-001)"
-      echo "\"$assert_script\""
+      echo "$hook_body"
     } > "$hook_file"
     chmod +x "$hook_file"
   fi
