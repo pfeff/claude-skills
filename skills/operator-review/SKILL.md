@@ -7,7 +7,7 @@ description: >
   in chunks", "use the interview tool", "review these with me". Drives decisions
   through AskUserQuestion (selectable options), chunked for large items, each with
   a recommended default.
-version: 1.0.0
+version: 1.1.0
 allowed-tools:
   - AskUserQuestion
   - TaskCreate
