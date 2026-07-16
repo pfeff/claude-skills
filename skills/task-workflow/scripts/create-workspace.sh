@@ -519,13 +519,19 @@ install_worktree_branch_hook() {
 
   if [[ -n "$cache_base" ]]; then
     hook_body=$(cat <<EOF
-# Version-agnostic: resolve the newest installed assert-worktree-branch.sh
-# (a pinned plugin-version path breaks on upgrade).
-_glob=($cache_base/*/skills/task-workflow/scripts/assert-worktree-branch.sh)
-_script="\$(printf '%s\n' "\${_glob[@]}" | sort -V | tail -1)"
-if [[ -x "\$_script" ]]; then
+# worktree-branch-hook-resolver (task-workflow REC-001): resolve the newest
+# installed assert-worktree-branch.sh across plugin-cache versions (a
+# pinned plugin-version path breaks on upgrade). POSIX-sh safe — no bash
+# arrays or other bashisms — because this snippet may be appended into a
+# pre-commit hook owned by another tool (husky, lefthook, the pre-commit
+# framework, hand-written) whose shebang is #!/bin/sh, not #!/bin/bash.
+_script=\$(ls $cache_base/*/skills/task-workflow/scripts/assert-worktree-branch.sh 2>/dev/null | sort -V | tail -1)
+if [ -x "\$_script" ]; then
   exec "\$_script"
 fi
+# Fail-open (intentional, operator-waived): a missing/moved plugin-cache
+# script skips the branch guard rather than blocking every commit, so a
+# plugin-cache hiccup can never block commits repo-wide.
 echo "pre-commit: assert-worktree-branch.sh not found in plugin cache; skipping branch guard" >&2
 exit 0
 EOF
@@ -538,7 +544,7 @@ EOF
     # Append only if not already present (idempotent). Detect either the
     # legacy pinned-path line or the version-agnostic resolver marker, so
     # re-runs after upgrading past this fix still don't append duplicates.
-    if ! grep -qF "$assert_script" "$hook_file" && ! grep -qF '_glob=(' "$hook_file"; then
+    if ! grep -qF "$assert_script" "$hook_file" && ! grep -qF 'worktree-branch-hook-resolver' "$hook_file"; then
       {
         echo ""
         echo "# worktree-branch alignment check (task-workflow REC-001)"
