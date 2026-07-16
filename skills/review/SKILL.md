@@ -117,7 +117,7 @@ BLOCKING is restricted to **correctness failures, security vulnerabilities, and 
 **File**: `operations/post-review.md`
 **When**: Automatically called at the end of `run-review` when the target is a PR number. Can also be invoked independently after PR creation. Requires `$PR_NUMBER`.
 
-Posts a single **sticky verdict comment** (marked with `<!-- review:metadata -->`) that is edited in place on every re-run — never appended. The comment's verdict line and marker are the authoritative cross-operator artifact (`l1-review` reads the marker). When the reviewer is not the PR author, it also submits a lightweight `REQUEST_CHANGES`/`APPROVE` event, dismissing its own prior blocking review so nothing stacks. On a self-PR the event is skipped (GitHub blocks it); the comment stands alone.
+Posts a single **sticky verdict comment** (marked with `<!-- review:metadata -->`) that is edited in place on every re-run — never appended. When the reviewer is not the PR author, it also submits a lightweight `REQUEST_CHANGES`/`APPROVE` event carrying the same marker, dismissing its own prior blocking review so nothing stacks; that event, on the reviews API, is the authoritative cross-operator artifact (`l1-review` reads the marker there — the sticky comment is a visibility mirror). On a self-PR the event is skipped (GitHub blocks it); the comment stands alone.
 
 ## Agent Prompts
 

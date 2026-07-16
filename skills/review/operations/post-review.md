@@ -18,9 +18,13 @@ identical to the in-repo form.
   human-readable review. It is identified by a hidden `<!-- review:metadata -->`
   marker. Re-running `/review` finds that comment and `PATCH`es it — the PR
   conversation never accumulates stale review dumps.
-- **The comment is the authoritative artifact.** Its `**<VERDICT>**` line and the
-  trailing `<!-- review:metadata -->` block are what higher layers (`l1-review`)
-  read. This holds whether or not the formal review event succeeds.
+- **Both surfaces carry the identical marker.** The formal review event (Step 7,
+  when submitted) and the sticky issue comment (Step 6) both carry the trailing
+  `<!-- review:metadata -->` block. Per lN-review-doctrine ("Canonical read surface
+  = the reviews API"), the reviews API is what higher layers (`l1-review`) read; the
+  issue comment is a visibility mirror for manual / rendered-view checks — not a
+  second source of truth. On a self-PR the review event is skipped (GitHub blocks
+  it), so the issue comment is the sole marker-bearing surface in that case.
 - **The formal review event is best-effort.** GitHub rejects `REQUEST_CHANGES` and
   `APPROVE` on your own PR (422). When the reviewer is the PR author, skip the event
   silently — the sticky comment stands on its own.
@@ -118,14 +122,21 @@ Then, in order:
    reviewer: review
    -->
    ```
+   This exact block is reused verbatim in Step 7: the reviews API is the **canonical
+   read surface** (lN-review-doctrine, "Posting protocol" — "Canonical read surface =
+   the reviews API"), so the formal review event posted there must carry this marker
+   too, not just the issue-comment mirror.
 
 Keep descriptions to 1–2 sentences; the goal is scannability. Write the composed body
-to a temp file the later steps read:
+to a temp file, and the trailing marker block alone to a second file, for the later
+steps to read:
 
 ```bash
 BODYFILE=$(mktemp /tmp/review-body.XXXXXX.md)
-chmod 600 "$BODYFILE"
-# write the composed Markdown body to $BODYFILE
+MARKERFILE=$(mktemp /tmp/review-marker.XXXXXX.md)
+chmod 600 "$BODYFILE" "$MARKERFILE"
+# write the composed Markdown body (sections 1-7 above, ending in the marker) to $BODYFILE
+# write ONLY the "Trailing marker" block (item 7 above, unchanged) to $MARKERFILE
 ```
 
 ## Step 6: Upsert the Sticky Comment
@@ -179,14 +190,21 @@ nor an `APPROVE` event may accumulate across re-runs.
          -f message="Superseded by re-review." -f event="DISMISS"
      done
    ```
-3. **Submit the new event — but not a redundant one.** Body is a one-liner pointing at
-   the sticky comment (the detail lives there, so the event stays lightweight and never
-   becomes a second large comment):
-   - `BLOCKING` → submit `event: REQUEST_CHANGES`, body `Changes requested — see the review summary comment.` (the prior block was just dismissed, so exactly one active `CHANGES_REQUESTED` remains).
-   - `CLEAN` → **skip entirely if `LAST_STATE == "APPROVED"`** (an approval is already standing; re-posting would stack a second "Approved" event). Otherwise submit `event: APPROVE`, body `No blocking issues — see the review summary comment.`
+3. **Submit the new event — but not a redundant one.** The event body is a one-liner
+   pointing at the sticky comment, **plus the same trailing `<!-- review:metadata -->`
+   marker block written to `$MARKERFILE` in Step 5** (unchanged, byte-for-byte). The
+   reviews API is the canonical read surface (lN-review-doctrine: "Canonical read
+   surface = the reviews API"; "both surfaces carry the identical marker") — posting
+   the one-liner alone here would leave the canonical surface marker-free even though
+   the issue-comment mirror has it, which is the defect this step closes:
+   - `BLOCKING` → submit `event: REQUEST_CHANGES`, one-liner `Changes requested — see the review summary comment.` (the prior block was just dismissed, so exactly one active `CHANGES_REQUESTED` remains).
+   - `CLEAN` → **skip entirely if `LAST_STATE == "APPROVED"`** (an approval is already standing; re-posting would stack a second "Approved" event). Otherwise submit `event: APPROVE`, one-liner `No blocking issues — see the review summary comment.`
    ```bash
+   EVENTBODYFILE=$(mktemp /tmp/review-event-body.XXXXXX.md)
+   chmod 600 "$EVENTBODYFILE"
+   { printf '%s\n\n' "$EVENT_BODY"; cat "$MARKERFILE"; } > "$EVENTBODYFILE"
    gh api -X POST "/repos/$owner/$repo/pulls/$PR_NUMBER/reviews" \
-     -f event="$EVENT" -f body="$EVENT_BODY"
+     -f event="$EVENT" -F body=@"$EVENTBODYFILE"
    ```
 
 ## Step 8: Report
