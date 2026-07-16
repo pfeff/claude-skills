@@ -605,7 +605,7 @@ if [[ -d "$WORKSPACE_PATH" ]]; then
 fi
 
 # Check for required templates
-for tmpl in DESIGN.md.tmpl CLAUDE.md.tmpl .envrc.tmpl settings.json.tmpl; do
+for tmpl in DESIGN.md.tmpl CLAUDE.md.tmpl .envrc.tmpl settings.json.tmpl .mcp.json.tmpl; do
   if [[ ! -f "$TEMPLATE_DIR/$tmpl" ]]; then
     echo "Error: Template not found: $TEMPLATE_DIR/$tmpl" >&2
     exit 2
@@ -755,6 +755,25 @@ if envsubst < "$TEMPLATE_DIR/.envrc.tmpl" > "$WORKSPACE_PATH/.envrc"; then
 else
   echo "Error: Failed to render .envrc" >&2
   exit 3
+fi
+
+# Render .mcp.json (workspace-scoped MCP server config; supersedes ~/.claude.json global slot)
+# COORDINATOR_URL/COORDINATOR_TOKEN are optional in .envrc.tmpl, but .mcp.json.tmpl
+# requires both — envsubst silently substitutes an unset/empty var, producing an
+# empty url and a bare "Bearer " token while still reporting success. Skip the render
+# entirely when either is unset so no broken .mcp.json is ever written (#172).
+if [[ -n "${COORDINATOR_URL:-}" && -n "${COORDINATOR_TOKEN:-}" ]]; then
+  # Don't clobber an existing workspace .mcp.json (carries a tenant MCP Bearer token).
+  if [[ -f "$WORKSPACE_PATH/.mcp.json" ]]; then
+    echo "  .mcp.json: already exists, skipping (not overwritten)" >&2
+  elif envsubst < "$TEMPLATE_DIR/.mcp.json.tmpl" > "$WORKSPACE_PATH/.mcp.json"; then
+    echo "  .mcp.json: created"
+  else
+    echo "Error: Failed to render .mcp.json" >&2
+    exit 3
+  fi
+else
+  echo "Note: COORDINATOR_URL/TOKEN not set; skipping workspace .mcp.json (using global MCP config)"
 fi
 
 # Render settings.json (envsubst for MODEL variable)

@@ -14,3 +14,7 @@ scripts/.private-tokens
 # Python test/byte-compile artifacts (skills/*/scripts test harnesses).
 __pycache__/
 *.pyc
+
+# Workspace-rooted MCP config scaffolded by task-workflow's create-workspace.sh —
+# carries a tenant-scoped MCP Bearer token (COORDINATOR_TOKEN). Never committed.
+.mcp.json
