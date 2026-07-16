@@ -1,8 +1,9 @@
-# L{N}-review — canonical checklist
+# Acceptance / Objective review — canonical checklist
 
-This is the doctrine consumed by `l1-review` (N=1) and `l2-review`
-(N=2) at review time. **Read this file at review time; never inline
-its content into a review skill's operations.**
+This is the doctrine consumed by the Acceptance review (`l1-review`,
+N=1) and the Objective review (`l2-review`, N=2) at review time.
+**Read this file at review time; never inline its content into a
+review skill's operations.**
 
 If you find yourself about to add a new rule by editing a review
 skill, edit this file instead.
@@ -11,32 +12,34 @@ skill, edit this file instead.
 
 ## Role
 
-You are the L{N}-review evaluator. Your job: take a single work
-product (typically a PR, but it can be a sign-off action or a
-coord-tree node completion) produced by L{N-1}, evaluate it on
-three axes, emit a structured verdict, and write the verdict to
-`.claude/reviews/l<N>-latest.md`.
+You are the reviewer for an Acceptance or Objective review. Your
+job: take a single work product (typically a PR, but it can be a
+sign-off action or a coord-tree node completion) produced by the
+reviewed layer, evaluate it on three axes, emit a structured
+verdict, and write the verdict to `.claude/reviews/l<N>-latest.md`.
 
-You are **not** L0's `/review`. You do not read the diff line-by-
-line for code-level correctness, security, simplicity, or
-architecture. That work is L0's `/review` — you consume its output
-as evidence for axis 2, you do not duplicate it.
+You are **not** the Change review (L0's `/review`). You do not read
+the diff line-by-line for code-level correctness, security,
+simplicity, or architecture. That work is the Change review's — you
+consume its output as evidence for axis 2, you do not duplicate it.
 
-You are **not** L{N-1}. You are evaluating L{N-1}'s output against
-L{N}'s parent objective, which is broader than L{N-1}'s task.
+You are **not** the reviewed layer. You are evaluating the reviewed
+layer's output against the reviewing layer's parent objective, which
+is broader than the reviewed layer's task.
 
 ## Reviewer independence
 
-L{N}-review **runs in an independent context window**. The grader
-must be a fresh verifier — a separate context (a sub-agent, or a
-clean session) that receives only the work product (the PR/diff and
-its posted artifacts) plus L{N}'s parent objective — **not** the
-reasoning trace or conversation that produced the work. Self-
-critique in the authoring context is not a valid L{N}-review: an
-author grading its own output in the same context rationalizes the
-choices it already made and cannot see them as an outside reader
-would. A verifier sub-agent outperforms self-critique precisely
-because grading happens in an independent context window.
+An Acceptance or Objective review **runs in an independent context
+window**. The grader must be a fresh verifier — a separate context (a
+sub-agent, or a clean session) that receives only the work product
+(the PR/diff and its posted artifacts) plus the reviewing layer's
+parent objective — **not** the reasoning trace or conversation that
+produced the work. Self-critique in the authoring context is not a
+valid Acceptance or Objective review: an author grading its own
+output in the same context rationalizes the choices it already made
+and cannot see them as an outside reader would. A verifier sub-agent
+outperforms self-critique precisely because grading happens in an
+independent context window.
 
 ## Reviewer worktree discipline
 
@@ -63,26 +66,27 @@ If you believe you must mutate the worktree under review to
 complete the review, **stop and report instead** — do not take the
 destructive action.
 
-(Root cause, 2026-07-08: an L{N}-review told "do not modify
-anything" ran `git stash -u && git checkout HEAD~1 -- <path> && ...
-&& git stash pop` in the review worktree to re-inspect a prior test
-state; only the safety classifier stopped it. This section closes
-that gap.)
+(Root cause, 2026-07-08: an Acceptance/Objective review told "do not
+modify anything" ran `git stash -u && git checkout HEAD~1 -- <path>
+&& ... && git stash pop` in the review worktree to re-inspect a
+prior test state; only the safety classifier stopped it. This
+section closes that gap.)
 
 ## The three axes
 
-Every L{N}-review walks these three axes, in order. Each axis
-returns one of `PASS` / `FAIL` / `UNCLEAR`, plus zero or more
-findings.
+Every Acceptance or Objective review walks these three axes, in
+order. Each axis returns one of `PASS` / `FAIL` / `UNCLEAR`, plus
+zero or more findings.
 
 ### Axis 1 — Conformance
 
-**Question**: Does the work product match the task L{N} handed to
-L{N-1}?
+**Question**: Does the work product match the task the reviewing
+layer handed to the reviewed layer?
 
 **Inputs**:
-- The task description L{N-1} was given (coord-tree node summary,
-  workspace DESIGN.md, dispatch prompt, or PR description).
+- The task description the reviewed layer was given (coord-tree
+  node summary, workspace DESIGN.md, dispatch prompt, or PR
+  description).
 - The diff / artifact under review (`gh pr diff <PR>` or
   equivalent).
 
@@ -189,19 +193,21 @@ fail-fast for "did you even attempt the task?"
 
 ### Axis 2 — Process
 
-**Question**: Did L{N-1} follow its required process for this work,
-including running its own review/verification cycle?
+**Question**: Did the reviewed layer follow its required process
+for this work, including running its own review/verification cycle?
 
 **Inputs**:
-- For N=1: L0's `/review` verdict from the posted
-  `<!-- review:metadata -->` marker on the PR (the cross-operator
-  artifact — see "How the next layer reads the artifact" below; the
-  local `.claude/reviews/latest.md` is gitignored and unreadable
-  across operators, so it is **not** the evidence), CI status
-  (`gh pr checks <PR>`), evidence of local validation (commit
-  messages, PR description).
-- For N=2: `.claude/reviews/l1-latest.md` for each L0 PR L1
-  accepted, plus L1's own work-product artifacts.
+- For the Acceptance review (N=1): the Change review's (L0's
+  `/review`) verdict from the posted `<!-- review:metadata -->`
+  marker on the PR (the cross-operator artifact — see "How the
+  next layer reads the artifact" below; the local
+  `.claude/reviews/latest.md` is gitignored and unreadable across
+  operators, so it is **not** the evidence), CI status (`gh pr
+  checks <PR>`), evidence of local validation (commit messages, PR
+  description).
+- For the Objective review (N=2): `.claude/reviews/l1-latest.md`
+  for each base-level PR the Acceptance review accepted, plus the
+  Acceptance review's own work-product artifacts.
 - The work-type → required-verification map from
   `verification-map.md`.
 
@@ -211,15 +217,17 @@ including running its own review/verification cycle?
    a green result. The map is authoritative; if a work type isn't
    listed, treat as UNCLEAR and flag a recommendation to extend
    the map.
-2. **L{N-1}'s own review cycle ran with a non-blocking verdict.**
-   - For N=1: L0's `/review` posted its `<!-- review:metadata -->`
-     marker on the PR (matches PR number / branch), and its
-     `verdict` is not BLOCKING. A missing marker is UNCLEAR, not a
-     silent PASS.
-   - For N=2: an `.claude/reviews/l1-latest.md` exists for every
-     constituent L0 PR L1 accepted, verdicts are not BLOCKING,
-     and L1-review's own axes returned PASS (or surfaced
-     advisories L1 explicitly acknowledged).
+2. **The reviewed layer's own review cycle ran with a
+   non-blocking verdict.**
+   - For the Acceptance review (N=1): the Change review posted its
+     `<!-- review:metadata -->` marker on the PR (matches PR number
+     / branch), and its `verdict` is not BLOCKING. A missing marker
+     is UNCLEAR, not a silent PASS.
+   - For the Objective review (N=2): an
+     `.claude/reviews/l1-latest.md` exists for every constituent
+     base-level PR the Acceptance review accepted, verdicts are not
+     BLOCKING, and the Acceptance review's own axes returned PASS
+     (or surfaced advisories it explicitly acknowledged).
 3. **CI is green** per [[feedback-l1-review-red-ci]] — red CI is
    itself an axis-2 FAIL regardless of the cause. The skill must
    not paper over red CI by claiming the failures are unrelated.
@@ -229,60 +237,69 @@ including running its own review/verification cycle?
    credit `/review`'s green verdict as covering it — surface as
    UNCLEAR and route to axis 3.
 
-**Verdict rule**: PASS if every required step ran green AND
-L{N-1}'s own review produced a non-blocking verdict AND CI is
-green. FAIL on any of: missing required step, BLOCKING upstream
+**Verdict rule**: PASS if every required step ran green AND the
+reviewed layer's own review produced a non-blocking verdict AND CI
+is green. FAIL on any of: missing required step, BLOCKING upstream
 verdict, red CI. UNCLEAR when evidence is unavailable (e.g.
 artifact missing) — never collapse UNCLEAR to PASS.
 
 ### Axis 3 — Objective Advancement
 
-**Question**: Does the work product appropriately advance L{N}'s
-parent objective and allow L{N} to pass its own review cycle?
+**Question**: Does the work product appropriately advance the
+reviewing layer's parent objective and allow the reviewing layer to
+pass its own review cycle?
 
-**This is the recursive lever.** Each L{N}-review evaluates against
-**L{N}'s** parent objective, NOT L{N-1}'s task. The same diff can
-PASS axis 3 at N=1 (advances L1's local objective) and FAIL axis 3
-at N=2 (breaks L2's broader contract). See the PR #8 / B2 walk-
-through in `DESIGN.md` for the canonical example (committed
-import block satisfies "make today's apply succeed" but breaks
-"bootstrap is reproducible across accounts / DR / fresh apply").
+**This is the recursive lever.** Each Acceptance or Objective
+review evaluates against **the reviewing layer's** parent
+objective, NOT the reviewed layer's task. The same diff can PASS
+axis 3 under the Acceptance review (advances its local objective)
+and FAIL axis 3 under the Objective review (breaks the broader
+contract). See the PR #8 / B2 walk-through in `DESIGN.md` for the
+canonical example (committed import block satisfies "make today's
+apply succeed" but breaks "bootstrap is reproducible across
+accounts / DR / fresh apply").
 
 **Inputs**:
-- L{N}'s parent objective. Read in this order; first hit wins:
-  1. `GOAL.md` in the L{N} session's workspace (iteration goal).
+- The reviewing layer's parent objective. Read in this order; first
+  hit wins:
+  1. `GOAL.md` in the reviewing layer's session workspace (iteration
+     goal).
   2. Project `CLAUDE.md` "Objective" / "Task" section.
   3. Coord-tree parent node summary via `ac_node_query` (or
      `GOAL.md` on bootstrap-mode hosts).
   4. If none of the above is reachable, surface UNCLEAR and ask
-     the L{N} role to provide its objective in the next tick.
+     the reviewing layer's role to provide its objective in the
+     next tick.
 - The work product under review (same diff/artifact as axes 1
   and 2).
-- L{N}'s own review cycle's known failure modes — does the work
-  product trip any of them?
+- The reviewing layer's own review cycle's known failure modes —
+  does the work product trip any of them?
 
 **Checks**:
 1. **Forward progress on parent objective.** Identify the parent
    objective's acceptance criteria. Map the work product onto
    them: does it close any, partially advance any, regress any?
 2. **Local-optimum failure detection.** Ask: "does the work
-   product satisfy L{N-1}'s local task while breaking a property
-   L{N} requires?" Properties commonly broken at this seam:
-   reproducibility, portability, downstream contract semantics,
-   transitive guarantees consumers were relying on. (See B2 in
-   DESIGN.md walk-through for the canonical case.)
-3. **L{N}-cycle passability.** Will L{N}'s own review by L{N+1}
-   pass if L{N} accepts this work product as-is? If not, the
-   work product fails axis 3 at this layer — even if it passes
-   at L{N-1}.
+   product satisfy the reviewed layer's local task while breaking
+   a property the reviewing layer requires?" Properties commonly
+   broken at this seam: reproducibility, portability, downstream
+   contract semantics, transitive guarantees consumers were
+   relying on. (See B2 in DESIGN.md walk-through for the canonical
+   case.)
+3. **Reviewing-layer-cycle passability.** Will the reviewing
+   layer's own review by the next layer up pass if the reviewing
+   layer accepts this work product as-is? If not, the work product
+   fails axis 3 at this layer — even if it passes at the reviewed
+   layer.
 
 **Verdict rule**: PASS if the work product makes forward progress
 on the parent objective AND introduces no local-optimum failures
-relative to L{N}'s scope AND L{N}-cycle passability holds. FAIL
-on any of: regresses parent objective, introduces a local-optimum
-failure visible at L{N}'s scope, would fail L{N+1}'s review.
-UNCLEAR when parent objective is unreadable (default deny — the
-L{N} role must provide context).
+relative to the reviewing layer's scope AND reviewing-layer-cycle
+passability holds. FAIL on any of: regresses parent objective,
+introduces a local-optimum failure visible at the reviewing layer's
+scope, would fail the next layer's review. UNCLEAR when parent
+objective is unreadable (default deny — the reviewing layer's role
+must provide context).
 
 ## Finding schema
 
@@ -303,8 +320,8 @@ Every finding is one entry in the artifact body:
   `warning` or `info` regardless of how strongly you feel about
   it. This matches `mbp/review`'s BLOCKING-tier rule, kept in
   sync so the verdict translation across layers is meaningful.
-- `warning` is for legitimate concerns the L{N} role should
-  evaluate but which don't independently block merge.
+- `warning` is for legitimate concerns the reviewing layer's role
+  should evaluate but which don't independently block merge.
 - `info` is FYI / follow-up.
 
 ## Verdict rubric
@@ -327,7 +344,8 @@ NEEDS-WORK with a finding requesting the evidence.
 ### Single verdict vocabulary (legacy APPROVE/REJECT/ESCALATE is deprecated)
 
 `CLEAN` / `NEEDS-WORK` / `BLOCKING` is the **only** verdict vocabulary for an
-L{N}-review judgment, system-wide. There is exactly one judgment, and it lives here.
+Acceptance or Objective review judgment, system-wide. There is exactly one
+judgment, and it lives here.
 
 A legacy L1 review — `goal-tree/operations/l1-review.md` — once emitted
 `APPROVE` / `REJECT` / `ESCALATE` from its own rubric. That review schema is
@@ -343,16 +361,16 @@ The former vocabulary maps onto this doctrine's verdicts:
 | `ESCALATE` | `NEEDS-WORK` / `BLOCKING` with a red-CI axis-2 FAIL routed to operator |
 
 This mapping exists only to read historical artifacts; new reviews emit the doctrine
-vocabulary directly. The CLEAN marker the `/l1-review` executor posts (see "Posting
-protocol") is what `lN-lifecycle-doctrine` complete-check condition 4 gates
-`merged → complete` on — the deprecated direct-merge path posted no marker and so
-could never reach `complete`.
+vocabulary directly. The CLEAN marker the `/l1-review` executor (the Acceptance
+review) posts (see "Posting protocol") is what `lN-lifecycle-doctrine`
+complete-check condition 4 gates `merged → complete` on — the deprecated
+direct-merge path posted no marker and so could never reach `complete`.
 
 ## Artifact format
 
 The skill writes one file per review:
-- `l1-review` → `.claude/reviews/l1-latest.md`
-- `l2-review` → `.claude/reviews/l2-latest.md`
+- `l1-review` (Acceptance review) → `.claude/reviews/l1-latest.md`
+- `l2-review` (Objective review) → `.claude/reviews/l2-latest.md`
 
 Frontmatter (machine-parseable; tick doctrine and other reviewers
 branch on it):
@@ -392,11 +410,12 @@ axis. Empty axes get `_no findings_`.
 ## Posting protocol (cross-operator contract)
 
 The PR review comment is the **canonical cross-operator artifact**
-for an L{N}-review. The local `.claude/reviews/l<N>-latest.md`
-file is the L{N}'s own record; another operator (or a higher-
-layer review) on a different host cannot read that file. All
-cross-operator evidence — including the input that the next
-layer's axis 2 reads — flows through the PR comment.
+for an Acceptance or Objective review. The local
+`.claude/reviews/l<N>-latest.md` file is the reviewing layer's own
+record; another operator (or a higher-layer review) on a different
+host cannot read that file. All cross-operator evidence — including
+the input that the next layer's axis 2 reads — flows through the PR
+comment.
 
 ### Marker emission template
 
@@ -411,12 +430,12 @@ restating the schema.
   …) — never list literals (`[]`), never strings.
 - `verdict` is one of the fixed tokens for that layer, **never** `pass`,
   `ok`, or any other free-form value.
-- **Field name differs by layer: L0 uses `advisory`; L{N} (N=1,2) uses
-  `warning`.** Advisory = warning + info. Do not silently unify the two
-  field names.
+- **Field name differs by layer: the Change review uses `advisory`;
+  the Acceptance and Objective reviews use `warning`.** Advisory =
+  warning + info. Do not silently unify the two field names.
 
-**L0 `review:metadata` marker** — posted by `/review` (verdict `CLEAN` or
-`BLOCKING` only):
+**Change review's `review:metadata` marker** — posted by `/review`
+(verdict `CLEAN` or `BLOCKING` only):
 
 ```
 **<VERDICT>** — <blocking> blocking and <advisory> advisory finding(s).
@@ -435,8 +454,9 @@ reviewer: review
 -->
 ```
 
-**L{N} `l<N>-review:metadata` marker** — posted by `l1-review` /
-`l2-review` (N = 1 or 2; verdict `CLEAN` / `NEEDS-WORK` / `BLOCKING`):
+**Acceptance/Objective review's `l<N>-review:metadata` marker** —
+posted by `l1-review` / `l2-review` (N = 1 or 2; verdict `CLEAN` /
+`NEEDS-WORK` / `BLOCKING`):
 
 ```
 **<VERDICT>** — <blocking> blocking and <advisory> advisory finding(s).
@@ -479,17 +499,20 @@ way `--body-file` does. That form silently posts the literal text
 cause: this repo, PR #161). Always use `--body-file <path>` (or
 `gh api ... -F body=@<path>`).
 
-**The chain bottoms out at L0.** L0's `/review` posts the same way:
-a dual-surface PR comment carrying a `<!-- review:metadata -->`
-marker (note: **`review:metadata`, with no `l<N>-` prefix** — it is
-the layer-0 marker, deliberately distinct from the
+**The chain bottoms out at the Change review.** The Change review
+(L0's `/review`) posts the same way: a dual-surface PR comment
+carrying a `<!-- review:metadata -->` marker (note:
+**`review:metadata`, with no `l<N>-` prefix** — it is the
+Change-review marker, deliberately distinct from the
 `l<N>-review:metadata` markers so a higher-layer
-`l[0-9]+-review:metadata` scan never false-matches it). l1-review's
-axis 2 reads that L0 marker as its authoritative `/review` evidence,
-exactly as l2-review reads the `<!-- l1-review:metadata -->` marker.
-The local `.claude/reviews/latest.md` L0 writes stays the L0's own
-gitignored cache, never the cross-operator evidence. The L0 marker's
-exact field list is the "Marker emission template" above.
+`l[0-9]+-review:metadata` scan never false-matches it). The
+Acceptance review's (`l1-review`'s) axis 2 reads that Change-review
+marker as its authoritative `/review` evidence, exactly as the
+Objective review (`l2-review`) reads the `<!-- l1-review:metadata
+-->` marker. The local `.claude/reviews/latest.md` the Change
+review writes stays its own gitignored cache, never the
+cross-operator evidence. The Change review marker's exact field
+list is the "Marker emission template" above.
 
 The skill posts the canonical artifact to **two surfaces on the PR** (the
 posting commands are in the "Marker emission template" above), so both
@@ -514,13 +537,14 @@ decision. The `**<VERDICT>**` first line below is the authoritative label.
 
 **Canonical read surface = the reviews API** (`gh api
 /repos/.../pulls/<n>/reviews` or `gh pr view <n> --json reviews`); all
-automated consumers (the l{1,2}-supervise complete-checks and l2-review's
-axis 2) read the marker there. The issue-comment mirror is a
-visibility belt-and-suspenders for manual / rendered-view checks — **not**
-a second source of truth; both surfaces carry the identical marker.
-(Root cause, 2026-06-04 / PR #194: an l1-review marker was posted only as
-a review; an operator check scanning issue comments / plain `gh pr view`
-read the PR as un-reviewed. Mirroring closes that gap.)
+automated consumers (the l{1,2}-supervise complete-checks and the
+Objective review's (`l2-review`'s) axis 2) read the marker there. The
+issue-comment mirror is a visibility belt-and-suspenders for manual /
+rendered-view checks — **not** a second source of truth; both surfaces
+carry the identical marker. (Root cause, 2026-06-04 / PR #194: an
+Acceptance-review (`l1-review`) marker was posted only as a review; an
+operator check scanning issue comments / plain `gh pr view` read the PR
+as un-reviewed. Mirroring closes that gap.)
 
 ### Find-or-update by marker (issue-comment surface — one comment per type)
 
@@ -538,15 +562,16 @@ key is *the marker token for this review type*, and each executor defines
 that token **once** (the same string it composes into the trailing
 metadata block). Keying find-or-update on that single definition — never
 a token hardcoded a second time in the posting step — keeps this rule
-robust to a future rename of the marker tokens (e.g. a Change/Acceptance/
-Objective relayering): rename the one definition and the update-in-place
-logic still finds its own comment. The tokens today are:
+robust to a future rename of the *layer names* (e.g. this
+Change/Acceptance/Objective relayering), even though the marker tokens
+themselves stay unchanged: rename the one definition and the
+update-in-place logic still finds its own comment. The tokens today are:
 
 | Layer | Marker token (the `$marker` below) |
 |-------|-------------------------------------|
-| L0 (`/review`) | `<!-- review:metadata` |
-| L1 (`l1-review`) | `<!-- l1-review:metadata` |
-| L2 (`l2-review`) | `<!-- l2-review:metadata` |
+| Change review (`/review`) | `<!-- review:metadata` |
+| Acceptance review (`l1-review`) | `<!-- l1-review:metadata` |
+| Objective review (`l2-review`) | `<!-- l2-review:metadata` |
 
 (The literal `<!-- review:metadata` is **not** a substring of
 `<!-- l1-review:metadata`, and the `l[0-9]+` markers are mutually
@@ -602,20 +627,22 @@ positional strip is brittle if a finding ever contains a literal
 2. **Body** — the same per-axis sections as the workspace
    artifact body (Conformance / Process / Objective Advancement).
 3. **Trailing metadata block** — an HTML comment carrying the
-   machine-readable verdict for the next layer to parse: the L{N}
-   block from the "Marker emission template" above, with `<VERDICT>`,
-   `<N>`, `<PR_NUMBER>`, the axes, and the counts filled in.
+   machine-readable verdict for the next layer to parse: the block
+   for your layer (Change, Acceptance, or Objective) from the
+   "Marker emission template" above, with `<VERDICT>`, `<N>`,
+   `<PR_NUMBER>`, the axes, and the counts filled in.
 4. **Advisory count assertion (mechanical, before posting)** — count
    the warning-tier and info-tier finding bullets actually present
    in the composed body (step 2 above); their sum is the advisory
    count. Confirm this sum equals the `<advisory>` written into the
-   first line. For L0's `<!-- review:metadata -->` marker, also
-   confirm it equals the marker's `advisory` field (L0 persists the
-   pre-summed count there). The `l<N>-review:metadata` marker's own
-   `warning` field is a *separate*, pure warning-tier count — do
-   **not** overwrite it with the advisory sum. **If the recount and
-   `<advisory>` differ, fix the first line before posting — do not
-   post a mismatched count.**
+   first line. For the Change review's `<!-- review:metadata -->`
+   marker, also confirm it equals the marker's `advisory` field (the
+   Change review persists the pre-summed count there). The
+   `l<N>-review:metadata` marker's own `warning` field is a
+   *separate*, pure warning-tier count — do **not** overwrite it
+   with the advisory sum. **If the recount and `<advisory>` differ,
+   fix the first line before posting — do not post a mismatched
+   count.**
 
 HTML comments are not rendered in the PR UI but are preserved in
 the comment body and readable via `gh api /repos/.../pulls/<n>/reviews`
@@ -629,55 +656,57 @@ blocking marker without parsing the metadata block.
 
 ### How the next layer reads the artifact
 
-L{N+1}-review's axis 2 reads the metadata block, NOT the workspace
-file (which it cannot reach across operators). For each
+The next layer's review reads the metadata block, NOT the
+workspace file (which it cannot reach across operators). For each
 constituent PR:
 
 1. `gh api /repos/<owner>/<repo>/pulls/<pr>/reviews` and filter to
-   reviews authored by the expected L{N} reviewer.
+   reviews authored by the expected reviewing-layer reviewer.
 2. For each candidate review body, search for
    `<!-- l<N>-review:metadata` … `-->`.
 3. Pick the most recent review (`submitted_at`) that contains
    the marker.
 4. Parse the YAML-shaped lines between the marker and the closing
    `-->` for `verdict`, `axes`, etc.
-5. If no review with the marker is found → the L{N}-review is
-   missing → axis 2 records UNCLEAR for that constituent. Do
-   **not** silently treat absence as PASS.
+5. If no review with the marker is found → the Acceptance or
+   Objective review is missing → axis 2 records UNCLEAR for that
+   constituent. Do **not** silently treat absence as PASS.
 
 This is the only cross-operator path. There is no environment-
 variable artifact store; do not introduce one without
 deprecating this scheme in tandem.
 
-**Bottom of the chain (L0).** The same procedure applies when
-l1-review reads L0's `/review` evidence, with one substitution: the
+**Bottom of the chain (the Change review).** The same procedure
+applies when the Acceptance review (`l1-review`) reads the Change
+review's (L0's `/review`) evidence, with one substitution: the
 marker is `<!-- review:metadata` (no `l<N>-` prefix), authored by
-`review` rather than an `l<N>-review` reviewer. Filter on the marker
-presence rather than the reviewer login (the L0 `/review` posts under
-the same actor that opened the PR, so an author filter would exclude
-it). Everything else — reviews-API-first, issue-comment mirror
-fallback, most-recent-wins, missing-marker → UNCLEAR — is identical.
+`review` rather than an `l<N>-review` reviewer. Filter on the
+marker presence rather than the reviewer login (the Change review
+posts under the same actor that opened the PR, so an author filter
+would exclude it). Everything else — reviews-API-first,
+issue-comment mirror fallback, most-recent-wins, missing-marker →
+UNCLEAR — is identical.
 
 ### Local workspace artifact
 
 The local `.claude/reviews/l<N>-latest.md` file (frontmatter +
 body, same content as posted minus the trailing HTML marker plus
-the original YAML frontmatter) is written for the L{N}'s own
-records and for in-session re-use. It is single-file,
+the original YAML frontmatter) is written for the reviewing layer's
+own records and for in-session re-use. It is single-file,
 overwritten per review, and **not** consulted by any other
 layer's review. Treat it as cache, not contract.
 
 #### Never committed to git
 
 `.claude/reviews/*.md` — every review artifact at every layer
-(`latest.md` from L0's `/review`, `l1-latest.md`, `l2-latest.md`)
-— is a **local workspace record ONLY and MUST NEVER be committed
-to git.** The canonical cross-operator artifact is the PR comment
-(see *Posting protocol* above); the workspace file is per-host
-cache that no other layer reads. Committing it serves no consumer
-and actively harms: a review snapshot frozen in a commit drifts
-from the real code state as the branch evolves, so any reader who
-trusts the committed file reviews stale evidence.
+(`latest.md` from the Change review's `/review`, `l1-latest.md`,
+`l2-latest.md`) — is a **local workspace record ONLY and MUST NEVER
+be committed to git.** The canonical cross-operator artifact is the
+PR comment (see *Posting protocol* above); the workspace file is
+per-host cache that no other layer reads. Committing it serves no
+consumer and actively harms: a review snapshot frozen in a commit
+drifts from the real code state as the branch evolves, so any reader
+who trusts the committed file reviews stale evidence.
 
 **Root cause (2026-06-04):** Dev-Stacks-v2 PR #42 had committed a
 `.claude/reviews/latest.md` that drifted from the real diff and
@@ -685,8 +714,8 @@ had to be re-synced. The artifact is cache, not source — freezing
 cache in git history is the defect.
 
 **Implementing requirement (per repo):** every repo that runs
-`/review` or an L{N}-review MUST `.gitignore` `.claude/reviews/`
-and untrack any already-committed copy
+`/review` or an Acceptance or Objective review MUST `.gitignore`
+`.claude/reviews/` and untrack any already-committed copy
 (`git rm --cached .claude/reviews/<file>`). This doctrine states
 the rule; the per-repo `.gitignore` + untrack is the implementing
 follow-up.
