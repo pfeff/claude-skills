@@ -7,7 +7,8 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-version: 1.2.1
+  - Agent
+version: 1.2.2
 ---
 
 # improvement-loop — continuous self-improvement role
