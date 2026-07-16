@@ -32,24 +32,45 @@ visible one.
 
 ## 2. Release hygiene when publishing a new skill
 
-Do all of this **in the same commit/PR** that adds the published skill — a new
-skill is not "published" until the manifests know about it.
+Do this **in the same commit/PR** that adds the published skill — a new skill
+is not "published" until the manifest knows about it.
 
 1. **Register the skill** in `.claude-plugin/marketplace.json` under
    `plugins[].skills`. Keep the list **alphabetical**.
-2. **Minor-bump the version** in **both** `.claude-plugin/plugin.json` and
-   `.claude-plugin/marketplace.json`. A new skill is an additive feature, so it
-   is a minor bump. (Precedent: commit `f758c17` bumped the manifest minor when
-   it added two skills.)
-3. *(Optional)* Update the **README skills table** so the new skill is
+2. *(Optional)* Update the **README skills table** so the new skill is
    discoverable from the front page.
 
-Skip step 1/2 and the skill ships in the tree but not in the published plugin —
+Skip step 1 and the skill ships in the tree but not in the published plugin —
 it will not load for installed users.
+
+**Do NOT bump the version** in `.claude-plugin/plugin.json` or
+`.claude-plugin/marketplace.json` as part of a skill-adding PR. That used to
+be step 2 here, and it caused a real defect: when multiple skill-adding PRs
+are open concurrently, each computes the same "next" version independently,
+so a batch of N concurrent PRs all claim the *same* version instead of
+leapfrogging it. The resulting text is byte-identical, so git's merge
+machinery sees no conflict — the pileup lands silently, with no signal that
+N releases got flattened into one version number. Concurrent additions to the
+`skills` array are fine (they touch distinct array positions and any real
+conflict there surfaces normally); the version fields are the collision
+point because every concurrent PR edits the exact same line.
+
+The version bump is a **separate, maintainer-run step**, done once after
+merging a batch of skill-adding PRs (or per merge, if you're not batching):
+
+```
+scripts/bump-version.sh
+```
+
+This minor-bumps `plugin.json` and `marketplace.json` together and keeps them
+in sync — run it, then commit the result.
 
 ## Related
 
-- `README.md` — the skills table (release-hygiene step 3).
-- `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — the manifests
-  steps 1–2 update.
+- `README.md` — the skills table (release-hygiene step 2).
+- `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — the
+  manifest step 1 updates; `scripts/bump-version.sh` bumps the version fields
+  separately.
+- `scripts/bump-version.sh` — the release-time version bump, run outside any
+  individual skill-adding PR.
 - `skills/goal-tree/commands/inbox.md` — in-plugin command precedent (rule 1).
