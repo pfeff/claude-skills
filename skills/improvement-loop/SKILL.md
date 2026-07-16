@@ -60,9 +60,11 @@ subagents.
 ## Operator Contact
 
 Operator contact happens at exactly **one point per cycle: terminal sign-off**
-on finished, already-reviewed work via `operator-review` (surfaced through the
-mission pane's breakpoint accept queue when no live operator session is
-attached). It is not a per-step checkpoint.
+on finished, already-reviewed work via `operator-review` — surfaced through
+the mission pane's breakpoint accept queue in the working session pair
+topology (when no live operator session is attached), or via the operator
+reviewing the PR directly in the CoS-owned topology (see Workspace &
+Ownership). It is not a per-step checkpoint.
 
 - **Interview doctrine and experience, not the operator.** Backlog-item
   selection, diagnosis, scoping, and resolving `dispatch-gate`'s four
@@ -147,7 +149,9 @@ All PR-gated. In scope:
 - Never push to main. Feature work happens in ephemeral worktrees; main
   clones stay on their default branch.
 - **You never merge your own PRs.** Improvement PRs surface to the operator
-  through the mission pane's breakpoint accept queue.
+  for terminal sign-off — through the mission pane's breakpoint accept queue
+  in the working session pair topology, or via the operator reviewing the PR
+  directly in the CoS-owned topology (see Workspace & Ownership).
 
 ## Loop Drive (staged)
 
