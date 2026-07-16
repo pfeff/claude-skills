@@ -158,7 +158,7 @@ interval at bring-up).
 
 **Later increment** (not built in v0): a hook-fed event queue with a
 debounced `tmux send-keys` wake nudge. `/loop` then demotes to a long-interval
-fallback heartbeat and pane-1 stall detector.
+fallback heartbeat and mission-session stall detector.
 
 **Billing invariant**: this session is an interactive TUI session — never a
 cron agent, `claude -p`, the Agent SDK, or a GitHub Action. Converting tick
