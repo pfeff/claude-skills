@@ -36,7 +36,7 @@ if [[ -z "$WORKTREE_ROOT" ]]; then
 fi
 
 # Get the current branch name
-CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null)"
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
 if [[ -z "$CURRENT_BRANCH" ]]; then
   # Detached HEAD — can't enforce a convention, warn and let commit proceed
   echo "assert-worktree-branch: HEAD is detached, cannot enforce branch alignment — proceeding" >&2
