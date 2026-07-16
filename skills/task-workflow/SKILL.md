@@ -5,9 +5,12 @@ allowed-tools:
   - Bash
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - AskUserQuestion
+  - Task
+  - Skill
 allowed-prompts:
   - tool: Bash
     prompt: create tmux sessions

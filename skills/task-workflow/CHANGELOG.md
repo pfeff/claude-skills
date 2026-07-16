@@ -6,6 +6,7 @@ All notable changes to the **task-workflow** skill will be documented in this fi
 
 ### Added
 - `operations/falsification-check.md` — refute-first sub-routine for the synthesis/write boundary: run the single most direct read-only query that would falsify an infra-state claim before writing it down.
+- `allowed-tools` frontmatter: declared `Edit`, `Task`, `Skill` — already mandated by existing `dispatch-task.md`, `fan-out.md`, `auto-advance.md`, `init-workspace.md`, and `open-workspace.md` steps but missing from the list, tripping `skill-lint`'s allowed-tools check once this file was touched.
 
 **Reasoning**: Source LL-1 / R1 from `qmd://tcetra/Generated/202605210922-Lessons-Learned-DO-588-Octopus-Investigation.md`. During the DO-588 stack17 RCA, two diagnostic-framing errors required user correction because synthesis happened from one evidence path (GitHub Actions logs / Terraform plan diff) without cross-checking the authoritative read-only API (`aws ec2 describe-instances`).
 
