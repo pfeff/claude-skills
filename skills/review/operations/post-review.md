@@ -204,7 +204,7 @@ nor an `APPROVE` event may accumulate across re-runs.
    chmod 600 "$EVENTBODYFILE"
    { printf '%s\n\n' "$EVENT_BODY"; cat "$MARKERFILE"; } > "$EVENTBODYFILE"
    gh api -X POST "/repos/$owner/$repo/pulls/$PR_NUMBER/reviews" \
-     -f event="$EVENT" -f body=@"$EVENTBODYFILE"
+     -f event="$EVENT" -F body=@"$EVENTBODYFILE"
    ```
 
 ## Step 8: Report
