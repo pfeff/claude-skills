@@ -1,6 +1,15 @@
 ---
 name: verify-inherited-premise
-description: Use when dispatching a task (or about to act) whose premise comes from an inherited claim rather than direct observation of the live system — a handoff/HANDOFF.md doc, an inbox or spec artifact, a skill's own documented schema/paths/behavior, a prior agent's summary, or a PR-body assertion. Adds a fidelity guard: verify the load-bearing claim against reality FIRST, and STOP-and-report if it's false instead of building on it or fabricating to fill the gap. Fires on "verify the premise", "add a fidelity guard", "don't trust the doc", or any dispatch whose success hinges on a claim not yet checked against the actual system.
+description: >-
+  Use when dispatching a task (or about to act) whose premise comes from an
+  inherited claim rather than direct observation of the live system — a
+  handoff/HANDOFF.md doc, an inbox or spec artifact, a skill's own documented
+  schema/paths/behavior, a prior agent's summary, or a PR-body assertion. Adds
+  a fidelity guard: verify the load-bearing claim against reality FIRST, and
+  STOP-and-report if it's false instead of building on it or fabricating to
+  fill the gap. Fires on "verify the premise", "add a fidelity guard", "don't
+  trust the doc", or any dispatch whose success hinges on a claim not yet
+  checked against the actual system.
 version: 1.0.0
 allowed-tools: Agent, Read, Grep, Glob, Bash
 ---
