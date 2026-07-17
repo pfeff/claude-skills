@@ -12,7 +12,8 @@ This doctrine does not replace the supervisor-tick trigger — it adds an
 earlier one. A supervisor that later observes `pr-open` on this PR will
 usually find the review chain already CLEAN (fast-forward past `pr-open`/
 `fixing`) or already `fixing` — either way its own dispatch is idempotent
-against markers already posted (stale-marker check, below).
+against markers already posted (see "Relationship to `pr-review-fanout`"
+below, whose already-CLEAN/non-stale-marker skip covers this case).
 
 ## Billing invariant (non-negotiable)
 
@@ -21,9 +22,10 @@ launched from the current session (Task tool). It MUST NEVER be `claude -p`
 / `--print`, the Agent SDK, a GitHub Action, `CronCreate`, `RemoteTrigger`,
 or any other harness-native scheduled/headless invocation — those move the
 work to the metered-credits billing pool instead of the interactive
-subscription pool. The billing invariant is itself a load-bearing surface
-per `depth-rule.md`'s Load-bearing surfaces item 1 — a change to this
-procedure that violates it forces the full ladder on itself.
+subscription pool. This procedure (including this invariant) is itself a
+load-bearing surface per `depth-rule.md`'s Load-bearing surfaces item 9 —
+any change to this file, including one that violates the invariant, forces
+the full ladder on itself.
 
 ## Procedure
 

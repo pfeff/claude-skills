@@ -54,6 +54,11 @@ Acceptance + Objective review), regardless of diff size:
 8. **Published host-agnosticism-sensitive surfaces** — anything
    `verification-map.md`'s doctrine-class sub-checklist item 6
    already treats as blocking-on-leak.
+9. **Event-triggered review-dispatch path** — `lN-review-doctrine`
+   `references/dispatch-procedure.md`, including its "Billing
+   invariant" section (the requirement that Step 2's dispatch use
+   an interactive Agent-tool subagent, never `claude -p`/Agent
+   SDK/a GitHub Action/`CronCreate`/`RemoteTrigger`).
 
 ## Thresholds (overridable defaults)
 

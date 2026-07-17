@@ -247,21 +247,13 @@ a review yet, so do it now. Load `lN-review-doctrine`'s dispatch procedure and
 follow it exactly:
 
 ```
-Read(~/.claude/plugins/marketplaces/pfeff/skills/lN-review-doctrine/references/dispatch-procedure.md)
+Read(${CLAUDE_PLUGIN_ROOT}/skills/lN-review-doctrine/references/dispatch-procedure.md)
 ```
 
-Summary (see the file for the authoritative procedure):
-
-1. Classify the change via `depth-rule.md`'s change-class table (diff against
-   the PR's base, current HEAD).
-2. Dispatch ONE **interactive Agent-tool subagent** (Task tool, this session —
-   never `claude -p`/Agent SDK/a GitHub Action/`CronCreate`/`RemoteTrigger`,
-   which would move the work to metered billing) to run the depth-appropriate
-   chain: `/review` always (unless a fresh in-session `.claude/reviews/latest.md`
-   already covers current HEAD), `/acceptance-review` if Standard or
-   Load-bearing, `/objective-review` if Load-bearing.
-3. Route the outcome: CLEAN -> `operator-review`; NEEDS-WORK/BLOCKING ->
-   `fix-then-re-review-ladder`.
+The file's Steps 1-3 are the authoritative procedure (classify via
+`depth-rule.md`, dispatch the depth-appropriate chain from an interactive
+Agent-tool subagent, route the outcome) — do not re-derive or restate it
+here; follow it as written there.
 
 **Skip if `--draft`**: a draft PR is not ready for review.
 
