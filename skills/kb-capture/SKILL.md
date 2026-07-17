@@ -83,5 +83,6 @@ last capture is updated in place (`kb_core.new_highlights`) rather than skipped.
 
 ## See Also
 
-- `SPEC.md` §2.1 (workspace) — the capture contract and acceptance criteria.
+- `skills/kb-core/references/spec-v2-contract.md` (AC-1.1–1.7 — capture contract and
+  acceptance criteria).
 - `skills/kb-compile` — the next stage.

@@ -65,5 +65,6 @@ carries `type:` + `sources:` (INV-2/INV-3). No fence — edit safety is git + re
 
 ## See Also
 
-- `SPEC.md` v2 §1 (ownership model) and §2.2 (compile contract) — workspace.
+- `skills/kb-core/references/spec-v2-contract.md` (Ownership design bullet; AC-2.1–2.6,
+  AC-3.1 — compile contract).
 - `skills/kb-capture`, `skills/kb-lint`.
