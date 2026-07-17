@@ -58,7 +58,7 @@ allowed-prompts:
     prompt: write metrics log
   - tool: Bash
     prompt: sleep for backoff between retries
-version: 1.9.0
+version: 1.10.0
 ---
 
 # Task Workflow Skill

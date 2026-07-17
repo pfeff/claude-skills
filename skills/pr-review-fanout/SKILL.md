@@ -5,7 +5,7 @@ allowed-tools:
   - Task
   - SendMessage
   - TaskUpdate
-version: 1.0.0
+version: 1.1.0
 ---
 
 # pr-review-fanout — bulk L1/L2 review-ladder fanout
@@ -204,3 +204,7 @@ consumer actually reads.
   a PR from NEEDS-WORK/BLOCKING back to CLEAN by triaging findings,
   dispatching one scoped fix agent, and re-running the ladder against the
   new HEAD.
+- `../lN-review-doctrine/references/dispatch-procedure.md` — the direct
+  single-PR path this skill's "When to invoke" points to instead of this
+  skill (event-triggered from PR creation). Converges on the same two
+  downstream skills above.
