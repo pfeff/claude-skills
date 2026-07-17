@@ -78,6 +78,19 @@ future PR may retune either value without a design revisit — that
 is the point of naming them as parameters here rather than folding
 the numbers into prose.
 
+## How a skipped tier reads downstream
+
+When a constituent PR's change class does not require a given tier
+(e.g. Docs/config-only or Small self-constituent — Change review
+only), the Acceptance or Objective review for that tier legitimately
+never runs, and no marker is posted. A later layer checking for that
+marker (`checklist.md`'s "How the next layer reads the artifact")
+must record this as `NOT-REQUIRED`, never `UNCLEAR` — `UNCLEAR`
+means evidence is missing for a tier that *was* required; a
+depth-rule skip is not missing evidence, it is the correct outcome
+for that class. See `checklist.md`'s "Tier-skip token
+(`NOT-REQUIRED`)" for the token definition.
+
 ## See also
 
 - `checklist.md` — the 3-axis checklist this depth rule gates.
