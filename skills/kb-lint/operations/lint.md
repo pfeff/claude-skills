@@ -72,8 +72,9 @@ tags: [kb]
 
 AC-6.1 (report emitted; nothing outside KB-owned notes edited), AC-6.2 (auto-fix confined to
 KB-owned notes + reversible; other findings proposal-only), AC-6.3 (≥1 actionable connection
-candidate). Proposal persistence (this repo's addition) is not yet reflected in SPEC.md
-numbering; see `kb_lint_proposals.py`'s tests for the dedup contract it must satisfy.
+candidate). Proposal persistence (this repo's addition) is not yet reflected in
+`skills/kb-core/references/spec-v2-contract.md`'s reconstructed AC contract; see
+`kb_lint_proposals.py`'s tests for the dedup contract it must satisfy.
 
 ## Integration Points
 

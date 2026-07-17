@@ -73,5 +73,5 @@ Stdlib `unittest` (zero-dependency, matches `kb-core/scripts/test_kb_core.py`).
 
 ## See Also
 
-- `SPEC.md` v2 §2.6 (lint contract) — workspace.
+- `skills/kb-core/references/spec-v2-contract.md` (AC-6.1–6.3 — lint contract).
 - `skills/kb-compile`.

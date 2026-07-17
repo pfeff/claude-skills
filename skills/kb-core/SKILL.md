@@ -10,6 +10,12 @@ Shared infrastructure for the three LLM-Knowledge-Base skills. **Not user-invoca
 there is no operation to run here (precedent: `lN-lifecycle-doctrine`). It exists so the
 deterministic logic from SPEC v2 §1 lives in exactly one place.
 
+## Source of truth
+
+| File | Purpose |
+|------|---------|
+| `references/spec-v2-contract.md` | Reconstructed KB SPEC v2 contract — the 3 design bullets (Ownership, Reuse the vault schema, Billing) and the AC-1.x/2.x/3.x/6.x acceptance-criteria checklist, with provenance to PR #123. The original `SPEC.md`'s §N numbering was lost with the unarchived `llm-kb` workspace; this reconstructs the surviving AC-level contract in-repo. |
+
 ## What it provides
 
 `scripts/kb_core.py` — pure, vault-I/O-free primitives consumed by kb-capture, kb-compile,
@@ -49,5 +55,6 @@ Stdlib `unittest` (zero-dependency, matches `task-workflow/scripts/test_render_d
 
 ## See Also
 
-- `SPEC.md` §1 (workspace) — the authorship-boundary contract these primitives enforce.
+- `skills/kb-core/references/spec-v2-contract.md` — the authorship-boundary contract (Ownership
+  design bullet) these primitives enforce.
 - `skills/kb-capture`, `skills/kb-compile`, `skills/kb-lint` — the three consumers.
