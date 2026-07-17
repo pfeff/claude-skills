@@ -1,15 +1,16 @@
-# L{N}-review — depth / proportionality rule
+# Acceptance / Objective review — depth / proportionality rule
 
 Grounded in the review-architecture design note (signed off
 2026-07-08). Consumed alongside `checklist.md` and
 `verification-map.md`: before applying the 3-axis checklist,
 determine **how much** of it applies to this work product. Today
-every PR that reaches L1/L2 gets the full ladder; this file
+every PR that reaches the Acceptance review (`l1-review`) or
+Objective review (`l2-review`) gets the full ladder; this file
 introduces the notion of *depth* the doctrine otherwise lacks.
 
 This file is additive doctrine. It does not rename the review
 layers or their marker tokens — see `checklist.md` for the
-existing L{N}-review vocabulary, unchanged.
+existing Change/Acceptance/Objective review vocabulary, unchanged.
 
 ## Change classes
 
