@@ -185,9 +185,9 @@ Check if a PR already exists for the current branch:
 gh pr view --json url,state 2>/dev/null
 ```
 
-**If PR already exists**: Report the existing PR URL and proceed to step 4a.
+**If PR already exists**: Report the existing PR URL, record `PR_JUST_CREATED=false`, and proceed to step 4a.
 
-**If no PR exists**: Invoke `/gh-pr-create`. Pass `--draft` if the user specified it.
+**If no PR exists**: Invoke `/gh-pr-create`. Pass `--draft` if the user specified it. Record `PR_JUST_CREATED=true` — `/gh-pr-create`'s own Step 9 already dispatches the review chain (step 4b below skips redundant dispatch on this branch).
 
 **On failure**: Print manual instructions and continue:
 
@@ -235,9 +235,40 @@ CI checks still failing after 3 fix attempts. You may need to investigate manual
   gh pr checks <PR_NUMBER> --repo <REPO>
 ```
 
-### 4b. Background Metrics Dispatch
+### 4b. Dispatch Review Chain
 
-Immediately after step 4 (before knowledge capture), dispatch metrics collection to a background subagent. Metrics has no dependency on step 5, so it runs concurrently while the user works through knowledge capture.
+**If `PR_JUST_CREATED=true`** (step 4 invoked `/gh-pr-create`): its own Step 9
+already dispatched the depth-rule-gated review chain — skip this step,
+proceed to step 4c.
+
+**If `PR_JUST_CREATED=false`** (step 4 found an already-open PR — e.g. new
+commits were pushed to it this run): nothing else in this flow has dispatched
+a review yet, so do it now. Load `lN-review-doctrine`'s dispatch procedure and
+follow it exactly:
+
+```
+Read(${CLAUDE_PLUGIN_ROOT}/skills/lN-review-doctrine/references/dispatch-procedure.md)
+```
+
+The file's Steps 1-3 are the authoritative procedure (classify via
+`depth-rule.md`, dispatch the depth-appropriate chain from an interactive
+Agent-tool subagent, route the outcome) — do not re-derive or restate it
+here; follow it as written there.
+
+**Skip if `--draft`**: a draft PR is not ready for review.
+
+**On failure to dispatch**: warn and continue — non-blocking:
+
+```
+Could not dispatch the review chain automatically. Run /review manually:
+  /review
+```
+
+Proceed to step 4c either way.
+
+### 4c. Background Metrics Dispatch
+
+Immediately after step 4b (before knowledge capture), dispatch metrics collection to a background subagent. Metrics has no dependency on step 5, so it runs concurrently while the user works through knowledge capture.
 
 Load the dispatch-task operation:
 
@@ -289,7 +320,7 @@ If yes, invoke `/claude-skills:lessons-learned` and wait for completion before c
 
 ### 6. Metrics Phase (R7)
 
-Check the background subagent dispatched in step 4b. If the dispatch completed successfully, step 6 is already done — report success and proceed. If the dispatch failed or was not used (fallback), collect metrics inline.
+Check the background subagent dispatched in step 4c. If the dispatch completed successfully, step 6 is already done — report success and proceed. If the dispatch failed or was not used (fallback), collect metrics inline.
 
 **Data to collect**:
 
@@ -420,6 +451,7 @@ All done! To close this workspace, run from your control session:
 | PR | No commits on branch | Warn, skip PR creation |
 | CI | Check failure | Diagnose and fix (up to 3 rounds), then continue |
 | CI | 3 fix rounds exhausted | Warn user, continue to knowledge capture |
+| Review dispatch | Agent-tool dispatch fails | Warn, print manual `/review` instruction, continue |
 | Compound | Skill failure | Print `/claude-skills:compound` command, continue |
 | Lessons | Skill failure | Print `/claude-skills:lessons-learned` command, continue |
 | Metrics | File write failure | Warn, continue |
@@ -447,6 +479,7 @@ Checking for uncommitted changes...
 
 Creating PR...
   ✓  https://github.com/pfeff/cursor-rules/pull/18
+  Review chain dispatched (Standard: Change + Acceptance) via gh-pr-create Step 9
 
 Capture a reusable solution? (/compound)  → No
 Run a retrospective? (/lessons-learned)   → No
@@ -488,6 +521,7 @@ To close this workspace, run from your control session:
 
 - **Git skill commit operation**: `skills/git/operations/commit.md`
 - **PR creation**: `commands/gh-pr-create.md`
+- **Review dispatch procedure**: `skills/lN-review-doctrine/references/dispatch-procedure.md` (step 4b)
 - **Compound skill**: `skills/compound/SKILL.md`
 - **Lessons learned skill**: `skills/lessons-learned/SKILL.md`
 - **Close workspace script**: `skills/task-workflow/scripts/close-workspace.sh`
