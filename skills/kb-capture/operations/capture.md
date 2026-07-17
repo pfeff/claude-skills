@@ -192,18 +192,22 @@ rearchitecture deferred as follow-up — it needs the plugin's actual synced-not
 inspected against a live vault to key off correctly, which is out of scope for this change
 (see kb-capture `SKILL.md` § Follow-up).
 
-**What's handled now (reconciliation, not integration):** both pipelines already key off the
-same Readwise `book_id` — this sweep's `source_key` is `readwise-<book_id>`, and the plugin's
-`booksIDsMap` is also `book_id`-keyed. As long as any future plugin-folder-based ingestion
-keys off `book_id` (read from the plugin note's own frontmatter, not its title or vault path),
-a source captured via either pipeline maps to the same `raw/<key>.md` identity and there is no
-double-capture risk. No code changes to reconcile identities are needed *yet* because this
-sweep does not read the plugin's folder at all. The manual check for now: before compiling,
-cross-check the `readwise_book_id` values already staged under `raw/*.md` against the
-plugin's `booksIDsMap` (`.obsidian/plugins/readwise-official/data.json`) to confirm no
-existing `raw/` source and plugin-synced note silently drifted onto different book ids for
-what is actually the same source (this would only happen from a Readwise-side id change,
-not from anything this sweep does).
+**What's true today (2026-07-17 audit):** both pipelines key off the same Readwise `book_id` —
+this sweep's `source_key` is `readwise-<book_id>`, and the plugin's `booksIDsMap` is also
+`book_id`-keyed. But a shared key only makes duplicates **detectable**, not **prevented**: the
+two pipelines write to different paths (`Readwise/` for the plugin, `raw/` for this sweep) and
+this sweep never reads `Readwise/`, so nothing dedupes between them. The audit confirmed 18
+duplicate `book_id`s already staged in both `raw/` (51 notes) and `Readwise/` (1196 notes). The
+plugin only syncs on Obsidian load (auto-sync off, `frequency: 0`); its last sync predates this
+sweep's first capture by two days, so today's 18 are a one-time backlog overlap rather than two
+pipelines actively racing — but the other 33 `raw/` book_ids the plugin hasn't seen yet will
+duplicate on its next sync, i.e. 100% of `raw/` will eventually have a plugin-side twin. No
+code changes are needed *yet* because this sweep does not read the plugin's folder at all — but
+the manual check below exists to catch duplicates that already occurred, not just to guard
+against future id drift. The manual check for now: before compiling, cross-check the
+`readwise_book_id` values already staged under `raw/*.md` against the plugin's `booksIDsMap`
+(`.obsidian/plugins/readwise-official/data.json`); treat any match as a confirmed duplicate to
+reconcile (drop or merge), not merely evidence of a hypothetical id-drift bug.
 
 ## Acceptance Criteria (SPEC §2.1)
 
