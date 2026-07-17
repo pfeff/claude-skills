@@ -239,7 +239,13 @@ for this work, including running its own review/verification cycle?
      is UNCLEAR, not a silent PASS.
    - For the Objective review (N=2): an
      `.claude/reviews/l1-latest.md` exists for every constituent
-     base-level PR the Acceptance review accepted, verdicts are not
+     base-level PR the Acceptance review accepted **and whose
+     change class required an Acceptance review** (see
+     `depth-rule.md`'s change-class table). A constituent whose
+     class is Docs/config-only or Small self-constituent is
+     recorded `NOT-REQUIRED`, not `UNCLEAR` — the depth rule
+     legitimately skipped that tier, so it is not a gap. For
+     constituents where the tier was required, verdicts are not
      BLOCKING, and the Acceptance review's own axes returned PASS
      (or surfaced advisories it explicitly acknowledged).
 3. **CI is green** per [[feedback-l1-review-red-ci]] — red CI is
@@ -255,7 +261,10 @@ for this work, including running its own review/verification cycle?
 reviewed layer's own review produced a non-blocking verdict AND CI
 is green. FAIL on any of: missing required step, BLOCKING upstream
 verdict, red CI. UNCLEAR when evidence is unavailable (e.g.
-artifact missing) — never collapse UNCLEAR to PASS.
+artifact missing) — never collapse UNCLEAR to PASS. A constituent
+recorded `NOT-REQUIRED` (its tier was legitimately skipped per the
+depth rule — see "How the next layer reads the artifact") is not
+missing evidence and does not trigger UNCLEAR.
 
 ### Axis 3 — Objective Advancement
 
@@ -354,6 +363,18 @@ axis 2 must surface as ambiguity in the verdict body. If the
 required verification step couldn't be evaluated (artifact missing,
 CI not yet finished), the reviewer cannot claim CLEAN — verdict is
 NEEDS-WORK with a finding requesting the evidence.
+
+### Tier-skip token (`NOT-REQUIRED`)
+
+`NOT-REQUIRED` is a distinct, non-gap status — separate from the
+axis-result vocabulary (`PASS`/`FAIL`/`UNCLEAR`) above. It records
+that a constituent's downstream review tier (Acceptance or
+Objective) was legitimately skipped per `depth-rule.md`'s
+change-class table, not that evidence is missing. See axis 2 check
+2 and "How the next layer reads the artifact" step 5 below for
+where it applies. Never substitute `NOT-REQUIRED` for `UNCLEAR`
+when the tier *was* required and its marker is simply absent —
+that remains a gap.
 
 ### Single verdict vocabulary (legacy APPROVE/REJECT/ESCALATE is deprecated)
 
@@ -682,9 +703,18 @@ constituent PR:
    the marker.
 4. Parse the YAML-shaped lines between the marker and the closing
    `-->` for `verdict`, `axes`, etc.
-5. If no review with the marker is found → the Acceptance or
-   Objective review is missing → axis 2 records UNCLEAR for that
-   constituent. Do **not** silently treat absence as PASS.
+5. If no review with the marker is found, check `depth-rule.md`'s
+   change-class table for that constituent PR before concluding
+   anything:
+   - If the constituent's class does not require this tier
+     (Docs/config-only or Small self-constituent — Change review
+     only), the absence is a legitimate depth-rule skip: axis 2
+     records `NOT-REQUIRED` for that constituent. This is not a
+     gap and needs no follow-up.
+   - Otherwise (the class requires this tier and no marker
+     exists) → the Acceptance or Objective review is missing →
+     axis 2 records UNCLEAR for that constituent. Do **not**
+     silently treat absence as PASS.
 
 This is the only cross-operator path. There is no environment-
 variable artifact store; do not introduce one without
