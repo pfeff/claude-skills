@@ -58,7 +58,7 @@ allowed-prompts:
     prompt: write metrics log
   - tool: Bash
     prompt: sleep for backoff between retries
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Task Workflow Skill
@@ -434,6 +434,7 @@ Load only what you need:
 - `references/solution-search.md` - QMD hybrid-search protocol over the Obsidian vault (replaces grep over `docs/solutions/`)
 - `references/error-classification.md` - Transient vs permanent error taxonomy for retry decisions
 - `references/retry-with-backoff.md` - Exponential backoff algorithm with jitter and escalation format
+- `../self-verify/references/bounded-external-waits.md` - Hard-cap + kill-on-stall recipe and `inconclusive` outcome for verify steps stalled on flaky/slow external resources
 
 **Supporting Files**:
 - `scripts/` - Shell utilities for workspace operations

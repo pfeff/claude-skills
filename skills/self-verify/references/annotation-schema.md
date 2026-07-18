@@ -41,7 +41,7 @@ evidence:
   tests_run:
     - step: <step name>
       command: <command run>
-      result: pass | fail | skipped
+      result: pass | fail | skipped | inconclusive
       detail: <one line — exit code, test count, or error summary>
   review_verdict: CLEAN | BLOCKING | n/a
   review_artifact: .claude/reviews/latest.md | n/a
@@ -63,6 +63,14 @@ annotator: self-verify
 - `evidence.tests_run` is a list of every required verification step from the
   work-type map, in the order they ran. Include skipped steps with
   `result: skipped` and a `detail` explaining why.
+- `result: inconclusive` marks a step that depended on a flaky/slow external
+  resource and was terminated by the hard-cap + kill-on-stall recipe in
+  `bounded-external-waits.md` before it could complete — `detail` states the
+  reason (`hard-cap-exceeded` or `blocked-io`). Distinct from `fail` (the
+  step ran and failed) and `skipped` (the step was never started); an
+  `inconclusive` step ran, was bounded, and did not reach a verdict. It
+  contributes to axis 2 as `warn`, never `fail`, and is never silently
+  dropped to a `pass`.
 - `evidence.review_verdict` is the `verdict` field from
   `.claude/reviews/latest.md` after running `/review`, or `n/a` if the repo
   is skills/docs-only with no code to review.

@@ -208,6 +208,19 @@ User chose: Skip validation and commit anyway
 | Transient test/lint failure | Backoff and re-run via transient retry path (5a) |
 | Error reclassifies mid-retry (transient → permanent or vice versa) | Switch to appropriate retry path with remaining budget |
 
+**External-dependency stalls are not the same as a slow test suite.** The
+5-minute timeout row above is a wall-clock backstop for the test/lint
+command as a whole. If a test or verify step depends on a flaky/slow
+external resource specifically (a third-party API, an OS-integration
+shell-out) and that step hangs mid-run, prefer the hard-cap +
+kill-on-stall recipe in
+`../../self-verify/references/bounded-external-waits.md` — it detects the
+hang via flat CPU sampling instead of waiting out the full wall-clock
+timeout, and reports the step as `inconclusive` rather than folding it
+into the transient-retry loop (which assumes the command will eventually
+succeed on its own if retried, not that it may be permanently blocked on
+I/O).
+
 ## Example
 
 ### Go project with test failure and successful retry
@@ -249,5 +262,6 @@ Ready to commit.
 - **Successor**: `/commit-changes` (git commit operation)
 - **Error classification**: `references/error-classification.md` — transient vs permanent error taxonomy
 - **Retry with backoff**: `references/retry-with-backoff.md` — exponential backoff algorithm for transient retries
+- **Bounded external waits**: `../../self-verify/references/bounded-external-waits.md` — hard-cap + kill-on-stall recipe and the `inconclusive` outcome, for a step that stalls on a flaky/slow external resource specifically
 - **Requirements**: R1 (detection), R2 (test execution), R3 (lint execution), R4 (retry loop), R5 (success path). See workspace DESIGN.md for requirement definitions.
 - **Constraint**: R6 — runs entirely within the work session, no control session changes
