@@ -5,7 +5,8 @@ allowed-tools:
   - Task
   - SendMessage
   - TaskUpdate
-version: 1.1.1
+  - TaskStop
+version: 1.1.2
 ---
 
 # pr-review-fanout — bulk L1/L2 review-ladder fanout

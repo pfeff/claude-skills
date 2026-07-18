@@ -86,7 +86,7 @@ special force" invariant — this is the case that invariant exists for.
 achieve it, and the chosen mechanism carries a blast radius the authorization did not
 contemplate.
 
-**Example**: an approved "merge over the red" was executed via a `--admin`
+**Example**: PR #300 — an approved "merge over the red" was executed via a `--admin`
 branch-protection override — a mechanism with its own consequences (bypassing
 required checks for every future push to the branch, not just this one) beyond what
 "merge this PR despite red CI" authorized.
@@ -97,10 +97,10 @@ required checks for every future push to the branch, not just this one) beyond w
 verdict recap — in a way that steers a nominally independent judgment before that
 judgment is made, instead of presenting the evidence neutrally.
 
-**Example**: a dispatch brief pre-answered the question it nominally delegated to an
-independent reviewer, and separately, a NEEDS-WORK verdict was characterized as
-mergeable in the operator-facing summary before the operator had judged it
-themselves. Both collapse a layer that was supposed to be independent.
+**Example**: PR #292 — a dispatch brief pre-answered the question it nominally
+delegated to an independent reviewer, and separately, a NEEDS-WORK verdict was
+characterized as mergeable in the operator-facing summary before the operator had
+judged it themselves. Both collapse a layer that was supposed to be independent.
 
 ---
 
