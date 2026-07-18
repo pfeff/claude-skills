@@ -23,7 +23,7 @@ Captures a solved problem as a `type=reference` note in the host's Obsidian vaul
 
 **Vault-resident**: Notes live in the Obsidian vault, not in any repository's `docs/`. The actual file write is delegated to the `obsidian-notes` skill (CLI-first); vault location is resolved per-host from `~/.claude/hosts/<hostname>.md`.
 
-**Schema**: Solution notes use the vault's real note convention — there is no dedicated `Solution` template or `problem_type` frontmatter field in the vault. Notes are written as `type=reference` (the closest existing note type — see `Templates/Reference.md`) with the vault's standard properties: `type`, `area`, `project`, `status`, `date`, `tags`. Problem classification (build-error, severity, etc.) is captured as `tags`, not invented frontmatter keys — see `operations/document-solution.md` for the full field mapping.
+**Schema**: Solution notes use the vault's real note convention — there is no dedicated `Solution` template or `problem_type` frontmatter field in the vault. Notes are written as `type=reference` (the closest existing note type). Problem classification (build-error, severity, etc.) is captured as `tags`, not invented frontmatter keys. See Integration Points below for the property list and `operations/document-solution.md` for the full field mapping.
 
 ## Invocation
 
@@ -53,7 +53,7 @@ Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/compound/operations/document-solut
 **File**: `operations/document-solution.md`
 **When**: User invokes `/claude-skills:compound` to capture a solved problem.
 
-**Quick summary**: Gather problem context, generate frontmatter, write a `type=solution` note via the `obsidian-notes` skill using the vault's `Solution` template.
+**Quick summary**: Gather problem context, generate frontmatter, write a `type=reference` note via the `obsidian-notes` skill using the vault's real properties (`area`/`project`/`status`/`date`/`tags`/`keywords`, set explicitly via `property:set` — no template).
 
 ## Output
 

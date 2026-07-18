@@ -49,6 +49,10 @@ If `$ARGUMENTS` contains a problem description, use it as seed context. Otherwis
 | Repository | Workspace context | Only if ambiguous |
 | Module/component | Code context | Only if unclear |
 | Project (DO ticket / epic slug) | Workspace context | Only if ambiguous |
+| Area (topic/domain, e.g. `tooling`, `workflow`) | Conversation | Only if not inferable |
+| Problem type (for `problem-type-<type>` tag) | Conversation | Yes, if not obvious — offer the enum in Error Handling |
+| Severity (for `severity-<level>` tag) | Conversation | Yes, if not obvious |
+| Related `Keywords/` terms (for `keywords`) | Conversation/vault | Only if relevant terms exist — omit otherwise |
 
 **Use AskUserQuestion** to fill gaps efficiently. Prefer a single confirmation with all fields over multiple rounds.
 
@@ -144,7 +148,13 @@ Set each frontmatter field (pass `type=` on every `property:set` call per the ob
 
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
   name=tags value="solution, problem-type-<problem_type>, severity-<severity>, <tag1>" type=list path="$target"
+
+# Omit entirely when no relevant Keywords/ terms exist.
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
+  name=keywords value="[[Terraform]], [[Keyword2]]" type=list path="$target"
 ```
+
+Values above (`<area>`, `<tag1>`, body text, etc.) are gathered freeform from the conversation — escape any embedded `"`, `` ` ``, or `$` before interpolating into these `value=`/`content=` strings, since they're passed through unquoted to the shell.
 
 Append the body — H1, an optional context line for `repo`/`module` (not vault properties), and the standard sections:
 
