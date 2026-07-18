@@ -50,7 +50,8 @@
         "./skills/self-verify",
         "./skills/skillify",
         "./skills/task-workflow",
-        "./skills/testing-without-mocks"
+        "./skills/testing-without-mocks",
+        "./skills/verify-inherited-premise"
       ]
     }
   ]
