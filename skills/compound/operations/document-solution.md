@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Captures a single solved problem as a `type=solution` note with structured YAML frontmatter so future agents can discover it via QMD hybrid search. Fast and focused — not a retrospective.
+Captures a single solved problem as a `type=reference` note with structured YAML frontmatter so future agents can discover it via QMD hybrid search. Fast and focused — not a retrospective.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ The `obsidian-notes` skill must be available and the host's `~/.claude/hosts/<ho
 
 ## Execution
 
-### Step 1: Source Host Config and Read the Solution Template
+### Step 1: Source Host Config
 
 Source the obsidian-notes host helper to load vault constants:
 
@@ -30,11 +30,7 @@ if [[ -z "$OBSIDIAN_CLI" ]]; then
 fi
 ```
 
-Read the vault's Solution template to see the canonical field list and body structure:
-
-```
-Read(file_path: "${OBSIDIAN_VAULT_PATH}/Templates/Solution.md")
-```
+There is no dedicated `Solution` template in the vault — solution notes are written directly as `type=reference` (see Step 5), the vault's standard note type for durable, retrievable writeups. No template read is needed.
 
 ### Step 2: Gather Problem Context
 
@@ -76,20 +72,19 @@ Anything to adjust before I write it up?
 
 ### Step 3: Generate Frontmatter
 
-Map the gathered context to the vault Solution template fields:
+Map the gathered context onto the vault's real, registered properties (`type`, `area`, `project`, `status`, `date`, `tags`, plus the real `keywords` field) — there is no `problem_type`, `severity`, `module`, `repo`, or `related` property in the vault's schema, so that classification signal is folded into `tags` (searchable) and, for `repo`/`module`, into the note body (Step 5) instead:
 
 | Field | Type | How to derive |
 |-------|------|---------------|
-| `type` | text | Always `solution` (pre-set by template) |
-| `date` | date | Today's date (auto-resolved from the template's `{{date}}` token at create time) |
-| `problem_type` | text | One of: `build-error`, `test-failure`, `runtime-error`, `performance`, `integration`, `workflow`, `best-practice` |
-| `severity` | text | `critical` (system down) / `high` (feature broken) / `medium` (degraded) / `low` (cosmetic/minor) |
-| `module` | text | Module or system name |
-| `repo` | text | Repository where the fix was applied |
+| `type` | text | Always `reference` |
+| `area` | text | Topic/domain area (e.g. `tooling`, `workflow`), if inferable; omit otherwise |
 | `project` | text | DO ticket / epic slug, if applicable (omit if not workspace-scoped) |
-| `tags` | list | Always include `solution`. Append topical keywords (lowercase, hyphen-separated). If `severity=critical` or the problem is known to recur, also include `critical-pattern` (see Step 6). |
+| `status` | text | Always `active` |
+| `date` | date | Today's date — compute explicitly (`date +%Y-%m-%d`); do not rely on template auto-fill (see Step 5 note) |
+| `tags` | list | Always include `solution`. Append `problem-type-<type>` where `<type>` is one of: `build-error`, `test-failure`, `runtime-error`, `performance`, `integration`, `workflow`, `best-practice`. Append `severity-<level>` where `<level>` is `critical`/`high`/`medium`/`low`. Append topical keywords (lowercase, hyphen-separated). If `severity=critical` or the problem is known to recur, also include `critical-pattern` (see Step 6). |
 | `keywords` | list | Wiki-links to existing `Keywords/` pages, if relevant terms exist (e.g., `"[[Terraform]]"`). Omit when nothing applies. |
-| `related` | list | Wiki-links to related vault notes, optional |
+
+`repo` and `module` are not vault properties — capture them as a context line in the note body (Step 5) instead of frontmatter. Related notes go in a `## Related` body section (the vault's real convention — see the `obsidian-notes` skill), not a `related:` property.
 
 ### Step 4: Determine Note Path
 
@@ -120,43 +115,44 @@ fi
 
 ### Step 5: Create the Note and Set Frontmatter
 
-Delegate the write to the `obsidian-notes` CLI. Create from the `Solution` template:
+Delegate the write to the `obsidian-notes` CLI. Create **without** a template: there is no `Solution` template, and the vault's `Reference` template's `date`/H1 fields use Templater syntax (`<% tp.date.now(...) %>` / `<% tp.file.title %>`) that the CLI does not resolve headlessly, so templating one in would leave unresolved tokens in the note. Set every field explicitly instead:
 
 ```bash
-"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" create \
-  path="$target" template="Solution"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" create path="$target"
 ```
 
-Set each frontmatter field that needs filling (the template pre-sets `type`, `date`, and the `solution` entry in `tags`):
+Set each frontmatter field (pass `type=` on every `property:set` call per the obsidian-notes Frontmatter Contract — the CLI silently skips writes when `type=` is omitted for fields not already in the vault's property registry):
 
 ```bash
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
-  name=problem_type value="<problem_type>" type=text path="$target"
+  name=type value=reference type=text path="$target"
 
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
-  name=severity value="<severity>" type=text path="$target"
+  name=status value=active type=text path="$target"
 
+# Compute today's date explicitly — do not rely on template auto-fill.
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
-  name=module value="<module>" type=text path="$target"
+  name=date value="$(date +%Y-%m-%d)" type=date path="$target"
 
+# Omit area: when no topic/domain area is inferable.
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
-  name=repo value="<repo>" type=text path="$target"
+  name=area value="<area>" type=text path="$target"
 
 # Omit project: when there is no DO ticket / epic slug.
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
   name=project value="<project-slug>" type=text path="$target"
 
 "$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" property:set \
-  name=tags value="solution, <tag1>, <tag2>" type=list path="$target"
+  name=tags value="solution, problem-type-<problem_type>, severity-<severity>, <tag1>" type=list path="$target"
 ```
 
-Pass `type=` on every `property:set` call (per the obsidian-notes Frontmatter Contract — the CLI silently skips writes when `type=` is omitted for fields not already in the vault's property registry).
-
-Append the body:
+Append the body — H1, an optional context line for `repo`/`module` (not vault properties), and the standard sections:
 
 ```bash
-"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" append path="$target" content="# <Problem title>\n\n## Problem\n\n<Problem text>\n\n## Symptoms\n\n- <symptom 1>\n- <symptom 2>\n\n## Root Cause\n\n<Root cause text>\n\n## Solution\n\n<Solution text — code examples welcome>\n\n## Prevention\n\n<Prevention text>\n"
+"$OBSIDIAN_CLI" vault="$OBSIDIAN_VAULT" append path="$target" content="# <Problem title>\n\n**Repo**: <repo> · **Module**: <module>\n\n## Problem\n\n<Problem text>\n\n## Symptoms\n\n- <symptom 1>\n- <symptom 2>\n\n## Root Cause\n\n<Root cause text>\n\n## Solution\n\n<Solution text — code examples welcome>\n\n## Prevention\n\n<Prevention text>\n"
 ```
+
+Omit the `**Repo**: ... · **Module**: ...` line entirely when neither is known.
 
 Wrap each CLI call per the obsidian-notes Non-Blocking Failure Contract: capture combined stdout+stderr, check whether the first line starts with `Error:`, and emit `[obsidian-notes] <output>` to stderr on failure. Continue the rest of the operation; don't fail the parent flow.
 
@@ -179,7 +175,7 @@ Display:
 Solution captured:
   <vault>/Notes/<YYYY>/<MM>/<filename>
 
-Fields: problem_type=<type>, severity=<level>, tags=[<tags>]
+Fields: type=reference, tags=[<tags>]
 ```
 
 No git-commit step — the vault has its own sync.
@@ -190,7 +186,7 @@ No git-commit step — the vault has its own sync.
 |-------|----------|
 | Host config missing `## Obsidian` section | `source "$HOST_CONFIG"` returns non-zero; report capture skipped and stop. Don't fail the parent flow. |
 | Obsidian CLI reachable but returns `Error:` | Emit `[obsidian-notes] <output>` to stderr; continue. Report which step failed in the final report. |
-| Can't classify `problem_type` | Ask user to pick from the enum (build-error, test-failure, runtime-error, performance, integration, workflow, best-practice). |
+| Can't classify problem type | Ask user to pick from the enum (build-error, test-failure, runtime-error, performance, integration, workflow, best-practice) used for the `problem-type-<type>` tag. |
 | Collision on target path | Append `-NN-` prefix per Step 4; re-probe until free. |
 
 ## Idempotency
