@@ -260,6 +260,7 @@ Write the file using this exact structure:
 ```markdown
 ---
 target: {branch name, PR #N, or "current branch"}
+sha: {full 40-char commit SHA reviewed — $GIT rev-parse HEAD}
 timestamp: {ISO 8601 UTC, e.g. 2026-02-23T14:30:00Z}
 agents: {$AGENT_COUNT}
 degraded: {true if degraded-mode, false otherwise}
@@ -287,6 +288,11 @@ verdict: {BLOCKING | CLEAN}
 
 Rules:
 - The YAML frontmatter must be machine-parseable. Use exact field names shown above.
+- `sha` is the full 40-char commit SHA of the reviewed HEAD (`$GIT rev-parse
+  HEAD`), captured at review time — never a short SHA, never the PR branch
+  name. This is what lets a later reader (or a re-review) tell this verdict
+  apart from a stale one against an older commit (see
+  `lN-review-doctrine/references/checklist.md`'s "Marker currency").
 - `verdict` in frontmatter is `BLOCKING` if any blocking findings exist, otherwise `CLEAN`.
 - `degraded` in frontmatter is `true` if the diff-size threshold was exceeded; `false` otherwise.
 - Omit the `### Blocking` section if there are no blocking findings.

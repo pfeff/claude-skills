@@ -5,7 +5,7 @@ allowed-tools:
   - Task
   - SendMessage
   - TaskUpdate
-version: 1.1.0
+version: 1.1.1
 ---
 
 # pr-review-fanout — bulk L1/L2 review-ladder fanout
@@ -39,12 +39,16 @@ canonical read surface is the reviews API, `gh pr view <n> --json
 reviews,comments`). A PR is a candidate when:
 
 - it carries a posted L0 `<!-- review:metadata -->` marker with verdict
-  `CLEAN` (a `BLOCKING` L0 verdict means the PR isn't ready for L1/L2 at
-  all — skip it, it needs L0 fix-up first), and
+  `CLEAN` and whose `sha` field matches the PR's current HEAD (a `BLOCKING`
+  L0 verdict means the PR isn't ready for L1/L2 at all — skip it, it needs
+  L0 fix-up first; a `CLEAN` L0 marker whose `sha` is stale is treated as
+  not-yet-reviewed at current HEAD), and
 - it has **no** `<!-- l1-review:metadata -->` / `<!-- l2-review:metadata
-  -->` marker, or an existing one is **stale** (posted against a SHA older
-  than the PR's current HEAD — a marker against an old SHA does not cover
-  the current diff and must be re-run).
+  -->` marker whose `sha` field matches current HEAD — either no marker
+  exists, or every existing one is **stale** (its `sha` is older than the
+  PR's current HEAD, per `lN-review-doctrine`'s "Marker currency" — a
+  marker against an old SHA does not cover the current diff, on either
+  posting surface, and must be re-run).
 
 For a PR flattened as a self-constituent (per the doctrine's self-
 constituent-flattening rule), resolve its L2 constituents to their own
@@ -173,9 +177,13 @@ consumer actually reads.
   the rest are stopped.
 - **Flattened self-constituent PRs** — see Step 1: resolve to the
   constituent's own posted markers rather than re-deriving a verdict.
-- **Stale marker** — an existing l1/l2 marker posted against a SHA older
-  than the PR's current HEAD does not count as done (Step 1); the ladder
-  re-runs against current HEAD.
+- **Stale marker** — an existing l1/l2 (or L0) marker whose `sha` field is
+  older than the PR's current HEAD does not count as done (Step 1); the
+  ladder re-runs against current HEAD. This holds regardless of which
+  posting surface the stale marker sits on — an old `BLOCKING` review
+  object left behind on the append-only reviews API by a since-superseded
+  re-review is filtered out by the same `sha` check
+  (`lN-review-doctrine`'s "Marker currency").
 - **L0 not clean** — a PR whose L0 `/review` verdict is `BLOCKING` is not
   a candidate at all (Step 1); it needs L0 fix-up before L1/L2 apply.
 

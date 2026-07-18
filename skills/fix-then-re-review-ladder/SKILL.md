@@ -1,7 +1,7 @@
 ---
 name: fix-then-re-review-ladder
 description: Recovery loop driving a PR (or reviewed work product) from a NEEDS-WORK/findings-attached verdict back to CLEAN. Triggers when a /review, /l1-review, or /l2-review verdict is not CLEAN and the operator wants it resolved. Triages findings into fix-now vs operator-waivable, dispatches ONE scoped fix agent (sole-finisher on the branch/worktree, no rescoping), then re-runs the tier-appropriate ladder (/review -> /l1-review -> /l2-review) against the NEW HEAD, looping fix->re-review until clean or a residual is reported. Produces the clean state operator-review then presents. Invoked by `pr-review-fanout` on a needs-work verdict, or standalone.
-version: 1.0.0
+version: 1.0.1
 allowed-tools:
   - Task
   - AskUserQuestion
@@ -29,18 +29,20 @@ A posted review marker at some tier — `<!-- review:metadata -->` (Change/L0),
 (Objective/L2) — carrying a `NEEDS-WORK` or `BLOCKING` verdict. Read the
 marker per the "How the next layer reads the artifact" procedure in
 `../lN-review-doctrine/references/checklist.md`: reviews API first,
-issue-comment mirror as fallback, most-recent-wins. Never trust a local
-`.claude/reviews/*.md` cache as the source of truth — it is per-host and not
-readable across operators.
+issue-comment mirror as fallback, `sha`-matched against current HEAD (never
+bare most-recent-wins — see that doctrine's "Marker currency" section).
+Never trust a local `.claude/reviews/*.md` cache as the source of truth —
+it is per-host and not readable across operators.
 
 ## Steps
 
 1. **Identify tier + current HEAD.** The failing marker names its `level`
-   (0/1/2 -> Change/Acceptance/Objective) and the SHA it reviewed. Compare
-   against `git rev-parse HEAD` on the PR branch: a verdict — CLEAN included —
-   posted against an older SHA than current HEAD is **stale**. Treat a stale
-   marker as if no review ran at that tier and restart the ladder against
-   current HEAD rather than trusting it.
+   (0/1/2 -> Change/Acceptance/Objective) and its `sha` field — the exact
+   revision it reviewed. Compare against `git rev-parse HEAD` on the PR
+   branch: a verdict — CLEAN included — whose marker `sha` is older than
+   current HEAD is **stale**. Treat a stale marker as if no review ran at
+   that tier and restart the ladder against current HEAD rather than
+   trusting it.
 2. **Extract findings** from the posted marker's body — the per-axis
    Conformance/Process/Objective sections for L1/L2, the Blocking/Advisory
    sections for L0 — read fresh from the PR comment (per the Prerequisite),
@@ -128,8 +130,11 @@ fix agent past an escalation; a human decision is required to proceed.
   second invocation) -> keep the one already in flight as sole finisher and
   stop the other; two fix agents must never commit to the same branch
   concurrently.
-- **Stale marker** -> always check the marker's reviewed SHA against current
-  HEAD before trusting any verdict, CLEAN included (step 1).
+- **Stale marker** -> always check the marker's `sha` field against current
+  HEAD before trusting any verdict, CLEAN included (step 1). This holds on
+  either posting surface — a stale `BLOCKING` event left behind on the
+  append-only reviews API by a since-superseded re-review never survives
+  this check (`lN-review-doctrine`'s "Marker currency").
 - **Relationship to `operator-review`**: this skill produces the clean state
   `operator-review`'s Prerequisite consumes. It does not itself seek operator
   sign-off on the change's content — the only operator interaction here is

@@ -19,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.7.1
+version: 0.7.2
 ---
 
 # Review Skill
