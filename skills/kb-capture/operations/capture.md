@@ -1,45 +1,85 @@
 # Capture Operation
 
-Stage eligible Readwise Reader documents into the vault's `raw/` queue (SPEC §2.1).
+Stage eligible Readwise sources into the vault's `raw/` queue (SPEC §2.1).
+
+**Plugin-hybrid (2026-07-18):** per the operator-signed-off design
+(`Notes/2026/07/2026-07-17-readwise-double-capture-audit-plugin-hybrid.md`), the Readwise
+Official Obsidian plugin is now the *only* thing that talks to Readwise. It syncs into the
+vault's local `Readwise/` folder; this operation reformats/filters from that folder into
+`raw/` instead of polling `readwise_list_highlights`. `book_id` stays the identity key end to
+end, so `source_key`/`highlights_fingerprint`/`new_highlights` and the `raw/` schema are
+unchanged — only *where the highlights come from* (step 1) and *how they're parsed* (step 2)
+changed. A narrow Reader MCP query is retained solely for the `kb`-tag override (Path B —
+see § Second Readwise pipeline below), because Readwise never exports a zero-highlight
+source into the plugin's folder at all.
 
 The deterministic core — the eligibility gate (`is_eligible`), the idempotency key
 (`source_key`), and content-aware re-sync (`highlights_fingerprint`, `new_highlights`) —
-lives in `kb_core` and is unit-tested (AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and the
-vault write are agent-orchestrated here (Readwise MCP + `obsidian-notes` CLI), the same
-I/O-via-CLI shape as the `compound` skill.
+lives in `kb_core` and is unit-tested (AC-1.2/1.3/1.4/1.6/1.7). The plugin-folder parsing —
+`book_id`/highlight/metadata extraction, dated-append-section aggregation, both backlink
+forms, gen1/gen2 duplicate-file and duplicate-block merging — lives in `readwise_folder` and
+is unit-tested (`skills/kb-capture/scripts/test_readwise_folder.py`). The vault reads/writes
+are agent-orchestrated here (`obsidian-notes` CLI), the same I/O-via-CLI shape as the
+`compound` skill.
 
 ## Inputs
 
-- Optional: a specific Reader doc id/url. Blank → **sweep highlighted sources** (step 1).
+- Optional: a specific Reader doc id/url (resolved via the narrow Path-B MCP query, same as
+  before). Blank → **sweep the plugin's `Readwise/` folder** (step 1).
 
 ## Steps
 
-1. **Enumerate candidate sources.** The operator's keepers are **highlighted, then
-   archived** — so the primary signal is *highlighted sources*, not the inbox. A freshly
-   saved, unhighlighted, untagged doc is exactly what the highlight gate is meant to exclude,
-   so **do not default to `location="new"`.** Enumerate, in priority order:
-   - **(primary) Highlighted sources** — `readwise_list_highlights` (the Readwise highlights
-     library), grouped by `book_id`. Every highlighted source is a candidate. Gather
-     `book_id`, `book_title`, `book_author`, `book_source_url`, `book_category`, `book_tags`,
-     and each highlight's `text`/`note`/`highlighted_at`. Page from most-recent and **bound the
-     window** (e.g. last N pages, or `highlighted_at_gt` a date) unless asked to go deeper —
-     the library can hold tens of thousands of highlights. Key: `source_key = readwise-<book_id>`.
+1. **Enumerate candidate sources from the plugin's folder.** The operator's keepers are
+   **highlighted, then archived** — so the primary signal is *highlighted sources*, not the
+   inbox. Readwise's export only emits sources that *have* highlights, so the plugin's
+   `Readwise/` folder is already pre-filtered to that population — there is no `location="new"`
+   equivalent to worry about here. In priority order:
+   - **(primary) The plugin's `Readwise/` folder.** Read every `Readwise/**/*.md` file
+     (`obsidian-notes` `read`, or `Glob`+`Read` — bound the sweep to files modified since the
+     last capture run if the folder is large; unless asked to go deeper, a full sweep is fine
+     since parsing is cheap and local, no rate limits). Build `file_texts = {path: content}`
+     and call `${CLAUDE_PLUGIN_ROOT}/skills/kb-capture/scripts/readwise_folder.py`'s
+     `collect_sources(file_texts)`. This single call does all of the mechanical work:
+     - Recovers `book_id` per source. **`book_id` stays the identity key** — a file/block with
+       no `book_id` (gen1 exports, ~76% of the folder) cannot be captured this way and is
+       skipped; this mirrors the design note's migration guidance to leave the id-less
+       population alone, not force-migrate it.
+     - Aggregates **every** dated `## New highlights added <date>` section a note has
+       accumulated (the plugin appends, never rewrites — losing anything but the first
+       section would silently truncate highlights added after the initial sync).
+     - Handles both backlink forms transparently (`([View Highlight](...))` for
+       articles/Reader docs, `([Location N](...))` for Kindle books — note the space before
+       the Kindle location number is a non-breaking space, not ASCII, which is why this is a
+       script and not an ad hoc grep).
+     - Merges the plugin's gen1/gen2 intra-`Readwise/` duplication — both duplicate *files*
+       (e.g. two "Perfect Health Diet" notes) and duplicate *blocks within one file* (the
+       plugin has been observed to resolve some title collisions by concatenating a second
+       source's complete export into the same file instead of writing a `-2.md` sibling) —
+       deduped by highlight backlink URL, so the same highlight is never double-counted.
+     - Each result is `{book_id: {"highlights": [...], "metadata": {...}, "paths": [...]}}`;
+       each highlight is `{"text": str, "note": str, "backlink": str}` — directly compatible
+       with `kb_core.highlights_fingerprint`/`new_highlights`, which only read `.text`/`.note`.
+     Key: `source_key = kb_core.source_key({"id": book_id})` = `readwise-<book_id>`.
    - **(override) `kb`-tagged Reader docs** — `reader_list_documents(tag=["kb"])`, any
-     location; captured unconditionally (Path B). Key: `source_key = readwise-<reader_id>`.
-   - **(named input)** — if an id/url was passed, resolve just that source
-     (`reader_get_document_details` + `reader_get_document_highlights`, or `readwise_list_highlights(book_id=…)`).
-
-   Large highlight pages can exceed the response limit and be saved to a file — page through
-   with `jq`/a script rather than loading the whole payload into context.
+     location; captured unconditionally (Path B). This is the one path still using the
+     Readwise MCP: Readwise never exports a zero-highlight source into the plugin's folder at
+     all, so folder-parsing structurally cannot recover it (see § Second Readwise pipeline).
+     Key: `source_key = readwise-<reader_id>`.
+   - **(named input)** — if an id/url was passed, resolve just that source via the Path-B MCP
+     query (`reader_get_document_details` + `reader_get_document_highlights`) if it's not
+     found in the folder; prefer the folder's copy when both exist.
 2. **Evaluate eligibility** per source (SPEC §2.1) using
    `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py`:
-   - `has_capture_tag` = the `kb` tag (`kb_core.CAPTURE_TAG`) is present on the doc.
-   - `highlight_count` / `notes_count` from the doc's highlights and notes.
+   - `has_capture_tag` = the `kb` tag (`kb_core.CAPTURE_TAG`) is present (Path-B sources only —
+     the plugin folder carries no reliable Reader-tag signal, see § Second Readwise pipeline).
+   - `highlight_count` = `len(highlights)`; `notes_count` =
+     `readwise_folder.notes_count(highlights)` — both from the `collect_sources` result.
    - `work_relevant` = **your** judgment of work-relevance scored against `WORK-DOMAINS.md`
-     (AI/LLM content relevant only when tied to engineering/agent automation). This is the
-     one non-deterministic input; everything else is mechanical.
+     (AI/LLM content relevant only when tied to engineering/agent automation), reading the
+     source's title/highlights. This is the one non-deterministic input; everything else is
+     mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
-   - Record the deciding gate for skipped docs (for the report).
+   - Record the deciding gate for skipped sources (for the report).
 3. **Idempotency guard — content-aware, not existence-only.** Compute
    `key = kb_core.source_key(source)` (pass the Readwise `book_id` for highlighted sources, or
    the Reader `id` for tagged/named docs). The raw artifact path is `raw/<key>.md`. Probe with
@@ -63,10 +103,12 @@ I/O-via-CLI shape as the `compound` skill.
           compare against yet); skip, but still do the frontmatter-only rewrite in step 3a to
           backfill `highlights_hash` so the next sweep takes the fast path in 3.3.
         - **Non-empty** → go to step 3a: fold the new highlight(s) into the existing note.
-   - **Dedup:** a source reachable both as a highlighted book and a Reader doc must be
-     captured once — prefer the `book_id` key when it has highlights, so the two paths don't
-     produce two `raw/` notes for the same source. (See also § Second Readwise pipeline below
-     for the Obsidian-plugin case.)
+   - **Dedup:** a source reachable both via the plugin folder (Path A) and the `kb`-tag
+     override (Path B) must be captured once — prefer the `book_id` key when the folder has
+     it, so the two paths don't produce two `raw/` notes for the same source. `collect_sources`
+     already dedupes *within* the folder (duplicate files and duplicate blocks — see step 1);
+     this bullet is about the folder-vs-Path-B boundary, which is the only remaining place two
+     pipelines could still collide (see § Second Readwise pipeline below).
 
 3a. **Fold-in update** (reached from 3.4 when there's new content, or as a hash-only backfill
     when there isn't). Read the full existing note (`obsidian-notes` `read`):
@@ -88,6 +130,21 @@ I/O-via-CLI shape as the `compound` skill.
    metadata and highlights/notes unmodified (AC-1.1). Include `highlights_hash:
    "<current_hash>"` (from step 3's `kb_core.highlights_fingerprint`) in the frontmatter so a
    later sweep can take the fast no-op path in step 3.3. Schema below.
+   - **Metadata source (Path A, folder-derived):** `title`/`author`/`url` come from
+     `collect_sources(...)[book_id]["metadata"]` (`readwise_folder.extract_metadata` —
+     best-effort across the plugin's coexisting note generations; empty string when
+     unrecoverable, e.g. `url` is legitimately empty for a Kindle book with no source URL).
+     `category` comes from the immediate subfolder the source's file(s) live under
+     (`Readwise/Articles` → `articles`, `Readwise/Books` → `books`, `Readwise/Tweets` →
+     `tweets`), not parsed from content. `reader_tags` is always `[]` — the plugin carries no
+     reliable per-source Reader-tag signal (see § Second Readwise pipeline); this is
+     unchanged from today's behavior (empirically dead code — all 51 pre-migration `raw/`
+     notes already had `reader_tags: []`).
+   - **Highlights body:** render each `collect_sources(...)[book_id]["highlights"]` entry as
+     `> <highlight text>` (and its `note`, if non-empty, under `## Notes`), same convention as
+     before — `kb-compile`'s read contract only looks at `source_key`/`type`/`sources:`, so
+     the exact internal rendering doesn't need to match the plugin's own layout byte-for-byte,
+     only preserve every highlight's text verbatim (AC-1.1).
    - **Compose the frontmatter with `fm-emit.py` when it's installed, not by hand.** `title` and
      `author` routinely contain a bare `: ` (e.g. "Claude Sonnet 5 vs Opus 4.8: Which Model…"),
      plus `#`, `[`, or a leading `@` — unquoted, any of these breaks the `---`...`---` block, and
@@ -179,35 +236,55 @@ AC-1.6 ("re-capture is a no-op") now means *content-stable* re-capture is a no-o
 whose highlights haven't changed is still skipped exactly as before. A source whose highlights
 *have* changed is no longer silently and permanently skipped (the bug this fixes).
 
-## Second Readwise pipeline (Obsidian "Readwise Official" plugin) — reconciliation, not full integration
+## Second Readwise pipeline (Obsidian "Readwise Official" plugin) — now the only sync mechanism
 
-The vault also runs the community **Readwise Official** Obsidian plugin
+**Adopted (2026-07-18).** The vault runs the community **Readwise Official** Obsidian plugin
 (`.obsidian/plugins/readwise-official/`), which does its own content-level incremental sync
-of the same Readwise library into a `Readwise/` vault folder, keyed by `book_id` via its own
-`booksIDsMap`. This is a second, currently disconnected pipeline from this MCP-based sweep
-into `raw/`. Fully hybridizing kb-capture to read the plugin's synced folder instead of
-polling `readwise_list_highlights` (letting the plugin, which is free and already running,
-own sync mechanics; kb-capture would then only filter + reformat into `raw/`) is a larger
-rearchitecture deferred as follow-up — it needs the plugin's actual synced-note schema
-inspected against a live vault to key off correctly, which is out of scope for this change
-(see kb-capture `SKILL.md` § Follow-up).
+of the Readwise library into the `Readwise/` vault folder, keyed by `book_id` via its own
+`booksIDsMap`. This *used to be* a second, disconnected pipeline racing this sweep's MCP polls
+into `raw/` — the audit found 18 confirmed, then 51 (100% of `raw/`) after a plugin re-sync,
+duplicate `book_id`s staged in both places. That risk is now structurally closed: this sweep
+no longer polls Readwise at all for Path A. The plugin is the *only* thing that talks to
+Readwise; this operation only reformats its local output. See
+`Notes/2026/07/2026-07-17-readwise-double-capture-audit-plugin-hybrid.md` for the full audit
+and rearchitecture rationale (Proposal / Verified findings / Migration path sections).
 
-**What's true today (2026-07-17 audit):** both pipelines key off the same Readwise `book_id` —
-this sweep's `source_key` is `readwise-<book_id>`, and the plugin's `booksIDsMap` is also
-`book_id`-keyed. But a shared key only makes duplicates **detectable**, not **prevented**: the
-two pipelines write to different paths (`Readwise/` for the plugin, `raw/` for this sweep) and
-this sweep never reads `Readwise/`, so nothing dedupes between them. The audit confirmed 18
-duplicate `book_id`s already staged in both `raw/` (51 notes) and `Readwise/` (1196 notes). The
-plugin only syncs on Obsidian load (auto-sync off, `frequency: 0`); its last sync predates this
-sweep's first capture by two days, so today's 18 are a one-time backlog overlap rather than two
-pipelines actively racing — but the other 33 `raw/` book_ids the plugin hasn't seen yet will
-duplicate on its next sync, i.e. 100% of `raw/` will eventually have a plugin-side twin. No
-code changes are needed *yet* because this sweep does not read the plugin's folder at all — but
-the manual check below exists to catch duplicates that already occurred, not just to guard
-against future id drift. The manual check for now: before compiling, cross-check the
-`readwise_book_id` values already staged under `raw/*.md` against the plugin's `booksIDsMap`
-(`.obsidian/plugins/readwise-official/data.json`); treat any match as a confirmed duplicate to
-reconcile (drop or merge), not merely evidence of a hypothetical id-drift bug.
+**Prerequisite this design inherits, not resolves:** the plugin must actually run
+(`frequency` set to a real interval, not `0`) for Path A to ingest anything — a dormant
+plugin under this design means no ingestion at all, since kb-capture no longer has an
+independent MCP fallback for Path A. This is a config change on the plugin side, not
+something this operation can enforce; flag it if a sweep finds nothing new for an
+implausibly long stretch.
+
+**What Path B (`kb`-tag override) still needs the MCP for, and why it can't move to the
+folder:** Readwise's export only emits sources that *have* highlights, so a `kb`-tagged
+source with **zero** highlights is never written into `Readwise/` at all — no amount of
+folder-parsing can recover it. The plugin's `tags:` frontmatter also carries only the
+Readwise *category* (`#articles`/`#tweets`/`#books`), never the operator's `kb` tag — 0/1196
+plugin notes in the audited vault carried it. The narrow `reader_list_documents(tag=["kb"])`
+query in step 1 exists solely to keep this path alive; it is cheap (one filtered query, not a
+full sweep) and, per the audit, empirically dead code today (all pre-migration `raw/` notes
+had `reader_tags: []` — Path B has never fired) — kept per the design note's explicit
+"do not silently drop it" guidance rather than retired outright.
+
+**Migration note (one-time, already applied 2026-07-18):** the 18/51 duplicates between
+`raw/` and `Readwise/` that motivated this rearchitecture are inert going forward — `raw/`
+notes already staged are untouched by this change (idempotency is content-fingerprint-keyed,
+so re-running the sweep over a source whose folder-derived content is unchanged is a no-op,
+not a rewrite), and no backfill/reconciliation pass was required as a precondition for this
+PR. If a stronger cleanup (e.g. deduping the pre-existing 51 against `Readwise/`) is wanted,
+track it as separate follow-up — out of scope here.
+
+**Not carried forward from the design note (verify against a live vault, not assumed):** a
+single `Readwise/` file can hold more than one independently-frontmattered source
+concatenated together — observed on 5/1235 notes in the audited vault as the plugin's
+resolution of a title collision (writing a second complete export into the same file instead
+of a `-2.md` sibling), rather than the design note's assumed 1-file-to-≤1-`book_id` shape.
+`readwise_folder.split_into_book_blocks` handles this; see its docstring and
+`test_readwise_folder.py`'s `TestSplitIntoBookBlocks`/`TestCollectSources` for the concrete
+case. Flagging this here since it's a correction to the design note's Identity section
+("filename is not an identity key... -2/-3 suffixes on collision"), discovered during
+implementation rather than during the original audit.
 
 ## Acceptance Criteria (SPEC §2.1)
 
@@ -221,6 +298,12 @@ place, not skipped), AC-1.7 (tagged with zero highlights/notes captured).
 - `kb_core.is_eligible`, `kb_core.source_key`, `kb_core.CAPTURE_TAG`,
   `kb_core.highlights_fingerprint`, `kb_core.new_highlights` —
   `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py`
-- Readwise MCP `reader_*` tools — source documents
+- `readwise_folder.collect_sources` (and its primitives — `extract_book_id`,
+  `split_into_book_blocks`, `split_sections`, `extract_highlights`, `merge_highlights`,
+  `extract_metadata`, `notes_count`) —
+  `${CLAUDE_PLUGIN_ROOT}/skills/kb-capture/scripts/readwise_folder.py` — Path A source
+- The plugin's `Readwise/` vault folder — Path A source documents (read via `obsidian-notes`
+  or `Glob`+`Read`, no MCP call)
+- Readwise MCP `reader_*` tools — Path B (`kb`-tag override) only
 - `obsidian-notes` skill — vault path resolution + `raw/` writes
 - `WORK-DOMAINS.md` (workspace) — work-relevance reference for step 2
