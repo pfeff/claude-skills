@@ -9,37 +9,44 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.3.0
+version: 0.4.0
 ---
 
 # KB Capture
 
 Implements the capture / ingest stage of the LLM Knowledge Base workflow (SPEC §2.1).
-Eligible Readwise Reader documents land in the vault's `raw/` staging queue with their
-origin metadata and highlights/notes intact, ready for `/kb-compile`.
+Eligible Readwise sources land in the vault's `raw/` staging queue with their origin metadata
+and highlights/notes intact, ready for `/kb-compile`.
 
-> **Status:** complete. The deterministic core is implemented and unit-tested in `kb-core`
-> (`is_eligible`, `source_key`, `highlights_fingerprint`, `new_highlights` —
-> AC-1.2/1.3/1.4/1.6/1.7). The Readwise read and `raw/` write are agent-orchestrated per
-> `operations/capture.md` (Readwise MCP + `obsidian-notes` CLI), and the full
-> capture→compile→lint flow was verified end-to-end against a live vault. Idempotency is
+> **Status:** complete, plugin-hybrid. The deterministic core is implemented and unit-tested
+> in `kb-core` (`is_eligible`, `source_key`, `highlights_fingerprint`, `new_highlights` —
+> AC-1.2/1.3/1.4/1.6/1.7) and, for Path A, in `kb-capture`'s own `readwise_folder`
+> (`collect_sources` and its primitives — `book_id`/highlight/metadata extraction, dated
+> append-section aggregation, both backlink forms, gen1/gen2 duplicate handling). The vault
+> reads/writes are agent-orchestrated per `operations/capture.md`. Idempotency is
 > content-aware, not existence-only: a source that gains highlights after its first capture
 > is folded into the existing `raw/<key>.md` on the next sweep instead of being skipped
 > forever (`operations/capture.md` § Re-sync vs. skip).
 
-> **Follow-up (deferred):** the vault also runs the community "Readwise Official" Obsidian
-> plugin, which does its own content-level sync into a `Readwise/` folder — a second,
-> currently disconnected pipeline from this MCP-based sweep. Rearchitecting kb-capture into a
-> hybrid (plugin owns sync mechanics; kb-capture only filters + reformats from the plugin's
-> folder into `raw/`) needs the plugin's live synced-note schema inspected against a real
-> vault and is out of scope here. See `operations/capture.md` § Second Readwise pipeline for
-> the reconciliation approach landed now (shared `book_id` identity) vs. what's deferred.
+> **Plugin-hybrid (2026-07-18, operator-signed-off):** Path A (the highlight sweep) no
+> longer polls Readwise via MCP. The community "Readwise Official" Obsidian plugin is now
+> the sole system that talks to Readwise; it syncs into the vault's local `Readwise/` folder,
+> and this skill reformats/filters from that folder into `raw/` instead — closing the
+> double-capture risk a live audit found (51/51 `raw/` sources had duplicated into the
+> plugin's folder). `book_id` stays the identity key throughout; `kb-compile` is unchanged.
+> Path B (the `kb`-tag override) still uses a narrow Readwise MCP query, because Readwise
+> never exports a zero-highlight source into the plugin's folder at all. See
+> `operations/capture.md` § Second Readwise pipeline, and
+> `Notes/2026/07/2026-07-17-readwise-double-capture-audit-plugin-hybrid.md` for the audit and
+> design this implements.
 
 ## What it sweeps
 
 The operator's workflow is **highlight → archive**, so highlighted sources (not the inbox)
-are the keeper signal. The default sweep enumerates the **Readwise highlights library**
-(grouped by source), *not* `location="new"`. See `operations/capture.md` step 1.
+are the keeper signal. The default sweep enumerates every source in the Readwise Official
+plugin's local **`Readwise/` vault folder** — already pre-filtered to highlighted sources,
+since Readwise's export only emits sources that have highlights — *not* `location="new"` and
+*not* a live `readwise_list_highlights` poll. See `operations/capture.md` step 1.
 
 ## Capture-eligibility predicate (SPEC §2.1)
 
@@ -75,11 +82,16 @@ last capture is updated in place (`kb_core.new_highlights`) rather than skipped.
 
 ## Integration Points
 
-- **Readwise** — highlighted sources via `readwise_list_highlights` (primary); Reader docs via `reader_*` tools (kb-tag override / named input).
+- **Readwise Official plugin `Readwise/` folder** — highlighted sources (primary, Path A); no
+  MCP call, read via `obsidian-notes`/`Glob`+`Read`.
+- **Readwise MCP `reader_*` tools** — `kb`-tag override only (Path B — Readwise never exports
+  a zero-highlight source into the plugin's folder, so this path can't move to the folder).
+- **kb-capture's `readwise_folder`** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-capture/scripts/readwise_folder.py`
+  (`collect_sources` and its primitives) — parses the plugin folder for Path A.
 - **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`, `highlights_fingerprint`, `new_highlights`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
 - **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
-- **kb-compile** — consumes the `raw/` queue this skill fills.
+- **kb-compile** — consumes the `raw/` queue this skill fills; unchanged by this rearchitecture.
 
 ## See Also
 
