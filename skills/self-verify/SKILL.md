@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Write
   - Task
-version: 1.0.0
+version: 1.1.0
 ---
 
 # self-verify — job self-verification + annotation
@@ -135,6 +135,24 @@ if present; otherwise fall back to DESIGN.md / PLAN.md / dispatch prompt.
 - Did the job self-resolve a Tier 1 decision (see
   `../decision-rights-doctrine/SKILL.md`) instead of escalating it to the
   operator?
+- Did the job violate the Pre-Output Classification Gate (global
+  `CLAUDE.md`; see `~/.claude/docs/reference/pre-output-classification-gate.md`)
+  — i.e. did it commit one of the gate's three named failure modes:
+  **silent assumption** (built on an ungrounded guess instead of grounding or
+  asking), **buried question** (raised a needs-input gap in prose instead of
+  via `AskUserQuestion`), or **proposal-in-limbo** (laid out options and
+  ended the turn with nothing decided)? Read the diff and any prose in the
+  job's own report for these patterns, not just its final action.
+
+  If found, this is an axis-1 finding (severity per whether it produced a
+  wrong/unreviewable result). It is **also** a measurement event, distinct
+  from the finding: log it via `~/.claude/hooks/gate-violation-write.sh`
+  (piping a JSON record with `session_id`, `violation_type` — one of
+  `silent-assumption` | `buried-question` | `proposal-in-limbo` — `reason`,
+  and `context_after`) so violation frequency stays queryable across
+  sessions in `~/.claude/corrections.jsonl`. This logging step is
+  best-effort — if the hook is unavailable, note the missed log in the
+  annotation and continue; do not block the self-verify pass on it.
 
 If `.claude/task-context.md` carries an Override annotation (see
 `references/task-context.md` "Override annotation") naming unresolved
@@ -224,3 +242,6 @@ frontmatter) and then stop. Do not open PRs, merge, or take further action.
 - `references/task-context.md` — task-context convention: four-field format, file location, fallback order
 - `../lN-review-doctrine/SKILL.md` — 3-axis doctrine and verification map
 - `../review/SKILL.md` — the `/review` skill this composes for code-level findings
+- `~/.claude/docs/reference/pre-output-classification-gate.md` (dotfiles) — the
+  gate's three failure modes and the `gate-violation-write.sh` measurement
+  convention Axis 1 logs into
