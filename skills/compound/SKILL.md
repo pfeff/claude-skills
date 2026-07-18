@@ -15,7 +15,7 @@ version: 0.2.0
 
 # Compound Skill
 
-Captures a solved problem as a `type=solution` note in the host's Obsidian vault, using the vault's `Solution` template. Notes are discovered by future agents via QMD hybrid search (BM25 + vector + reranker) over the vault.
+Captures a solved problem as a `type=reference` note in the host's Obsidian vault, using the vault's real frontmatter convention. Notes are discovered by future agents via QMD hybrid search (BM25 + vector + reranker) over the vault.
 
 ## Core Concepts
 
@@ -23,7 +23,7 @@ Captures a solved problem as a `type=solution` note in the host's Obsidian vault
 
 **Vault-resident**: Notes live in the Obsidian vault, not in any repository's `docs/`. The actual file write is delegated to the `obsidian-notes` skill (CLI-first); vault location is resolved per-host from `~/.claude/hosts/<hostname>.md`.
 
-**Schema**: Solution notes use the vault's `Solution` template. Frontmatter fields, body sections, and the `type=solution` vocabulary are defined in `$OBSIDIAN_VAULT_PATH/Templates/Solution.md`.
+**Schema**: Solution notes use the vault's real note convention — there is no dedicated `Solution` template or `problem_type` frontmatter field in the vault. Notes are written as `type=reference` (the closest existing note type). Problem classification (build-error, severity, etc.) is captured as `tags`, not invented frontmatter keys. See Integration Points below for the property list and `operations/document-solution.md` for the full field mapping.
 
 ## Invocation
 
@@ -53,7 +53,7 @@ Read(file_path: "${CLAUDE_PLUGIN_ROOT}/skills/compound/operations/document-solut
 **File**: `operations/document-solution.md`
 **When**: User invokes `/claude-skills:compound` to capture a solved problem.
 
-**Quick summary**: Gather problem context, generate frontmatter, write a `type=solution` note via the `obsidian-notes` skill using the vault's `Solution` template.
+**Quick summary**: Gather problem context, generate frontmatter, write a `type=reference` note via the `obsidian-notes` skill using the vault's real properties (`area`/`project`/`status`/`date`/`tags`/`keywords`, set explicitly via `property:set` — no template).
 
 ## Output
 
@@ -67,7 +67,7 @@ Creates a solution note at:
 
 ## Integration Points
 
-- **Vault Solution template**: `<vault>/Templates/Solution.md` — frontmatter schema (`type`, `date`, `problem_type`, `severity`, `module`, `repo`, `project`, `tags`, `keywords`, `related`) and body sections (Problem, Symptoms, Root Cause, Solution, Prevention).
+- **Vault Reference template**: `<vault>/Templates/Reference.md` — the note type compound builds on; frontmatter schema is the vault's standard `type`/`area`/`project`/`status`/`date`/`tags` (plus the real, registered `keywords` field). Body sections (Problem, Symptoms, Root Cause, Solution, Prevention) are caller-composed, not template-defined.
 - **Obsidian-notes skill**: `~/.claude/skills/obsidian-notes/SKILL.md` — CLI surface (`create`, `property:set`, `append`) used for the write, plus the non-blocking failure contract.
 - **Host config**: `~/.claude/hosts/<hostname>.md` `## Obsidian` section — vault path, CLI binary.
 - **Retrieval**: QMD hybrid search over the vault — `skills/task-workflow/references/solution-search.md` defines the canonical query protocol used by `init-workspace`, `planning-workflow`, and other read-side callers.
