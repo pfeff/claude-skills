@@ -55,6 +55,12 @@ inside this skill, stop — that logic belongs in skill-creator, not here.
    - An explicit **Edge Cases** section listing anything the history
      couldn't resolve — gaps to ask the user about, not guesses to bake in
      silently
+   - If a step verifies/validates against a flaky or slow **external**
+     resource (a third-party API/service, an OS-integration shell-out),
+     check `docs/skill-authoring.md` rule 3 before drafting it — that step
+     must run through `run_bounded_external`
+     (`skills/self-verify/references/bounded-external-waits.md`), not an
+     unbounded wait.
 
 3. **Show the draft and confirm before writing.** This is the safety step —
    never skip it. If the user wants changes, iterate on the draft in
