@@ -60,9 +60,36 @@ if [[ "$REPO" == */agent-coordinator ]]; then
   # Restart the service
   launchctl kickstart -k gui/$(id -u)/com.pfeff.agent-coordinator
 
-  # Verify health
+  # Verify health — bounded. The naive `curl || echo WARNING` this replaces
+  # looks like a safety net but isn't one: curl blocks forever on a wedged
+  # connection (accepted but never answered), and the `||` fallback can only
+  # fire on a definite exit — so a hang here silently wedges the whole merge
+  # action with no warning ever printed. run_bounded_external fixes that by
+  # capping wall-clock time and independently detecting a stalled curl via
+  # flat-CPU sampling. Cap chosen for a *local* health endpoint immediately
+  # after `launchctl kickstart`: 10s hard cap (a healthy loopback response is
+  # low-latency; 10s is generous slack for a cold BEAM/Phoenix boot, not
+  # slack for "this is just slow"), sampled every 2s with a stall declared
+  # after 3 flat samples (~6s) since a wedged curl reads ~0% CPU almost
+  # immediately. `--max-time 5` stays on the curl itself as defense in
+  # depth, not redundant noise: this Deploy Procedure is also read and
+  # copy-pasted by a human per the numbered steps below, and a bare
+  # standalone curl (run outside the wrapper) would regain the original
+  # unbounded-hang bug. Requires bash explicitly, not the ambient shell:
+  # run_bounded_external's `set -m` process-group isolation hard-errors
+  # under zsh, and the operator's login shell is zsh. See
+  # ../../self-verify/references/bounded-external-waits.md.
   sleep 3
-  curl -sf http://localhost:4000/api/health || echo "WARNING: Health check failed after deploy"
+  health_output=$(bash -c "
+    source '${CLAUDE_PLUGIN_ROOT}/skills/self-verify/scripts/run-bounded-external.sh'
+    run_bounded_external 'curl -sf --max-time 5 http://localhost:4000/api/health' 10 2 3
+  ")
+  health_status=$?
+  case "$health_status" in
+    0) : ;;  # healthy — deploy verified
+    2|3) echo "WARNING: Health check inconclusive after deploy ($health_output) — verify manually" ;;
+    *) echo "WARNING: Health check failed after deploy" ;;
+  esac
 fi
 
 # Update coordinator
@@ -92,8 +119,8 @@ When the merged repo is `agent-coordinator`, the full deploy sequence is:
 3. `cd $AC_REPO_PATH && MIX_ENV=prod mix release --overwrite`
 4. `cd $AC_REPO_PATH && MIX_ENV=prod mix ecto.migrate`
 5. `launchctl kickstart -k gui/$(id -u)/com.pfeff.agent-coordinator`
-6. Wait 3 seconds, then `curl -sf http://localhost:4000/api/health`
-7. If health check fails, log warning but do not roll back (manual intervention needed)
+6. Wait 3 seconds, then check health via `run_bounded_external` (bounded, bash-pinned — see the Merge action above and `../../self-verify/references/bounded-external-waits.md`), not a bare `curl` — a bare `curl -sf http://localhost:4000/api/health` can hang forever on a wedged connection with no warning ever printed
+7. If health check fails **or is inconclusive** (hard-cap/stall), log warning but do not roll back (manual intervention needed)
 
 ## Integration Points
 
