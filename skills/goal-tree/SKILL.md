@@ -63,7 +63,7 @@ allowed-prompts:
     prompt: create node via discuss-dispatch script
   - tool: Bash
     prompt: check active nodes for completion
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Goal Tree Workflow
