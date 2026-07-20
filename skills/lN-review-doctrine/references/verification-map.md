@@ -106,12 +106,33 @@ listed severity (per `checklist.md` severity rules):
      the PR — treat a missing or red host-agnostic check as a gap
      (axis-2 finding, UNCLEAR → NEEDS-WORK rather than a silent
      PASS).
+7. **Bounded external waits in verify steps** (process — warning,
+   **blocking** if the step is a required-verification step per this
+   map) — There is no reliable mechanical check for this (see
+   `docs/skill-authoring.md` rule 3): distinguishing "an external
+   call" from "a call to the repo's own test/build tooling," and
+   "this is a verify step" from "this is an illustrative example,"
+   both need judgment. Substitute a manual read: for any new or
+   changed verify/validation/acceptance-check step in the diff that
+   shells out to a third-party API/service or an OS-integration
+   shell-out (AppleScript, iCloud, system automation), confirm it
+   runs through `run_bounded_external`
+   (`skills/self-verify/references/bounded-external-waits.md`) rather
+   than an unbounded wait, AND that it's invoked with an explicit
+   `bash` interpreter (shebang, `bash script.sh`, or `bash -c`) — the
+   recipe hard-errors under zsh (`set: can't change option: -m`) and
+   silently loses process-group isolation under lenient `sh`
+   handling. A step that talks only to the repo's own test/build
+   toolchain (unit tests, `go build`, a linter) is out of scope for
+   this item — it is not the "external" class this doctrine covers.
 
 Item 1 is the load-bearing one for cross-skill contracts; item 6
 is the load-bearing one against host/private leaks (mechanical,
-never eyeballed); the others are loading/coherence checks. Running
-them together takes a few minutes of grepping and is the actual
-content of axis 2 for doctrine-class PRs.
+never eyeballed); item 7 is the load-bearing one against silent
+unbounded hangs in future verify steps; the others are
+loading/coherence checks. Running them together takes a few minutes
+of grepping and is the actual content of axis 2 for doctrine-class
+PRs.
 
 ## Workflow-class PR sub-checklist
 

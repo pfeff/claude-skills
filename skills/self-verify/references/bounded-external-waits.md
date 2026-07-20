@@ -1,8 +1,10 @@
 # Bounded external verify waits
 
 Canonical home for this doctrine. Referenced by `../SKILL.md` (self-verify),
-`../../dispatch-gate/SKILL.md`, and `../../task-workflow/operations/validate-implementation.md`.
-Edit here, not in the consumer skills.
+`../../dispatch-gate/SKILL.md`, `../../task-workflow/operations/validate-implementation.md`,
+`../../../docs/skill-authoring.md` (rule 3, authoring-time), and
+`../../lN-review-doctrine/references/verification-map.md` (Doctrine-class PR
+sub-checklist item 7, review-time). Edit here, not in the consumer skills.
 
 ## Origin evidence
 
