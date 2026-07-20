@@ -21,3 +21,4 @@ ${REPOS_LIST}
 - See **DESIGN.md** for requirements and acceptance criteria.
 - Use `TaskList` for implementation progress; `cd ${PROJECT_DIR}` and `Read(${PROJECT_DIR}/GOAL.md)` for project state.
 - This workspace auto-advances (implement → validate → commit → next); see the `auto-advance` operation for loop/stop behavior.
+- **This node is working space, not storage.** Close it via the sanctioned close path, never bare `git worktree remove`/`rm -rf`. And regardless of how it closes: any spec, design doc, or decision record meant to outlive this node must go to the Obsidian vault (via `obsidian-notes`) during the work — not stay only in this node's DESIGN.md.

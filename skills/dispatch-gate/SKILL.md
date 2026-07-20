@@ -92,7 +92,14 @@ Evaluate what's known against the four fields:
 1. **Objective** — what the job is trying to achieve.
 2. **Acceptance test** — the observable condition that proves it done.
 3. **Scope / blast-radius bound** — what the job may touch.
-4. **Affected surface** — paths, skills, or system boundaries touched.
+4. **Affected surface** — paths, skills, or system boundaries touched. If
+   the job will produce a durable artifact — a spec, design doc, runbook,
+   decision record, anything meant to outlive the job — the affected
+   surface includes the Obsidian vault: the worker writes it there (via
+   the `obsidian-notes` skill) during the run, not only into its own
+   worktree/workspace. A worktree is working space and may not survive
+   past dispatch; the vault is git-backed and versioned, so it's the only
+   place such an artifact is actually durable.
 
 Apply the fill heuristics (spike work, user-facing-surface work) from
 `../self-verify/references/task-context.md` "Fill heuristics" — do not

@@ -26,3 +26,4 @@ ${REPOS_LIST}
 - Session tasks are implementation steps, not separate GitHub issues.
 - The `GitHub Issue` ref above auto-populates `Closes #N` in PR bodies.
 - This workspace auto-advances (implement → validate → commit → next); see the `auto-advance` operation for loop/stop behavior.
+- **This workspace is working space, not storage.** Close it only via `/close-workspace` (never bare `git worktree remove` or `rm -rf`) — that path archives before deleting. But archiving is not enough: any spec, design doc, runbook, or decision record meant to outlive this task must be written to the Obsidian vault (via the `obsidian-notes` skill) *during* the work, not left only in this DESIGN.md. The vault is git-backed — durable and versioned — a workspace is neither once it's gone.

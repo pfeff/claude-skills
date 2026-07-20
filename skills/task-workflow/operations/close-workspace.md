@@ -19,6 +19,18 @@ Cleanly tears down a task workspace by invoking `close-workspace.sh`.
 
 **If the script fails**: Report the error and exit code. Do not attempt to replicate the script's behavior manually.
 
+## Durable Artifacts Check (do this first, before invoking the script)
+
+The script's archive step (`~/src/work/.archive/<epic>/<task>.tar.gz`) is not a substitute for
+the vault. A tarball can still be pruned or lost, and it's an after-the-fact copy, not a versioned
+record. **The rule that actually prevents permanent loss**: any spec, design doc, runbook, or
+decision record meant to outlive this task must already be in the Obsidian vault (written via the
+`obsidian-notes` skill during the work), not deferred to close time. Before running
+`close-workspace.sh`, scan the workspace (DESIGN.md, notes/, any spec-shaped file) for content that
+should have gone to the vault and hasn't — write it there now if so. This check is independent of
+*how* the workspace eventually goes away: the no-manual-teardown rule above closes one loss path,
+this closes all of them, including this sanctioned one.
+
 ## Purpose
 
 Closes a task workspace when work is complete, preserving artifacts in a compressed archive while cleaning up active resources. All logic is handled by the deterministic script.
