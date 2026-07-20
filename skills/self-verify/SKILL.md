@@ -74,6 +74,15 @@ in SKILL.md or in operations/.
 Each required step that fails becomes a finding in the annotation. Record
 which steps ran and their results as `evidence.tests_run`.
 
+**External-resource steps run bounded.** If a required verification step
+shells out to a flaky or slow resource outside the repo's own test/build
+toolchain (a third-party API, an OS-integration shell-out such as
+AppleScript/iCloud), run it under the hard-cap + kill-on-stall recipe in
+`references/bounded-external-waits.md` rather than waiting on it unbounded.
+A step the recipe kills (hard-cap or flat-CPU stall) is recorded as
+`result: inconclusive`, not `fail` or `skipped` — see that reference for the
+full doctrine and the axis-2 verdict mapping.
+
 ### Step 3 — Compose /review for code-level findings
 
 Run the repo's `/review` skill against the diff to collect L0 per-line
@@ -174,7 +183,10 @@ Did the job follow the required process?
 
 Verdict: `pass` if all required steps ran green. `fail` if any required step
 failed or was skipped. `warn` if a step could not be evaluated (missing
-artifact).
+artifact), **including a step recorded `result: inconclusive`** per
+`references/bounded-external-waits.md` — a stalled or capped external-resource
+step is never `fail` (it didn't fail, it couldn't complete) and never a
+silent `pass`.
 
 #### Axis 3 — Objective Advancement
 
@@ -238,6 +250,9 @@ frontmatter) and then stop. Do not open PRs, merge, or take further action.
 ## References
 
 - `references/annotation-schema.md` — the annotation file format
+- `references/bounded-external-waits.md` — hard-cap + kill-on-stall doctrine
+  and recipe for verify steps depending on flaky/slow external resources;
+  defines the `inconclusive` outcome
 - `references/acceptance-demo.md` — acceptance test results (four sample runs, including code changes)
 - `references/task-context.md` — task-context convention: four-field format, file location, fallback order
 - `../lN-review-doctrine/SKILL.md` — 3-axis doctrine and verification map

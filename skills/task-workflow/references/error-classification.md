@@ -53,6 +53,17 @@ If error output does not match any pattern above:
 2. Use a reduced retry budget: `max(1, transient_retries / 2)` rounded down
 3. Log: "Uncertain error classification — defaulting to transient with reduced retries"
 
+### Not covered here: a process that never exits
+
+Every rule above classifies an error from a **completed** command (exit code
++ stderr/stdout). A verify step that shells out to a flaky/slow external
+resource and hangs produces no output to match — it simply never returns.
+That is a stall, not an error, and this file's retry-on-failure logic
+doesn't apply until the process actually exits. Bound the wait instead: see
+`../../self-verify/references/bounded-external-waits.md` for the hard-cap +
+kill-on-stall recipe (flat-CPU sampling, not wall-clock alone) and the
+`inconclusive` outcome a killed step reports.
+
 ## Usage
 
 Operations load this reference when a step fails:
