@@ -82,6 +82,40 @@ class TestInlineCodeSpanExcluded(unittest.TestCase):
         self.assertEqual(check_fixture("inline-code-span.md"), [])
 
 
+class TestCommentMentionExcluded(unittest.TestCase):
+    """(h) A `#` comment inside a bash fence that merely mentions the
+    vocabulary word, with no invocation and no companion
+    run_bounded_external -> NOT flagged. Reproduced as a live false
+    positive against PR #197 head (4eb042b5) before the command-position /
+    comment-stripping fix; must pass after it."""
+
+    def test_no_violations(self):
+        self.assertEqual(check_fixture("comment-mention.md"), [])
+
+
+class TestUrlSubstringExcluded(unittest.TestCase):
+    """(i) A URL substring like `curl.example.com` inside an `echo` string
+    -> NOT flagged. Reproduced as a live false positive against PR #197
+    head (4eb042b5) before anchoring the vocabulary match to command
+    position; must pass after it."""
+
+    def test_no_violations(self):
+        self.assertEqual(check_fixture("url-substring.md"), [])
+
+
+class TestLoopbackCommentLoopholeFlagged(unittest.TestCase):
+    """(j) A genuinely external curl call whose trailing comment happens to
+    mention "localhost" -> still FLAGGED. Guards against the loopback
+    exclusion degrading into a bare same-line substring search that a
+    comment can defeat; the exclusion must only see the line's code
+    portion (before any `#`)."""
+
+    def test_flags_curl(self):
+        violations = check_fixture("loopback-comment-loophole.md")
+        self.assertTrue(violations, "expected the external call to be flagged")
+        self.assertEqual(violations[0]["call"], "curl")
+
+
 class TestFullCorpusIsClean(unittest.TestCase):
     """(g) The current repo's skills/ and docs/ trees produce zero
     violations — this is the claim the review required proof of before this

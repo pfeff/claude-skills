@@ -55,6 +55,19 @@ given paths. A fence tagged with any other language (e.g. ```markdown``` for
 an illustrative example, ```yaml```, ```python```) is not scanned; those are
 demonstrations, not the actual verify-step code surface.
 
+**Markdown only.** This lint discovers and scans *.md files exclusively
+(see `discover_markdown_files`) — it never reads a *.sh file. A real,
+executable shell script committed anywhere in the repo (e.g. under a
+skill's scripts/ dir) is entirely outside this lint's reach, even if it
+shells out to the vocabulary unwrapped. Widening to *.sh was considered
+and deliberately deferred: a spot check of this repo's committed *.sh
+files turns up several unwrapped curl/ssh call sites (e.g.
+skills/goal-tree/scripts/coord-helpers.sh,
+skills/ralph-wiggum/scripts/run-container.sh), so "extend to *.sh" is not
+the zero-false-positive, drop-in change the *.md scope was — it needs its
+own corpus pass and exclusion review, not a one-line glob change. This
+lint's actual, current guarantee is markdown-only coverage.
+
 No third-party dependencies (stdlib only) so it runs identically in
 pre-commit and CI without an extra install step.
 """
@@ -64,7 +77,20 @@ import sys
 from pathlib import Path
 
 VOCAB = ["curl", "wget", "ssh", "osascript"]
-VOCAB_RE = re.compile(r"\b(" + "|".join(VOCAB) + r")\b")
+
+# Match a vocabulary word only in COMMAND POSITION: the start of the line's
+# code (after optional leading whitespace), or immediately after a
+# statement/pipeline separator (`;`, `&`, `|` — this also covers `&&` and
+# `||`, since the match anchors on the second character), a command
+# substitution opener (`$(`), or a backtick. Still a regex, not a shell
+# parser — it doesn't resolve quoting or subshells — but anchoring to
+# command position (rather than a bare word-boundary search anywhere on the
+# line) is what keeps a mention like "curl needs a timeout" in a comment,
+# or a URL host like `curl.example.com` inside an `echo` string, from
+# matching: neither is preceded by a command-starting delimiter.
+COMMAND_POS_RE = re.compile(
+    r"(?:^|[;&|`]|\$\()\s*(" + "|".join(VOCAB) + r")\b"
+)
 
 FENCE_RE = re.compile(r"^\s*```\s*([A-Za-z0-9_+-]*)\s*$")
 BASHY_LANGS = {"", "bash", "sh", "shell", "zsh", "console"}
@@ -77,8 +103,26 @@ WRAPPED_RE = re.compile(r"run_bounded_external")
 # SAME line as the vocabulary hit (deliberately line-scoped, not
 # block-scoped, so this exclusion can't accidentally mask an unrelated,
 # genuinely-external call elsewhere in the same block).
+#
+# Checked against the line's CODE portion only (text before any `#`
+# comment marker — see `code_part()`), not the raw line: matching the raw
+# line would let a trailing comment like `# not localhost` on an otherwise
+# fully external call suppress a real violation.
 LOOPBACK_RE = re.compile(r"localhost|127\.0\.0\.1|0\.0\.0\.0|::1", re.IGNORECASE)
 INTERNAL_SERVICE_RE = re.compile(r"\bCOORDINATOR_URL\b")
+
+
+def code_part(line):
+    """Return the portion of a line before its first `#` comment marker.
+
+    Deliberately simple (no quote-awareness — a `#` inside a quoted string
+    is still treated as a comment opener). For a line that is entirely a
+    comment, this returns an empty/whitespace string, so neither the
+    command-position vocabulary match nor the loopback/internal-service
+    exclusion check ever considers comment text — closing the false-positive
+    class where a fenced bash block merely narrates a vocabulary word in
+    prose without invoking it (see PR #197 review)."""
+    return line.split("#", 1)[0]
 
 
 def iter_fenced_blocks(text):
@@ -120,10 +164,11 @@ def check_file(path):
             continue  # exclusion 1: already bounded
 
         for offset, line in enumerate(block):
-            m = VOCAB_RE.search(line)
+            code = code_part(line)
+            m = COMMAND_POS_RE.search(code)
             if not m:
                 continue
-            if LOOPBACK_RE.search(line) or INTERNAL_SERVICE_RE.search(line):
+            if LOOPBACK_RE.search(code) or INTERNAL_SERVICE_RE.search(code):
                 continue  # exclusion 2: loopback / internal coordinator
             violations.append({
                 "file": path,
