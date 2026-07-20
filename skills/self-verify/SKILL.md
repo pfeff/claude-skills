@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Write
   - Task
-version: 1.1.1
+version: 1.1.2
 ---
 
 # self-verify — job self-verification + annotation

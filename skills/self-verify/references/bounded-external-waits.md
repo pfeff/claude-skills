@@ -97,12 +97,16 @@ run_bounded_external() {
 
   # Job control (set -m) makes bash put this background job in its own new
   # process group (pgid == pid), so "kill -- -$pid" below reaches it and all
-  # its descendants. Turned back off immediately after backgrounding — the
-  # group assignment happens at fork time and survives that.
+  # its descendants. Restored to the caller's prior state (not unconditionally
+  # off) immediately after backgrounding — the group assignment happens at
+  # fork time and survives that. Without the save/restore, a caller that
+  # already had monitor mode on (interactive shells default to this) would
+  # find it silently turned off after calling this function.
+  local restore_m; case $- in *m*) restore_m="set -m" ;; *) restore_m="set +m" ;; esac
   set -m
   eval "$cmd" &
   pid=$!
-  set +m
+  $restore_m
 
   while kill -0 "$pid" 2>/dev/null; do
     if (( SECONDS - start >= hard_cap )); then
@@ -148,11 +152,20 @@ run_bounded_external() {
 
 # Signal the whole process group ("-$pid", not "$pid") so descendants spawned
 # by a wrapper/script/pipeline die too, not just the directly-backgrounded pid.
+# Also signal the direct pid itself as a fallback: if process-group isolation
+# somehow didn't take (set -m failed to create a distinct pgid), the group
+# kill above silently targets a group that doesn't exist — a no-op, strictly
+# worse than the pre-fix direct-pid kill. The direct kill is a strict subset
+# of what the group kill already reaches when isolation worked (same pid, so
+# it never signals wider than intended), and is a harmless redundant no-op
+# (suppressed) once the group kill has already reaped it.
 _run_bounded_external_kill_group() {
   local pid="$1" grace="${2:-1}"
   kill -TERM -- "-$pid" 2>/dev/null
+  kill -TERM "$pid" 2>/dev/null
   sleep "$grace"
   kill -KILL -- "-$pid" 2>/dev/null
+  kill -KILL "$pid" 2>/dev/null
 }
 
 # Read cumulative utime+stime (clock ticks) from /proc/<pid>/stat. The comm
@@ -220,6 +233,18 @@ macOS-specific), but that is an argument from design, not an empirical
 result. Anyone running this on the operator's WSL2/Linux fleet should
 re-run the wrapped-stall and used-CPU-then-hung cases there before treating
 the Linux path as proven, not just plausible.
+
+**Inherent limitation, not fixable here**: process-group kill only reaches
+descendants that remain in the launched group. A descendant that
+daemonizes into its own session — `setsid`, `nohup` combined with a
+double-fork, or equivalent — deliberately detaches from the process group
+and escapes both the group kill and the direct-pid fallback above. This is
+not a bug in the recipe; it is the same class of escape that any
+process-group-based supervision (not just this one) cannot reach without
+resorting to a session-/cgroup-level mechanism, which is out of scope for a
+light bash helper. If a verify step's external call is known to
+self-daemonize, this recipe cannot guarantee reaping it and a different
+mechanism is needed.
 
 ## References
 
