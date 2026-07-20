@@ -373,11 +373,16 @@ function check_for_pr(node_id, node_info):
   # `set -m` process-group isolation hard-errors under zsh, and the control
   # session's login shell is zsh. See
   # ../../self-verify/references/bounded-external-waits.md.
-  bounded_result = bash -c "
+  # Literal bash — same pattern as the health-check in operations/l1-review.md:
+  # a single command substitution assigns bounded_result, and $? on the very
+  # next line captures ITS exit status. Run both statements as one shell
+  # invocation with nothing in between; do not split them across separate
+  # tool calls or insert other commands, or $? no longer reflects this call.
+  bounded_result=$(bash -c "
     source '${CLAUDE_PLUGIN_ROOT}/skills/self-verify/scripts/run-bounded-external.sh'
     run_bounded_external 'gh pr list --repo $REPO --head $BRANCH --json number,state --jq \".[0]\"' 20 5 3
-  "
-  bounded_status = $?
+  ")
+  bounded_status=$?
 
   if bounded_status in (2, 3):
     # inconclusive (hard-cap or stalled `gh` call) — not "no PR yet" and not

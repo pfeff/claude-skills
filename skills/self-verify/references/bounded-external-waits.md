@@ -69,6 +69,19 @@ a definitive answer.
 
 ## Recipe: flat-CPU kill-on-stall
 
+**This section is the teaching copy; `../scripts/run-bounded-external.sh` is
+the executable copy** that call sites actually `source` instead of
+hand-copying the function body below. The two must stay in sync: the fenced
+code in this section and the script's `run_bounded_external` /
+`_run_bounded_external_kill_group` / `_run_bounded_external_linux_cpu_ticks`
+functions carry the same executable statements (comments may legitimately
+reword — e.g. a cross-reference that reads naturally inline here reads
+differently from a standalone file — but the code itself must match).
+**Editing one requires editing the other in the same change.** Drift is
+caught mechanically by `../scripts/test_bounded_external_equivalence.py`
+(code-only diff, comments excluded), but this pointer is the first line of
+defense for a human editor who hasn't run tests yet.
+
 A light bash helper — not a monitoring framework. Runs a command with a
 hard wall-clock cap and independently samples CPU usage to catch a stall
 before the cap even fires. The command is launched as its own **process
@@ -269,3 +282,9 @@ mechanism is needed.
 - `../../dispatch-gate/SKILL.md` — Step 5 (standing dispatch-brief
   instruction) and Step 6 (frozen-manifest STOP protocol, preserved
   unchanged by this doctrine).
+- `../scripts/run-bounded-external.sh` — the executable copy of the recipe
+  above, sourced by call sites instead of hand-copying the function body.
+  See the note under "Recipe: flat-CPU kill-on-stall" — edit both together.
+- `../scripts/test_bounded_external_equivalence.py` — asserts the recipe's
+  fenced code block and the script stay code-equivalent; fails loudly on
+  drift instead of the two silently diverging.

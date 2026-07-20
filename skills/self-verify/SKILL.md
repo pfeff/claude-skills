@@ -7,7 +7,7 @@ allowed-tools:
   - Grep
   - Write
   - Task
-version: 1.1.2
+version: 1.2.0
 ---
 
 # self-verify — job self-verification + annotation
@@ -79,7 +79,10 @@ shells out to a flaky or slow resource outside the repo's own test/build
 toolchain (a third-party API, an OS-integration shell-out such as
 AppleScript/iCloud), run it under the hard-cap + kill-on-stall recipe in
 `references/bounded-external-waits.md` rather than waiting on it unbounded.
-A step the recipe kills (hard-cap or flat-CPU stall) is recorded as
+The recipe is also available as a sourceable script,
+`scripts/run-bounded-external.sh`, so callers don't have to hand-copy the
+function body — `source` it and call `run_bounded_external` directly. A
+step the recipe kills (hard-cap or flat-CPU stall) is recorded as
 `result: inconclusive`, not `fail` or `skipped` — see that reference for the
 full doctrine and the axis-2 verdict mapping.
 
@@ -253,6 +256,8 @@ frontmatter) and then stop. Do not open PRs, merge, or take further action.
 - `references/bounded-external-waits.md` — hard-cap + kill-on-stall doctrine
   and recipe for verify steps depending on flaky/slow external resources;
   defines the `inconclusive` outcome
+- `scripts/run-bounded-external.sh` — executable copy of that recipe,
+  sourceable by any caller instead of hand-copying the function body
 - `references/acceptance-demo.md` — acceptance test results (four sample runs, including code changes)
 - `references/task-context.md` — task-context convention: four-field format, file location, fallback order
 - `../lN-review-doctrine/SKILL.md` — 3-axis doctrine and verification map
