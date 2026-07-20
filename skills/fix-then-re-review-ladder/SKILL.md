@@ -83,8 +83,8 @@ it is per-host and not readable across operators.
    never counts toward the new HEAD.
 7. **Loop or exit:**
    - New verdict `CLEAN` -> stop looping; hand off to `operator-review`
-     (its Prerequisite is exactly this: all tier-warranted markers posted
-     and CLEAN).
+     (its Prerequisite is all tier-warranted markers posted; this loop's
+     exit condition is what makes them CLEAN by the time of handoff).
    - New verdict `NEEDS-WORK`/`BLOCKING` with new or narrowed findings ->
      back to step 2, triage the new marker.
    - An escalation condition below is met -> **stop**, do not loop further;

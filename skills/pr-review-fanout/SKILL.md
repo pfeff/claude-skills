@@ -5,7 +5,8 @@ allowed-tools:
   - Task
   - SendMessage
   - TaskUpdate
-version: 1.1.1
+  - TaskStop
+version: 1.1.3
 ---
 
 # pr-review-fanout — bulk L1/L2 review-ladder fanout
@@ -155,7 +156,14 @@ merely theoretical:
    physically different files on disk. Cross-PR clobber requires two
    agents sharing one worktree, which only happens in the duplicate-agent
    case (Step 6) — and that case is resolved by stopping all but the
-   sole-finisher, not by scoping the cache path.
+   sole-finisher, not by scoping the cache path. That resolution has a
+   window, not an instant: until the `TaskStop` in Step 6 actually lands,
+   both duplicate agents are writing the same worktree's
+   `.claude/reviews/l<N>-latest.md`, so their local writes can race. This
+   same-worktree write race is harmless for the same reason cross-PR
+   clobber is (bullet 2 below) — the local file is never the evidence
+   anything downstream trusts — but it is a distinct scenario from the
+   cross-PR path-isolation argument above, not covered by it.
 2. **Nothing downstream reads the local cache across agents.** `.claude/reviews/`
    is gitignored (repo-wide `.gitignore`); no consumer — not
    `operator-review`, not `fix-then-re-review-ladder`, not a higher-layer
