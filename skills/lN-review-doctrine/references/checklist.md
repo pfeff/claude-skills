@@ -416,6 +416,7 @@ verdict: CLEAN | NEEDS-WORK | BLOCKING
 level: 1 | 2
 pr: <PR number or "n/a">
 target: <owner/repo#PR or local-branch-name>
+sha: <full 40-char commit SHA reviewed>
 axes:
   conformance: PASS | FAIL | UNCLEAR
   process:     PASS | FAIL | UNCLEAR
@@ -452,6 +453,53 @@ host cannot read that file. All cross-operator evidence — including
 the input that the next layer's axis 2 reads — flows through the PR
 comment.
 
+### Marker currency (staleness detection across both surfaces)
+
+**Problem this closes (backlog #58, observed on PR #189).** The
+issue-comment mirror is update-in-place (one comment per marker
+type — see "Find-or-update by marker" below), so a re-review always
+overwrites it: a BLOCKING→CLEAN re-review leaves that surface reading
+CLEAN. The PR review-object surface is **append-only** — a re-review
+posts a *new* review object rather than editing the old BLOCKING one
+(intentional, see "Scope" below). A reader who trusts an arbitrary
+review object on that surface — rather than the most recent one that
+actually covers the current diff — sees BLOCKING while the
+issue-comment reader sees CLEAN. That asymmetry is misleading only to
+a reader who doesn't already resolve it correctly.
+
+**Resolution: every marker (both layers) carries a `sha` field — the
+full 40-char commit SHA of the exact revision reviewed — so staleness
+is mechanically detectable on *either* surface without relying on
+comment-ordering or timestamp heuristics.** Two things make this
+concrete:
+
+1. **Re-review always targets current HEAD and posts a fresh event
+   (already-correct existing behavior, restated as a requirement).**
+   `pr-review-fanout` Step 1 and `fix-then-re-review-ladder` Step 1
+   already treat a marker posted against an older SHA than the PR's
+   current HEAD as not covering the current diff and re-run the
+   ladder; that re-run's post carries the *new* HEAD's `sha`. This
+   doctrine mandates that behavior explicitly: **a review MUST NOT be
+   considered to cover a HEAD other than the one whose SHA is written
+   into its own marker.**
+2. **Every reader — on either surface — filters by `sha` before
+   trusting a verdict**, per "How the next layer reads the artifact"
+   below. A marker whose `sha` doesn't match the PR's current HEAD is
+   stale regardless of which surface carries it or how recently it
+   was posted; a marker whose `sha` matches current HEAD is current
+   regardless of older, differently-verdicted markers sitting beside
+   it on the append-only surface.
+
+This is additive: the `sha` field is a new line inside the existing
+marker body. The marker tokens (`review:metadata`,
+`l1-review:metadata`, `l2-review:metadata`) and the find-or-update
+regex that keys on them (`(^|\n)$marker` — see "Find-or-update by
+marker" below) are **unchanged**; only the YAML fields inside the
+comment block gain one entry. No consumer that greps for the marker
+token itself needs to change to keep working; only consumers that
+parse the verdict need to also read the new field to get the
+staleness fix.
+
 ### Marker emission template
 
 Copy the block for your layer verbatim and fill in only the `<...>`
@@ -468,6 +516,10 @@ restating the schema.
 - **Field name differs by layer: the Change review uses `advisory`;
   the Acceptance and Objective reviews use `warning`.** Advisory =
   warning + info. Do not silently unify the two field names.
+- `sha` is the **full 40-char lowercase hex commit SHA** of the exact
+  revision reviewed (`git rev-parse HEAD` in the reviewed worktree at
+  review time) — never the short 7-char form, never the PR branch
+  name. See "Marker currency" above for why this field exists.
 
 **Change review's `review:metadata` marker** — posted by `/review`
 (verdict `CLEAN` or `BLOCKING` only):
@@ -482,6 +534,7 @@ verdict: <CLEAN|BLOCKING>
 level: 0
 pr: <PR_NUMBER>
 target: <owner>/<repo>#<PR_NUMBER>
+sha: <full 40-char commit SHA reviewed>
 blocking: <int>
 advisory: <int>
 reviewed_at: <iso8601>
@@ -503,6 +556,7 @@ verdict: <CLEAN|NEEDS-WORK|BLOCKING>
 level: <N>
 pr: <PR_NUMBER>
 target: <owner>/<repo>#<PR_NUMBER>
+sha: <full 40-char commit SHA reviewed>
 axes: { conformance: <PASS|FAIL|UNCLEAR>, process: <PASS|FAIL|UNCLEAR>, objective: <PASS|FAIL|UNCLEAR> }
 blocking: <int>
 warning: <int>
@@ -555,9 +609,10 @@ the machine-read path and any human / plain-`gh pr view` check find the
 marker:
 - **(1) PR review** — the canonical machine-read surface (reviews API).
   **APPEND-ONLY**: a submitted review object cannot be edited in place the
-  way an issue comment can, and consumers read it most-recent-wins (see
-  "How the next layer reads the artifact"), so re-running a review adds a
-  new review object each time. This is intentional and unchanged.
+  way an issue comment can, and consumers read it `sha`-matched against
+  current HEAD, not bare most-recent-wins (see "Marker currency" and "How
+  the next layer reads the artifact"), so re-running a review adds a new
+  review object each time. This is intentional and unchanged.
 - **(2) Issue-comment mirror** — **UPDATE-IN-PLACE**, keyed on this review
   type's marker token. Exactly one issue comment per marker type per PR: if
   a comment already carries "$marker", PATCH it; else create one. See
@@ -640,10 +695,11 @@ fi
 **Scope — issue-comment surface only.** This update-in-place rule governs
 surface (2) *exclusively*. The PR **review-object** surface (1) is
 **left as-is (append-only)**: a submitted review cannot be edited/deduped
-the same way, and its canonical read is most-recent-wins, so a fresh
-review object per run is correct and its behavior is **not** changed by
-this rule. Do not silently apply find-or-update to the review-object
-surface.
+the same way, and its canonical read is `sha`-matched against current HEAD
+(see "Marker currency" above and "How the next layer reads the artifact"
+below — not bare most-recent-wins), so a fresh review object per run is
+correct and its behavior is **not** changed by this rule. Do not silently
+apply find-or-update to the review-object surface.
 
 ### Post-body composition
 
@@ -665,7 +721,9 @@ positional strip is brittle if a finding ever contains a literal
    machine-readable verdict for the next layer to parse: the block
    for your layer (Change, Acceptance, or Objective) from the
    "Marker emission template" above, with `<VERDICT>`, `<N>`,
-   `<PR_NUMBER>`, the axes, and the counts filled in.
+   `<PR_NUMBER>`, `sha` (`git rev-parse HEAD` in the reviewed
+   worktree — the exact revision this review evaluated, not the PR
+   branch name or a short SHA), the axes, and the counts filled in.
 4. **Advisory count assertion (mechanical, before posting)** — count
    the warning-tier and info-tier finding bullets actually present
    in the composed body (step 2 above); their sum is the advisory
@@ -699,22 +757,42 @@ constituent PR:
    reviews authored by the expected reviewing-layer reviewer.
 2. For each candidate review body, search for
    `<!-- l<N>-review:metadata` … `-->`.
-3. Pick the most recent review (`submitted_at`) that contains
-   the marker.
-4. Parse the YAML-shaped lines between the marker and the closing
-   `-->` for `verdict`, `axes`, etc.
-5. If no review with the marker is found, check `depth-rule.md`'s
-   change-class table for that constituent PR before concluding
-   anything:
+3. Resolve the PR's current HEAD SHA (`gh pr view <pr> --json
+   headRefOid -q .headRefOid`, or `git rev-parse HEAD` on the PR
+   branch).
+4. Parse each candidate marker's `sha` field and **discard any
+   marker whose `sha` does not equal current HEAD** — that marker
+   reviewed an earlier revision and does not cover the current
+   diff, regardless of its `submitted_at` timestamp or verdict.
+   This is the mechanical fix for the stale-BLOCKING-survives
+   asymmetry (backlog #58): the append-only review-object surface
+   can and will retain an old `BLOCKING` event after a re-review
+   posts a fresh `CLEAN` one, but that old event's `sha` never
+   matches current HEAD once a re-review has run, so this filter
+   removes it from consideration on **either** surface without
+   needing surface-specific logic.
+5. Among the markers whose `sha` matches current HEAD (normally at
+   most one — a re-review always targets current HEAD before
+   posting, per "Marker currency" above), pick the most recent by
+   `submitted_at` if more than one is present (e.g. a duplicate-agent
+   race — see `pr-review-fanout`'s Step 6 conflict resolution), then
+   parse its YAML-shaped lines for `verdict`, `axes`, etc.
+6. If no marker survives the `sha` filter — no marker exists at all,
+   or every marker present is against an older SHA than current HEAD
+   — no review has yet run against current HEAD. Check
+   `depth-rule.md`'s change-class table for that constituent PR
+   before concluding anything:
    - If the constituent's class does not require this tier
      (Docs/config-only or Small self-constituent — Change review
      only), the absence is a legitimate depth-rule skip: axis 2
      records `NOT-REQUIRED` for that constituent. This is not a
      gap and needs no follow-up.
-   - Otherwise (the class requires this tier and no marker
-     exists) → the Acceptance or Objective review is missing →
-     axis 2 records UNCLEAR for that constituent. Do **not**
-     silently treat absence as PASS.
+   - Otherwise (the class requires this tier and no current-SHA
+     marker exists) → the Acceptance or Objective review is missing
+     or stale → axis 2 records UNCLEAR for that constituent. Do
+     **not** silently treat absence as PASS, and do **not** fall
+     back to an older-SHA marker's verdict just because it's the
+     only one available.
 
 This is the only cross-operator path. There is no environment-
 variable artifact store; do not introduce one without
@@ -728,8 +806,8 @@ marker is `<!-- review:metadata` (no `l<N>-` prefix), authored by
 marker presence rather than the reviewer login (the Change review
 posts under the same actor that opened the PR, so an author filter
 would exclude it). Everything else — reviews-API-first,
-issue-comment mirror fallback, most-recent-wins, missing-marker →
-UNCLEAR — is identical.
+issue-comment mirror fallback, `sha`-matched currency, missing/stale
+marker → UNCLEAR — is identical.
 
 ### Local workspace artifact
 

@@ -42,6 +42,8 @@ Extract from the YAML frontmatter:
 - `verdict`: `BLOCKING` or `CLEAN`
 - `blocking`: integer count
 - `advisory`: integer count
+- `sha`: the full 40-char commit SHA reviewed — carried into the trailing
+  marker unchanged (Step 5, item 7)
 - `target`, `agents`, `degraded`: for the comment header
 
 Unlike the old behavior, **do not skip** when `blocking + advisory == 0`. A clean
@@ -116,6 +118,7 @@ Then, in order:
    level: 0
    pr: <PR_NUMBER>
    target: <owner>/<repo>#<PR_NUMBER>
+   sha: <full 40-char commit SHA reviewed, from latest.md's `sha` field>
    blocking: <count>
    advisory: <count>
    reviewed_at: <ISO-8601 UTC>
