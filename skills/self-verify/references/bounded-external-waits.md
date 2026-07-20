@@ -83,6 +83,20 @@ after the function has already reported `inconclusive` and returned. See
 `## Platform note: CPU sampling` below for why the stall check itself also
 branches by platform.
 
+> **Requires bash — this recipe does NOT work under zsh.** Run it with an
+> explicit `bash` interpreter (`bash script.sh`, `bash -c '...'`, or a
+> `#!/usr/bin/env bash` shebang), never by sourcing it into an interactive
+> shell or a `sh`/`zsh` script. Verified: under zsh, `set -m` fails outright
+> with `set: can't change option: -m` (zsh refuses job-control changes in a
+> non-interactive shell), and zsh's `$-` does not carry the `m` flag at all
+> — so both the process-group isolation and the save/restore guard below are
+> bash-specific. This matters because a verify step written in a zsh context
+> would either abort here or, under lenient error handling, continue WITHOUT
+> process-group isolation — i.e. silently lose the very protection this
+> recipe exists to provide. A verification helper that fails open in the
+> default interactive shell is precisely the failure mode this doctrine is
+> meant to prevent, so pin the interpreter explicitly.
+
 ```bash
 # run_bounded_external <cmd> [hard_cap_s] [sample_interval_s] [stall_samples] [flat_cpu_pct] [term_kill_grace_s]
 #
