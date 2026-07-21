@@ -34,7 +34,7 @@ sign-off until the tier's agent reviews are done and posted.
 
 ## Steps
 1. **Produce the Sign-off brief.** This is a required, non-skippable
-   precondition — no Step-3 AskUserQuestion for a merge/sign-off decision may
+   precondition — no Step-2 AskUserQuestion for a merge/sign-off decision may
    open until this brief has been emitted in full, as prose, in the chat. Four
    parts, in order:
    - **Problem** — the problem the change targets, sourced from the spec/task,
@@ -60,7 +60,7 @@ sign-off until the tier's agent reviews are done and posted.
    place of a problem→intent reconciliation is the "here is a diff, approve
    it" failure the Goal forbids. Verdicts are evidence for one axis; they are
    never the reconciliation. If the brief's Problem / plain-summary /
-   Intent-reconciliation parts are not emitted, the sign-off ask is premature.
+   Intent-reconciliation / Evidence parts are not emitted, the sign-off ask is premature.
 2. **Drive decisions through AskUserQuestion, not prose** — gated behind the
    Sign-off brief above. The operator decides from selectable options. One
    decision per question; batch related ones per the AskUserQuestion batch
