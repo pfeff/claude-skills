@@ -74,11 +74,23 @@ are agent-orchestrated here (`obsidian-notes` CLI), the same I/O-via-CLI shape a
      the plugin folder carries no reliable Reader-tag signal, see § Second Readwise pipeline).
    - `highlight_count` = `len(highlights)`; `notes_count` =
      `readwise_folder.notes_count(highlights)` — both from the `collect_sources` result.
-   - `work_relevant` = **your** judgment of work-relevance (home vs. job/work reading — see
-     SKILL.md "Capture-eligibility predicate": relevant when tied to software engineering,
-     AI/agent tooling, MCP, or infra/DevOps automation; not relevant for personal/home
-     reading with no such tie), reading the source's title/highlights. This is the one
-     non-deterministic input; everything else is mechanical.
+   - **Resolve the work-relevance gate first (host-scoped, opt-in, default OFF).** Check
+     `KB_CAPTURE_WORK_RELEVANCE_GATE` in the environment; if unset there, check the current
+     host's config file (`~/.claude/hosts/<hostname>.md` — TCETRA-prefix routing per
+     `~/.claude/CLAUDE.md`) for the same variable. This mirrors the opt-in convention
+     `goal-tree` uses for `GOAL_TREE_BACKEND` (`skills/goal-tree/lib/env-detection.md`): a
+     host opts in explicitly, it's never assumed. **Default — unset, or any value other than
+     `on`:** the gate is OFF. Set `work_relevant = True` unconditionally and skip the
+     judgment below entirely; every source with ≥1 highlight/note is eligible regardless of
+     topic. This is the safe default for an unconfigured or personal host — it must never
+     start silently filtering out non-work reading just because this gate exists in the
+     codebase (see `SKILL.md` "Capture-eligibility predicate").
+   - `work_relevant` (only computed when the gate resolved `on` above) = **your** judgment of
+     work-relevance (home vs. job/work reading — see SKILL.md "Capture-eligibility
+     predicate": relevant when tied to software engineering, AI/agent tooling, MCP, or
+     infra/DevOps automation; not relevant for personal/home reading with no such tie),
+     reading the source's title/highlights. This is the one non-deterministic input, and
+     only on gate-ON hosts; everything else is mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
    - Record the deciding gate for skipped sources (for the report).
 3. **Idempotency guard — content-aware, not existence-only.** Compute
