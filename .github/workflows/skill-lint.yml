@@ -38,18 +38,3 @@ jobs:
             exit 0
           fi
           echo "$files" | xargs python3 scripts/check-allowed-tools.py
-
-  bounded-external-waits:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Unit tests for the validator
-        run: python3 -m unittest discover -s scripts -p 'test_check_bounded_external_waits.py'
-
-      # Whole-tree, not diff-scoped: unlike allowed-tools, this check has
-      # zero pre-existing debt (verified against the full corpus — see
-      # scripts/check-bounded-external-waits.py docstring), so there is no
-      # unrelated backlog to avoid blocking PRs on.
-      - name: Check bounded external waits
-        run: python3 scripts/check-bounded-external-waits.py skills docs

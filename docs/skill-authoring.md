@@ -108,21 +108,6 @@ and the axis-2 doctrine-class PR sub-checklist
 (`skills/lN-review-doctrine/references/verification-map.md` item 7), not
 mechanically.
 
-`scripts/check-bounded-external-waits.py` (wired into CI, see
-`.github/workflows/skill-lint.yml`) adds a narrow mechanical backstop on top
-of that judgment call — not a replacement for it. It flags a small, closed
-vocabulary of known-flaky external command names (`curl`, `wget`, `ssh`,
-`osascript`) appearing unwrapped inside a fenced bash-ish code block
-anywhere under `skills/` or `docs/`, excluding calls already routed through
-`run_bounded_external` and calls to a loopback host or this repo's own
-`COORDINATOR_URL` coordinator. It exists precisely because a doctrine-only
-rule never gets checked against a PR whose review tier doesn't reach the
-doctrine-class checklist (a small, self-constituent skill-adding PR is
-reviewed at Change tier only) — the lint runs regardless of tier. It does
-NOT attempt the general "is this call external" classification described
-above; anything outside its closed vocabulary or its exclusions still
-depends on the doctrine rule and the review checklist.
-
 ## Related
 
 - `README.md` — the skills table (release-hygiene step 2).
@@ -137,8 +122,6 @@ depends on the doctrine rule and the review checklist.
   bash-vs-zsh constraint (rule 3).
 - `skills/lN-review-doctrine/references/verification-map.md` — Doctrine-class
   PR sub-checklist item 7, the review-time check for rule 3.
-- `scripts/check-bounded-external-waits.py` — the mechanical CI backstop for
-  rule 3's closed vocabulary (rule 3).
 - `skills/skillify/SKILL.md` — the authoring-time entrypoint where a new
   skill's draft steps get checked against this doctrine before being
   written (all three rules).
