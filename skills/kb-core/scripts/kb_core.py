@@ -65,8 +65,9 @@ def is_eligible(
       - Path A (default): ≥1 highlight *or note* (notes count) **AND** work-relevant
         (AC-1.1, AC-1.2, AC-1.3).
 
-    ``work_relevant`` is the caller-supplied result of the LLM relevance judgment scored
-    against WORK-DOMAINS.md; this function owns only the deterministic gate logic.
+    ``work_relevant`` is the caller-supplied result of the LLM relevance judgment (home/personal
+    vs. job/work-relevant reading — criterion inlined in kb-capture's SKILL.md, not a separate
+    workspace file); this function owns only the deterministic gate logic.
     """
     if has_capture_tag:
         return True

@@ -74,10 +74,11 @@ are agent-orchestrated here (`obsidian-notes` CLI), the same I/O-via-CLI shape a
      the plugin folder carries no reliable Reader-tag signal, see § Second Readwise pipeline).
    - `highlight_count` = `len(highlights)`; `notes_count` =
      `readwise_folder.notes_count(highlights)` — both from the `collect_sources` result.
-   - `work_relevant` = **your** judgment of work-relevance scored against `WORK-DOMAINS.md`
-     (AI/LLM content relevant only when tied to engineering/agent automation), reading the
-     source's title/highlights. This is the one non-deterministic input; everything else is
-     mechanical.
+   - `work_relevant` = **your** judgment of work-relevance (home vs. job/work reading — see
+     SKILL.md "Capture-eligibility predicate": relevant when tied to software engineering,
+     AI/agent tooling, MCP, or infra/DevOps automation; not relevant for personal/home
+     reading with no such tie), reading the source's title/highlights. This is the one
+     non-deterministic input; everything else is mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
    - Record the deciding gate for skipped sources (for the report).
 3. **Idempotency guard — content-aware, not existence-only.** Compute
@@ -306,4 +307,3 @@ place, not skipped), AC-1.7 (tagged with zero highlights/notes captured).
   or `Glob`+`Read`, no MCP call)
 - Readwise MCP `reader_*` tools — Path B (`kb`-tag override) only
 - `obsidian-notes` skill — vault path resolution + `raw/` writes
-- `WORK-DOMAINS.md` (workspace) — work-relevance reference for step 2

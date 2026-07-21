@@ -53,8 +53,13 @@ since Readwise's export only emits sources that have highlights — *not* `locat
 A source is captured iff **either**:
 
 - **(A) Default path** — has ≥1 highlight (*notes count as highlights*) **AND** an LLM
-  judges it work-relevant scored against `WORK-DOMAINS.md`. AI/LLM content is relevant
-  only when tied to engineering/agent workflows, tooling, MCP, or infra automation.
+  judges it work-relevant. **Work-relevance criterion (home vs. job/work reading):**
+  relevant when the source is about software engineering, AI/agent tooling, MCP, or
+  infra/DevOps automation — the operator's standing professional domains. Not relevant
+  when it's personal/home reading (health, hobbies, general news, fiction, etc.) with no
+  tie to those domains. Judge against the source's own title/highlights, not the topic in
+  the abstract — a general-audience article the operator highlighted for engineering
+  reasons still counts.
 - **(B) Tag override** — carries the `kb` tag → captured unconditionally (no highlight
   required, topic irrelevant).
 
@@ -90,7 +95,6 @@ last capture is updated in place (`kb_core.new_highlights`) rather than skipped.
   (`collect_sources` and its primitives) — parses the plugin folder for Path A.
 - **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`, `highlights_fingerprint`, `new_highlights`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
-- **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
 - **kb-compile** — consumes the `raw/` queue this skill fills; unchanged by this rearchitecture.
 
 ## See Also
