@@ -1,6 +1,6 @@
 ---
 name: kb-capture
-description: "Capture / ingest bridge for the LLM Knowledge Base. Sweeps work-relevant Readwise HIGHLIGHTED sources (the operator highlights-then-archives, so highlights — not the inbox — are the signal) into the vault's raw/ queue for later /kb-compile; kb-tagged docs are captured unconditionally. A source is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag. Capture writes only under raw/ (never off-limits zones) and is idempotent. Use when ingesting highlighted reading into the knowledge base."
+description: "Capture / ingest bridge for the LLM Knowledge Base. Sweeps Readwise HIGHLIGHTED sources (the operator highlights-then-archives, so highlights — not the inbox — are the signal) into the vault's raw/ queue for later /kb-compile; kb-tagged docs are captured unconditionally. A source is captured iff it has ≥1 highlight (notes count) AND is work-relevant, OR carries the kb tag; the work-relevance gate is host-scoped and opt-in (default: capture everything). Capture writes only under raw/ (never off-limits zones) and is idempotent. Use when ingesting highlighted reading into the knowledge base."
 argument-hint: "[blank to sweep highlighted sources, or a Reader doc id/url]"
 allowed-tools:
   - Read
@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.4.0
+version: 0.5.0
 ---
 
 # KB Capture
@@ -52,11 +52,25 @@ since Readwise's export only emits sources that have highlights — *not* `locat
 
 A source is captured iff **either**:
 
-- **(A) Default path** — has ≥1 highlight (*notes count as highlights*) **AND** an LLM
-  judges it work-relevant scored against `WORK-DOMAINS.md`. AI/LLM content is relevant
-  only when tied to engineering/agent workflows, tooling, MCP, or infra automation.
+- **(A) Default path** — has ≥1 highlight (*notes count as highlights*) **AND** is
+  work-relevant. **The work-relevance gate is host-scoped and opt-in — default OFF.** A
+  host only has the criterion below applied if it explicitly sets
+  `KB_CAPTURE_WORK_RELEVANCE_GATE=on` (environment, or in its own
+  `~/.claude/hosts/<hostname>.md` — the same host-config opt-in convention `goal-tree` uses
+  for `GOAL_TREE_BACKEND`, see `skills/goal-tree/lib/env-detection.md`). **On any
+  unconfigured or gate-off host, `work_relevant` is always `True`** — every source with
+  ≥1 highlight/note is eligible, topic irrelevant. This default-off shape is deliberate: an
+  unconfigured or personal host must never silently start filtering out non-work reading
+  just because this gate exists (see `operations/capture.md` step 2 for the resolution
+  steps). **Work-relevance criterion (applies only on gate-ON hosts — home vs. job/work
+  reading):** relevant when the source is about software engineering, AI/agent tooling,
+  MCP, or infra/DevOps automation — the operator's standing professional domains. Not
+  relevant when it's personal/home reading (health, hobbies, general news, fiction, etc.)
+  with no tie to those domains. Judge against the source's own title/highlights, not the
+  topic in the abstract — a general-audience article the operator highlighted for
+  engineering reasons still counts.
 - **(B) Tag override** — carries the `kb` tag → captured unconditionally (no highlight
-  required, topic irrelevant).
+  required, topic irrelevant, gate state irrelevant).
 
 ## raw/ staging convention
 
@@ -90,7 +104,6 @@ last capture is updated in place (`kb_core.new_highlights`) rather than skipped.
   (`collect_sources` and its primitives) — parses the plugin folder for Path A.
 - **kb-core** — `${CLAUDE_PLUGIN_ROOT}/skills/kb-core/scripts/kb_core.py` (`CAPTURE_TAG`, `is_eligible`, `source_key`, `is_writable`, `highlights_fingerprint`, `new_highlights`).
 - **obsidian-notes skill / host config** — resolves the vault path; performs vault writes.
-- **WORK-DOMAINS.md** (workspace) — the §2.1 work-relevance reference.
 - **kb-compile** — consumes the `raw/` queue this skill fills; unchanged by this rearchitecture.
 
 ## See Also

@@ -74,10 +74,17 @@ are agent-orchestrated here (`obsidian-notes` CLI), the same I/O-via-CLI shape a
      the plugin folder carries no reliable Reader-tag signal, see § Second Readwise pipeline).
    - `highlight_count` = `len(highlights)`; `notes_count` =
      `readwise_folder.notes_count(highlights)` — both from the `collect_sources` result.
-   - `work_relevant` = **your** judgment of work-relevance scored against `WORK-DOMAINS.md`
-     (AI/LLM content relevant only when tied to engineering/agent automation), reading the
-     source's title/highlights. This is the one non-deterministic input; everything else is
-     mechanical.
+   - **Resolve the work-relevance gate first.** Check `KB_CAPTURE_WORK_RELEVANCE_GATE` in the
+     environment, then the current host's config file (`~/.claude/hosts/<hostname>.md`) for
+     the same variable. **Default — unset, or any value other than `on`:** gate OFF,
+     `work_relevant = True` unconditionally,
+     skip the judgment below. See SKILL.md "Capture-eligibility predicate" for the full
+     rationale (default-off is deliberate — an unconfigured/personal host must never start
+     silently filtering non-work reading) and the `goal-tree`/`GOAL_TREE_BACKEND` precedent
+     this mirrors.
+   - `work_relevant` (only computed when the gate resolved `on` above) = **your** judgment of
+     work-relevance per SKILL.md's criterion, reading the source's title/highlights. The one
+     non-deterministic input, and only on gate-ON hosts; everything else is mechanical.
    - Capture iff `kb_core.is_eligible(highlight_count, notes_count, has_capture_tag, work_relevant)`.
    - Record the deciding gate for skipped sources (for the report).
 3. **Idempotency guard — content-aware, not existence-only.** Compute
@@ -289,7 +296,9 @@ implementation rather than during the original audit.
 ## Acceptance Criteria (SPEC §2.1)
 
 AC-1.1 (staged with metadata/highlights), AC-1.2 (no-highlight/no-notes skipped),
-AC-1.3 (notes count), AC-1.4 (irrelevant skipped unless tagged), AC-1.5 (zones untouched),
+AC-1.3 (notes count), AC-1.4 (irrelevant skipped unless tagged — only when the host's
+work-relevance gate is on; on a gate-off/unconfigured host every highlighted/noted source is
+eligible, topic irrelevant), AC-1.5 (zones untouched),
 AC-1.6 (idempotent — content-stable re-capture is a no-op; changed sources are updated in
 place, not skipped), AC-1.7 (tagged with zero highlights/notes captured).
 
@@ -306,4 +315,3 @@ place, not skipped), AC-1.7 (tagged with zero highlights/notes captured).
   or `Glob`+`Read`, no MCP call)
 - Readwise MCP `reader_*` tools — Path B (`kb`-tag override) only
 - `obsidian-notes` skill — vault path resolution + `raw/` writes
-- `WORK-DOMAINS.md` (workspace) — work-relevance reference for step 2
