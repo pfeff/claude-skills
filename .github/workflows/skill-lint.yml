@@ -12,6 +12,20 @@ on:
       - 'skills/**'
 
 jobs:
+  bounded-external-doc-script-equivalence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Guards against drift between the teaching copy of run_bounded_external
+      # (references/bounded-external-waits.md) and the executable copy
+      # (run-bounded-external.sh). Not picked up by the top-level
+      # `python3 -m unittest discover -s scripts` command, which only walks
+      # scripts/ — so it needs an explicit CI step, same as check-allowed-tools.py
+      # below.
+      - name: Doc/script equivalence test for run_bounded_external
+        run: python3 -m unittest discover -s skills/self-verify/scripts -p 'test_bounded_external_equivalence.py'
+
   allowed-tools:
     runs-on: ubuntu-latest
     steps:

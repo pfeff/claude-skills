@@ -356,8 +356,42 @@ function check_for_pr(node_id, node_info):
   node = node_info.node
   branch = node.branch  # e.g., "autoresearch/C.3.27/D.1"
 
-  # Check for open PRs on this branch
-  pr_json = gh pr list --repo $REPO --head $BRANCH --json number,state --jq '.[0]'
+  # Check for open PRs on this branch — bounded. This call runs once per
+  # monitoring cycle per active node, so an unbounded `gh pr list` that
+  # hangs (GitHub API stall, wedged network) doesn't just miss this node's
+  # check — it wedges the whole cycle, delaying detection for every other
+  # active node too. Cap chosen for a GitHub API list call, which is
+  # network-bound and has more latency variance than a local check but
+  # still runs inside a tight per-cycle loop: 20s hard cap (comfortably
+  # above typical `gh pr list` latency, still small next to the
+  # STUCK_MINUTES=30 threshold below), sampled every 5s with a stall
+  # declared after 3 flat samples (~15s) since a wedged `gh` process
+  # (DNS/TCP hang) sits at ~0% CPU immediately. No `gh`-side timeout flag
+  # exists to layer on as defense in depth (`gh pr list --help` has none;
+  # unlike curl's `--max-time`, the wrapper is the only bound here).
+  # Requires bash explicitly, not the ambient shell: run_bounded_external's
+  # `set -m` process-group isolation hard-errors under zsh, and the control
+  # session's login shell is zsh. See
+  # ../../self-verify/references/bounded-external-waits.md.
+  # Literal bash — same pattern as the health-check in operations/l1-review.md:
+  # a single command substitution assigns bounded_result, and $? on the very
+  # next line captures ITS exit status. Run both statements as one shell
+  # invocation with nothing in between; do not split them across separate
+  # tool calls or insert other commands, or $? no longer reflects this call.
+  bounded_result=$(bash -c "
+    source '${CLAUDE_PLUGIN_ROOT}/skills/self-verify/scripts/run-bounded-external.sh'
+    run_bounded_external 'gh pr list --repo $REPO --head $BRANCH --json number,state --jq \".[0]\"' 20 5 3
+  ")
+  bounded_status=$?
+
+  if bounded_status in (2, 3):
+    # inconclusive (hard-cap or stalled `gh` call) — not "no PR yet" and not
+    # a failure. Log and defer: leave the node active and re-check next
+    # cycle rather than blocking this cycle or silently advancing the node.
+    log("check_for_pr inconclusive for $NODE_ID ($bounded_result) — will re-check next cycle")
+    return
+
+  pr_json = parse_json(bounded_result)
 
   if pr_json is not empty and pr_json.state == "OPEN":
     pr_number = pr_json.number
