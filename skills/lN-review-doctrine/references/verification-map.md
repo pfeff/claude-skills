@@ -22,7 +22,7 @@ be extended.
 | Shell | `*.sh`, `*.bash`, files with `#!/.../sh` | `shellcheck`, repo test runner if `bats`/`shunit2` present | |
 | YAML / CI workflows | `.github/workflows/*.yml`, `*.yaml`, `*.yml` | `yamllint` (if configured), `actionlint` for workflow files | Workflow changes additionally require axis-3 attention to verify the workflow runs at least once green on this PR. |
 | Markdown / docs only | `*.md` only (no code files in diff) | `markdownlint` if configured; otherwise no required verification | Pure-doc PRs pass axis 2 by default; axis 1 (conformance) and axis 3 (objective) still apply. |
-| Claude skills / commands | `claude/skills/**`, `claude/commands/**` | See [Doctrine-class PR sub-checklist](#doctrine-class-pr-sub-checklist) below — there is no equivalent of `terraform validate` for skill markdown, so axis 2 substitutes a concrete manual list. | Doctrine-only skills (no `operations/` directory — pure reference) require every item; executor skills (have `operations/`) require items 1, 3, 4. Item 6 (mechanical host-agnosticism) applies to **any** PR touching published content, both kinds. |
+| Claude skills / commands | `claude/skills/**`, `claude/commands/**` | See [Doctrine-class PR sub-checklist](#doctrine-class-pr-sub-checklist) below — there is no equivalent of `terraform validate` for skill markdown, so axis 2 substitutes a concrete manual list. | Doctrine-only skills (no `operations/` directory — pure reference) require every item; executor skills (have `operations/`) require items 1, 3, 4. Items 6 (mechanical host-agnosticism) and 7 (bounded external waits) apply to **any** PR touching published content, both kinds — item 7 especially, since a verify step (the thing item 7 checks) lives in an executor skill's `operations/*.md`, not in doctrine-only reference content. |
 | Claude workflows | `claude/workflows/*.js`, `.claude/workflows/*.js` | `node --check <file>` (JS syntax parse) for each changed workflow file, AND meta-shape validation — see [Workflow-class PR sub-checklist](#workflow-class-pr-sub-checklist) below. | Analogous to the Claude-skills doctrine-class row: there is no runtime test for a workflow script in review, so axis 2 substitutes parse + meta-shape as the static gate. |
 | Mission data | `*.tsv` (mission-data artifacts) | Parse-check against the consuming script — run the script/function that reads or derives from the file and confirm it parses cleanly and the derived value computes (e.g. `measure-mission.sh calc_P` for `pipeline.tsv`) | The consuming script may live in another repo (guardian/mission); there is no static linter for ad hoc TSV schemas, so axis 2 substitutes this generic parse-check. |
 | Mixed (multiple patterns) | Multiple rows match | Union of required steps from every matched row | All required steps must be green. A red Go test and a green TF plan in the same PR is FAIL. |
@@ -106,12 +106,33 @@ listed severity (per `checklist.md` severity rules):
      the PR — treat a missing or red host-agnostic check as a gap
      (axis-2 finding, UNCLEAR → NEEDS-WORK rather than a silent
      PASS).
+7. **Bounded external waits in verify steps** (process — warning,
+   **blocking** if the step is a required-verification step per this
+   map) — There is no reliable mechanical check for this (see
+   `docs/skill-authoring.md` rule 3): distinguishing "an external
+   call" from "a call to the repo's own test/build tooling," and
+   "this is a verify step" from "this is an illustrative example,"
+   both need judgment. Substitute a manual read: for any new or
+   changed verify/validation/acceptance-check step in the diff that
+   shells out to a third-party API/service or an OS-integration
+   shell-out (AppleScript, iCloud, system automation), confirm it
+   runs through `run_bounded_external`
+   (`skills/self-verify/references/bounded-external-waits.md`) rather
+   than an unbounded wait, AND that it's invoked with an explicit
+   `bash` interpreter (shebang, `bash script.sh`, or `bash -c`) — the
+   recipe hard-errors under zsh (`set: can't change option: -m`) and
+   silently loses process-group isolation under lenient `sh`
+   handling. A step that talks only to the repo's own test/build
+   toolchain (unit tests, `go build`, a linter) is out of scope for
+   this item — it is not the "external" class this doctrine covers.
 
 Item 1 is the load-bearing one for cross-skill contracts; item 6
 is the load-bearing one against host/private leaks (mechanical,
-never eyeballed); the others are loading/coherence checks. Running
-them together takes a few minutes of grepping and is the actual
-content of axis 2 for doctrine-class PRs.
+never eyeballed); item 7 is the load-bearing one against silent
+unbounded hangs in future verify steps; the others are
+loading/coherence checks. Running them together takes a few minutes
+of grepping and is the actual content of axis 2 for doctrine-class
+PRs.
 
 ## Workflow-class PR sub-checklist
 
