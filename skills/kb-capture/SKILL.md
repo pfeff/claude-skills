@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
-version: 0.4.0
+version: 0.5.0
 ---
 
 # KB Capture

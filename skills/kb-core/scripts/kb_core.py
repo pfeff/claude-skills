@@ -67,12 +67,10 @@ def is_eligible(
 
     ``work_relevant`` is the caller-supplied result of the LLM relevance judgment (home/personal
     vs. job/work-relevant reading — criterion inlined in kb-capture's SKILL.md, not a separate
-    workspace file). That judgment is itself host-scoped and opt-in (SKILL.md "Capture-eligibility
-    predicate" / ``operations/capture.md`` step 2): a host must explicitly set
-    ``KB_CAPTURE_WORK_RELEVANCE_GATE=on`` for the criterion to be applied at all. On any
-    unconfigured or gate-off host — the default — the caller passes ``work_relevant=True``
-    unconditionally (capture everything highlighted/noted). This function owns only the
-    deterministic gate logic; it has no host awareness of its own.
+    workspace file). That judgment is host-scoped and opt-in, default OFF (capture everything);
+    see SKILL.md "Capture-eligibility predicate" and ``operations/capture.md`` step 2 for the
+    resolution mechanism and rationale. This function owns only the deterministic gate logic —
+    it has no host awareness of its own.
     """
     if has_capture_tag:
         return True
