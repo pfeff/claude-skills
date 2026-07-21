@@ -31,6 +31,7 @@
         "./skills/kb-core",
         "./skills/kb-lessons-bridge",
         "./skills/kb-lint",
+        "./skills/kb-sweep",
         "./skills/l1-supervisor",
         "./skills/l2-supervisor",
         "./skills/lessons-learned",
