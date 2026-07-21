@@ -7,7 +7,7 @@ description: >
   in chunks", "use the interview tool", "review these with me". Drives decisions
   through AskUserQuestion (selectable options), chunked for large items, each with
   a recommended default.
-version: 1.1.0
+version: 1.2.0
 allowed-tools:
   - AskUserQuestion
   - Bash
@@ -33,28 +33,46 @@ The human review sits *on top of* that evidence — do not present for operator
 sign-off until the tier's agent reviews are done and posted.
 
 ## Steps
-1. **Restate the problem** the change targets — sourced from the spec/task, PR
-   body Summary/Context, linked issues, or operator-correction memory, *not* a
-   restatement of the change's title — and its acceptance criteria: the bar the
-   change must clear. A change with no discoverable motivating problem is not
-   ready to present; surface that gap rather than papering over it.
-2. **Show it solves the problem, reasonably.** Lead with evidence: the original
-   defect reproduced-then-caught, tests passing, real catches/behavior, the
-   problem-grounded intent reconciliation (does the diff resolve *that* problem,
-   or has it drifted / been superseded / gone stale?), and the agent-review
-   verdicts from `/review` (+ `/l1-review`/`/l2-review`), linking their markers.
-   Keep it proportionate to the change.
-3. **Drive decisions through AskUserQuestion, not prose** — the operator decides
-   from selectable options. One decision per question; batch related ones per the
-   AskUserQuestion batch rules in `operator-interview-doctrine`; every question
-   carries exactly one recommended default, placed first.
-4. **Chunk large items for approval** (e.g. a full spec: Problem+Decisions /
+1. **Produce the Sign-off brief.** This is a required, non-skippable
+   precondition — no Step-3 AskUserQuestion for a merge/sign-off decision may
+   open until this brief has been emitted in full, as prose, in the chat. Four
+   parts, in order:
+   - **Problem** — the problem the change targets, sourced from the spec/task,
+     PR body Summary/Context, linked issues, or operator-correction memory,
+     *not* a restatement of the change's title — and its acceptance criteria:
+     the bar the change must clear. A change with no discoverable motivating
+     problem is not ready to present; surface that gap rather than papering
+     over it.
+   - **What the change does, in plain language** — what merging actually does
+     to the world on the normal path and on the failure/edge path. Plain
+     language, not a reviewer's-eye technical restatement.
+   - **Intent reconciliation** — an explicit judgment: does the diff resolve
+     *that* problem, or has it drifted / been superseded / gone stale? State
+     any honest caveat (e.g. a partial slice of a larger objective).
+   - **Evidence** — the original defect reproduced-then-caught, tests passing,
+     real catches/behavior, and the agent-review verdicts from `/review`
+     (+ `/l1-review`/`/l2-review`), linking their markers — presented
+     explicitly as evidence for the conformance/process/objective axes,
+     **not** as the reconciliation itself. Keep it proportionate to the
+     change.
+
+   **Anti-pattern:** presenting agent-review verdicts (CLEAN/BLOCKING) in
+   place of a problem→intent reconciliation is the "here is a diff, approve
+   it" failure the Goal forbids. Verdicts are evidence for one axis; they are
+   never the reconciliation. If the brief's Problem / plain-summary /
+   Intent-reconciliation parts are not emitted, the sign-off ask is premature.
+2. **Drive decisions through AskUserQuestion, not prose** — gated behind the
+   Sign-off brief above. The operator decides from selectable options. One
+   decision per question; batch related ones per the AskUserQuestion batch
+   rules in `operator-interview-doctrine`; every question carries exactly one
+   recommended default, placed first.
+3. **Chunk large items for approval** (e.g. a full spec: Problem+Decisions /
    Requirements+Acceptance / Deferred+E2E), approving each chunk before the final
    explicit sign-off.
-5. **Honor sign-off:** explicit sign-off confers authority; "looks fine"/silence
+4. **Honor sign-off:** explicit sign-off confers authority; "looks fine"/silence
    does not. On sign-off, record it and route the approval per **Approval
    discipline** below; otherwise hold as draft.
-6. **Record each decision immediately** (TaskUpdate/TaskCreate) before acting.
+5. **Record each decision immediately** (TaskUpdate/TaskCreate) before acting.
 
 ## Approval discipline (account-aware, two-party)
 
