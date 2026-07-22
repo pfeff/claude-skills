@@ -21,6 +21,7 @@
         "./skills/diataxis",
         "./skills/dispatch-gate",
         "./skills/drift-check",
+        "./skills/family-check",
         "./skills/fix-then-re-review-ladder",
         "./skills/git",
         "./skills/github-projects",
