@@ -202,7 +202,7 @@ Found 5 actionable recommendations. Use `/self-improvement REC-XXX` to analyze.
 [Original recommendation text]
 
 ### Target Files
-- `skills/task-workflow/operations/create-workspace.md` (line 45-60)
+- `skills/task-workflow/operations/workspace-setup.md` (line 45-60)
 
 ### Feasibility
 - Complexity: Low

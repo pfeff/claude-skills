@@ -123,7 +123,7 @@ Check proposed changes for:
 
 | File | Additions | Deletions | Change Type |
 |------|-----------|-----------|-------------|
-| `operations/create-workspace.md` | +5 | -2 | Modification |
+| `operations/workspace-setup.md` | +5 | -2 | Modification |
 | `SKILL.md` | +1 | 0 | Addition |
 
 ## Traceability
