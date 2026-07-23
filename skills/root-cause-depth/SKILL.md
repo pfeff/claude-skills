@@ -10,6 +10,8 @@ description: >-
   investigation, "is that the real cause". Fire eagerly — stopping shallow is
   the default failure this guards against.
 version: 1.0.0
+allowed-tools:
+  - Read
 ---
 
 # Root-Cause Depth
@@ -21,13 +23,22 @@ condition below.
 
 ## Stop condition (evaluate every candidate cause C)
 
-C is terminal ONLY when it passes all three gates and lands on a branch:
+C is terminal ONLY when it passes all three gates and lands on a branch.
+Throughout, **"the action C implies"** means the *mechanism-level fix* — what
+the owner would change so the correct state is produced — assumed applied. It
+is NOT the response branch you pick below when the mechanism is outside your
+control (Accept & record does not "fix" anything, so never evaluate gates 2–3
+against it).
 
 1. **Owner named.** What system/process was supposed to produce the correct
    state? If you cannot name it (IaC, pipeline, automation, a validation that
    should have failed, a person/team), you are above the mechanism — keep going.
-2. **Recurrence test.** If you take the action C implies, can this *class* of
-   failure recur through the same path? If yes → not terminal, keep going.
+   **Fallback:** if after a few levels no single owner is identifiable (a
+   diffuse or emergent cause), stop descending and make "identify/assign the
+   owner" the terminal action — i.e. Escalate.
+2. **Recurrence test.** If the mechanism-level fix were applied, could this
+   *class* of failure still recur through the same path? If yes → not terminal,
+   keep going.
 3. **Red-flag test.** Is the implied action "manually correct this instance"?
    If yes → not terminal, keep going. The root cause is why that value was
    wrong *and* why nothing caught it.
@@ -43,6 +54,8 @@ actual stop:
   - **Defend** — guards on our side: validation, retries, fallbacks, and/or
     detection/alerting so the failure is contained or caught fast.
   - **Escalate** — identify and engage the party who owns the mechanism.
+- **Mixed ownership** (partly ours, partly external) → do both: apply the
+  structural fix to our portion AND Escalate the external portion.
 
 The investigation stops at *named mechanism + chosen branch* — never at
 "manually fix this instance."
