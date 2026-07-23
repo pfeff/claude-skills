@@ -315,6 +315,26 @@ class TestRegistryMismatches(DriftCheckTestCase):
         self.assertTrue(result["drifted"])
         self.assertEqual(result["unregistered"], ["foo"])
 
+    def test_malformed_marketplace_json_reported_not_raised(self):
+        # A malformed marketplace.json must degrade to a reported finding, not an
+        # uncaught traceback that kills the run before any report is printed.
+        os.makedirs(self._path("skills", "foo"))
+        _write(self._path(".claude-plugin", "marketplace.json"), "{not valid json")
+
+        result = drift_check.check_registry_mismatches(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("marketplace.json", result["error"])
+        self.assertEqual(result["unregistered"], [])
+        self.assertEqual(result["missing_dirs"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising).
+        report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+        self.assertIn("DRIFT:", report)
+        self.assertIn("marketplace.json", report)
+        self.assertEqual(drift_check.main([self.repo]), 0)
+
 
 # --- extract_path_references / resolve_reference ---------------------------------
 

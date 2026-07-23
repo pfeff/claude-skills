@@ -218,9 +218,12 @@ def check_dangling_references(repo_root):
 
 
 def check_registry_mismatches(repo_root):
-    """Check 3. Returns {"drifted": bool, "unregistered": [name], "missing_dirs": [name]}.
+    """Check 3. Returns {"drifted": bool, "unregistered": [name], "missing_dirs": [name],
+    "error": str | None}.
     "unregistered" = dirs under skills/ not in marketplace.json's skills array.
-    "missing_dirs" = marketplace.json entries whose dir doesn't exist."""
+    "missing_dirs" = marketplace.json entries whose dir doesn't exist.
+    "error" = set (and "drifted" forced True) when marketplace.json exists but can't be
+    read or parsed; the registry comparison is skipped in that case rather than crashing."""
     skills_dir = os.path.join(repo_root, "skills")
     marketplace_path = os.path.join(repo_root, ".claude-plugin", "marketplace.json")
 
@@ -233,19 +236,25 @@ def check_registry_mismatches(repo_root):
         }
 
     registered = set()
+    error = None
     if os.path.isfile(marketplace_path):
-        with open(marketplace_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        for plugin in data.get("plugins", []):
-            for entry in plugin.get("skills", []):
-                registered.add(entry.rstrip("/").split("/")[-1])
+        try:
+            with open(marketplace_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            error = f"could not read .claude-plugin/marketplace.json: {exc}"
+        else:
+            for plugin in data.get("plugins", []):
+                for entry in plugin.get("skills", []):
+                    registered.add(entry.rstrip("/").split("/")[-1])
 
-    unregistered = sorted(actual - registered)
-    missing_dirs = sorted(registered - actual)
+    unregistered = sorted(actual - registered) if error is None else []
+    missing_dirs = sorted(registered - actual) if error is None else []
     return {
-        "drifted": bool(unregistered or missing_dirs),
+        "drifted": bool(unregistered or missing_dirs or error),
         "unregistered": unregistered,
         "missing_dirs": missing_dirs,
+        "error": error,
     }
 
 
@@ -292,6 +301,8 @@ def format_report(results):
     lines.append("## Registry mismatches")
     if rm["drifted"]:
         lines.append("DRIFT:")
+        if rm.get("error"):
+            lines.append(f"  - {rm['error']}")
         for name in rm["unregistered"]:
             lines.append(f"  - unregistered dir: skills/{name}")
         for name in rm["missing_dirs"]:
