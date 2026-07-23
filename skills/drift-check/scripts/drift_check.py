@@ -188,19 +188,28 @@ def _skill_doc_paths(skill_dir):
 
 def check_dangling_references(repo_root):
     """Check 2. Returns {"drifted": bool, "count": int,
-    "findings": [(doc_path, raw_ref, resolved_path)]} (paths relative to repo_root)."""
+    "findings": [(doc_path, raw_ref, resolved_path)], "error": str | None} (paths relative
+    to repo_root).
+    "error" = set (and "drifted" forced True) when one or more docs can't be read (OSError,
+    e.g. unreadable) or decoded (UnicodeDecodeError, e.g. invalid UTF-8); those docs are
+    skipped rather than crashing the scan, and remaining docs are still checked."""
     skills_dir = os.path.join(repo_root, "skills")
     findings = []
+    errors = []
     if not os.path.isdir(skills_dir):
-        return {"drifted": False, "count": 0, "findings": []}
+        return {"drifted": False, "count": 0, "findings": [], "error": None}
 
     for skill_name in sorted(os.listdir(skills_dir)):
         skill_dir = os.path.join(skills_dir, skill_name)
         if not os.path.isdir(skill_dir):
             continue
         for doc_path in _skill_doc_paths(skill_dir):
-            with open(doc_path, "r", encoding="utf-8") as f:
-                text = f.read()
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+            except (OSError, UnicodeDecodeError) as exc:
+                errors.append(f"could not read {os.path.relpath(doc_path, repo_root)}: {exc}")
+                continue
             for raw_ref, kind in extract_path_references(text):
                 candidates = resolve_candidates(raw_ref, kind, repo_root, skill_dir)
                 if not any(os.path.isfile(c) for c in candidates):
@@ -211,10 +220,43 @@ def check_dangling_references(repo_root):
                             os.path.relpath(candidates[0], repo_root),
                         )
                     )
-    return {"drifted": len(findings) > 0, "count": len(findings), "findings": findings}
+    error = "; ".join(errors) if errors else None
+    return {
+        "drifted": len(findings) > 0 or bool(errors),
+        "count": len(findings),
+        "findings": findings,
+        "error": error,
+    }
 
 
 # --- Check 3: registry mismatches ----------------------------------------------
+
+
+def _extract_registered_skills(data):
+    """Validate the parsed marketplace.json ``data`` and extract the set of registered
+    skill names. Returns (registered_set, error_detail). ``error_detail`` is None on
+    success; on any structural-shape failure (top level not an object, "plugins" not a
+    list, a plugin entry not an object, a plugin's "skills" not a list, or a skills entry
+    not a string) it is a short human-readable description and registered_set is empty."""
+    if not isinstance(data, dict):
+        return set(), f"top-level value is {type(data).__name__}, expected an object"
+    plugins = data.get("plugins", [])
+    if not isinstance(plugins, list):
+        return set(), f'"plugins" is {type(plugins).__name__}, expected a list'
+    registered = set()
+    for plugin in plugins:
+        if not isinstance(plugin, dict):
+            return set(), f"a plugin entry is {type(plugin).__name__}, expected an object"
+        skills_list = plugin.get("skills", [])
+        if not isinstance(skills_list, list):
+            return set(), (
+                f'a plugin\'s "skills" is {type(skills_list).__name__}, expected a list'
+            )
+        for entry in skills_list:
+            if not isinstance(entry, str):
+                return set(), f"a skills entry is {type(entry).__name__}, expected a string"
+            registered.add(entry.rstrip("/").split("/")[-1])
+    return registered, None
 
 
 def check_registry_mismatches(repo_root):
@@ -223,7 +265,9 @@ def check_registry_mismatches(repo_root):
     "unregistered" = dirs under skills/ not in marketplace.json's skills array.
     "missing_dirs" = marketplace.json entries whose dir doesn't exist.
     "error" = set (and "drifted" forced True) when marketplace.json exists but can't be
-    read or parsed; the registry comparison is skipped in that case rather than crashing."""
+    read, parsed, or has an unexpected structure (e.g. "plugins" not a list, a plugin
+    entry not an object); the registry comparison is skipped in that case rather than
+    crashing."""
     skills_dir = os.path.join(repo_root, "skills")
     marketplace_path = os.path.join(repo_root, ".claude-plugin", "marketplace.json")
 
@@ -244,9 +288,9 @@ def check_registry_mismatches(repo_root):
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             error = f"could not read .claude-plugin/marketplace.json: {exc}"
         else:
-            for plugin in data.get("plugins", []):
-                for entry in plugin.get("skills", []):
-                    registered.add(entry.rstrip("/").split("/")[-1])
+            registered, structure_error = _extract_registered_skills(data)
+            if structure_error:
+                error = f"marketplace.json has unexpected structure: {structure_error}"
 
     unregistered = sorted(actual - registered) if error is None else []
     missing_dirs = sorted(registered - actual) if error is None else []
@@ -291,6 +335,8 @@ def format_report(results):
     lines.append("## Dangling file references")
     if dr["drifted"]:
         lines.append(f"DRIFT: {dr['count']} dangling reference(s).")
+        if dr.get("error"):
+            lines.append(f"  - {dr['error']}")
         for doc_path, raw_ref, resolved in dr["findings"]:
             lines.append(f"  - {doc_path}: `{raw_ref}` -> {resolved} (missing)")
     else:

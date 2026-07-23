@@ -270,6 +270,51 @@ class TestDanglingReferences(DriftCheckTestCase):
         result = drift_check.check_dangling_references(self.repo)
         self.assertFalse(result["drifted"])
 
+    def test_invalid_utf8_doc_reported_not_raised(self):
+        # A doc with invalid UTF-8 bytes must degrade to a reported finding, not an
+        # uncaught traceback that kills the run before any report is printed. Same
+        # defect class, same read call, as Check 3's marketplace.json guard.
+        skill_dir = self._path("skills", "foo")
+        os.makedirs(skill_dir, exist_ok=True)
+        with open(os.path.join(skill_dir, "SKILL.md"), "wb") as f:
+            f.write(b"\xff\xfe garbage")
+
+        result = drift_check.check_dangling_references(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("SKILL.md", result["error"])
+        self.assertEqual(result["findings"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising).
+        report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+        self.assertIn("DRIFT:", report)
+        self.assertIn("SKILL.md", report)
+        self.assertEqual(drift_check.main([self.repo]), 0)
+
+    def test_unreadable_doc_does_not_block_other_docs(self):
+        # A read failure on one doc must not prevent the scan from continuing to the
+        # next doc/skill (the "next loop iteration" the reviewer flagged).
+        os.makedirs(self._path("skills", "bad"), exist_ok=True)
+        bad_doc = self._path("skills", "bad", "SKILL.md")
+        with open(bad_doc, "wb") as f:
+            f.write(b"\xff\xfe garbage")
+
+        _write(
+            self._path("skills", "good", "SKILL.md"),
+            "# good\n\n`scripts/missing_module.py` — does not exist.\n",
+        )
+
+        result = drift_check.check_dangling_references(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        # The good skill's dangling reference was still found despite the bad one.
+        self.assertEqual(result["count"], 1)
+        self.assertIn(
+            os.path.join("skills", "good", "SKILL.md"),
+            [doc for doc, _, _ in result["findings"]],
+        )
+
 
 # --- Check 3: registry mismatches ------------------------------------------------
 
@@ -358,6 +403,53 @@ class TestRegistryMismatches(DriftCheckTestCase):
         self.assertIn("DRIFT:", report)
         self.assertIn("marketplace.json", report)
         self.assertEqual(drift_check.main([self.repo]), 0)
+
+    def _assert_structural_malformation_degrades_gracefully(self, marketplace_content):
+        os.makedirs(self._path("skills", "foo"))
+        _write(self._path(".claude-plugin", "marketplace.json"), marketplace_content)
+
+        result = drift_check.check_registry_mismatches(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertEqual(result["unregistered"], [])
+        self.assertEqual(result["missing_dirs"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising) — the same bar as malformed/invalid-UTF-8 JSON above.
+        report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+        self.assertIn("DRIFT:", report)
+        self.assertEqual(drift_check.main([self.repo]), 0)
+        return result
+
+    def test_plugins_not_a_list_reported_not_raised(self):
+        # Syntactically valid JSON, structurally malformed: "plugins" is a string, not
+        # a list. The old code's `for plugin in data.get("plugins", [])` would iterate
+        # over the string's characters and then crash on `plugin.get(...)`.
+        self._assert_structural_malformation_degrades_gracefully(
+            json.dumps({"plugins": "not-a-list"}) + "\n"
+        )
+
+    def test_non_dict_plugin_entries_reported_not_raised(self):
+        # Syntactically valid JSON, structurally malformed: plugin entries are ints, not
+        # objects. The old code's `plugin.get("skills", [])` would crash with
+        # AttributeError.
+        self._assert_structural_malformation_degrades_gracefully(
+            json.dumps({"plugins": [1, 2, 3]}) + "\n"
+        )
+
+    def test_non_dict_top_level_reported_not_raised(self):
+        # Syntactically valid JSON, structurally malformed: the whole document is a list,
+        # not an object. The old code's `data.get("plugins", [])` would crash with
+        # AttributeError.
+        self._assert_structural_malformation_degrades_gracefully(json.dumps([]) + "\n")
+
+    def test_non_string_skills_entry_reported_not_raised(self):
+        # Syntactically valid JSON, structurally malformed: a plugin's "skills" entries
+        # are ints, not path strings. The old code's `entry.rstrip("/")` would crash with
+        # AttributeError.
+        self._assert_structural_malformation_degrades_gracefully(
+            json.dumps({"plugins": [{"skills": [1, 2]}]}) + "\n"
+        )
 
 
 # --- extract_path_references / resolve_reference ---------------------------------
