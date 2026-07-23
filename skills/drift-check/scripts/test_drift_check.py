@@ -335,6 +335,30 @@ class TestRegistryMismatches(DriftCheckTestCase):
         self.assertIn("marketplace.json", report)
         self.assertEqual(drift_check.main([self.repo]), 0)
 
+    def test_invalid_utf8_marketplace_json_reported_not_raised(self):
+        # json.load() implicitly decodes as UTF-8; invalid bytes raise UnicodeDecodeError
+        # (a ValueError, not OSError/JSONDecodeError). That must degrade the same way as
+        # malformed JSON — a reported finding, not an uncaught traceback.
+        os.makedirs(self._path("skills", "foo"))
+        marketplace_path = self._path(".claude-plugin", "marketplace.json")
+        os.makedirs(os.path.dirname(marketplace_path), exist_ok=True)
+        with open(marketplace_path, "wb") as f:
+            f.write(b"\xff\xfe garbage")
+
+        result = drift_check.check_registry_mismatches(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("marketplace.json", result["error"])
+        self.assertEqual(result["unregistered"], [])
+        self.assertEqual(result["missing_dirs"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising).
+        report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+        self.assertIn("DRIFT:", report)
+        self.assertIn("marketplace.json", report)
+        self.assertEqual(drift_check.main([self.repo]), 0)
+
 
 # --- extract_path_references / resolve_reference ---------------------------------
 

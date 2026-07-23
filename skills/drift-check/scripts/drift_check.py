@@ -241,7 +241,7 @@ def check_registry_mismatches(repo_root):
         try:
             with open(marketplace_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             error = f"could not read .claude-plugin/marketplace.json: {exc}"
         else:
             for plugin in data.get("plugins", []):
