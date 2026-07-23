@@ -168,7 +168,7 @@ After applying edits (Step 5a or 5b), check if any modified file is within a ski
 For each modified file, check if its path matches `skills/{skill-name}/`:
 ```
 # Extract skill name from path
-# e.g., skills/task-workflow/operations/create-workspace.md → task-workflow
+# e.g., skills/task-workflow/operations/workspace-setup.md → task-workflow
 ```
 
 Deduplicate — if multiple files in the same skill were modified, bump version once.

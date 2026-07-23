@@ -93,7 +93,7 @@ Search for specific files mentioned in recommendation or related by keyword.
 
 | File | Section | Modification Type |
 |------|---------|-------------------|
-| `skills/task-workflow/operations/create-workspace.md` | Lines 45-60 | Add parallel execution |
+| `skills/task-workflow/operations/workspace-setup.md` | Lines 45-60 | Add parallel execution |
 | `skills/task-workflow/SKILL.md` | Operations table | Update description |
 
 ### Feasibility Assessment
