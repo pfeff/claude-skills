@@ -315,6 +315,78 @@ class TestDanglingReferences(DriftCheckTestCase):
             [doc for doc, _, _ in result["findings"]],
         )
 
+    def test_unreadable_skills_dir_reported_not_raised(self):
+        # An unreadable skills/ directory must degrade to a reported error, not an
+        # uncaught PermissionError that kills the run before any report is printed.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("running as root: chmod 0o000 does not block reads")
+
+        skills_dir = self._path("skills")
+        os.makedirs(skills_dir, exist_ok=True)
+
+        os.chmod(skills_dir, 0o000)
+        try:
+            result = drift_check.check_dangling_references(self.repo)
+        finally:
+            os.chmod(skills_dir, 0o755)
+
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("skills", result["error"])
+        self.assertEqual(result["findings"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising).
+        os.chmod(skills_dir, 0o000)
+        try:
+            report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+            self.assertIn("DRIFT:", report)
+            self.assertEqual(drift_check.main([self.repo]), 0)
+        finally:
+            os.chmod(skills_dir, 0o755)
+
+    def test_unreadable_operations_dir_does_not_block_scan(self):
+        # A skill whose operations/ subdirectory can't be listed must degrade to a
+        # reported error without blocking the scan of other skills (the same
+        # "next loop iteration" bar as the unreadable-doc case above).
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("running as root: chmod 0o000 does not block reads")
+
+        bad_skill_dir = self._path("skills", "bad")
+        ops_dir = os.path.join(bad_skill_dir, "operations")
+        os.makedirs(ops_dir, exist_ok=True)
+        _write(os.path.join(bad_skill_dir, "SKILL.md"), "# bad\n")
+
+        _write(
+            self._path("skills", "good", "SKILL.md"),
+            "# good\n\n`scripts/missing_module.py` — does not exist.\n",
+        )
+
+        os.chmod(ops_dir, 0o000)
+        try:
+            result = drift_check.check_dangling_references(self.repo)
+        finally:
+            os.chmod(ops_dir, 0o755)
+
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("operations", result["error"])
+        # The good skill's dangling reference was still found despite the unreadable
+        # operations/ dir in the other skill.
+        self.assertEqual(result["count"], 1)
+        self.assertIn(
+            os.path.join("skills", "good", "SKILL.md"),
+            [doc for doc, _, _ in result["findings"]],
+        )
+
+        os.chmod(ops_dir, 0o000)
+        try:
+            report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+            self.assertIn("DRIFT:", report)
+            self.assertEqual(drift_check.main([self.repo]), 0)
+        finally:
+            os.chmod(ops_dir, 0o755)
+
 
 # --- Check 3: registry mismatches ------------------------------------------------
 
@@ -450,6 +522,38 @@ class TestRegistryMismatches(DriftCheckTestCase):
         self._assert_structural_malformation_degrades_gracefully(
             json.dumps({"plugins": [{"skills": [1, 2]}]}) + "\n"
         )
+
+    def test_unreadable_skills_dir_reported_not_raised(self):
+        # An unreadable skills/ directory must degrade to a reported error, not an
+        # uncaught PermissionError that kills the run before any report is printed.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("running as root: chmod 0o000 does not block reads")
+
+        skills_dir = self._path("skills")
+        os.makedirs(skills_dir, exist_ok=True)
+        _write(self._path(".claude-plugin", "marketplace.json"), _marketplace_json(["foo"]))
+
+        os.chmod(skills_dir, 0o000)
+        try:
+            result = drift_check.check_registry_mismatches(self.repo)
+        finally:
+            os.chmod(skills_dir, 0o755)
+
+        self.assertTrue(result["drifted"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("skills", result["error"])
+        self.assertEqual(result["unregistered"], [])
+        self.assertEqual(result["missing_dirs"], [])
+
+        # The full report still renders deterministically end-to-end (main() completes
+        # rather than raising).
+        os.chmod(skills_dir, 0o000)
+        try:
+            report = drift_check.format_report(drift_check.run_all_checks(self.repo))
+            self.assertIn("DRIFT:", report)
+            self.assertEqual(drift_check.main([self.repo]), 0)
+        finally:
+            os.chmod(skills_dir, 0o755)
 
 
 # --- extract_path_references / resolve_reference ---------------------------------

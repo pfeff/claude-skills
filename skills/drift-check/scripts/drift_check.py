@@ -172,18 +172,27 @@ def resolve_candidates(raw_ref, kind, repo_root, skill_dir):
     raise ValueError(f"unknown reference kind: {kind}")
 
 
-def _skill_doc_paths(skill_dir):
-    """SKILL.md plus any operations/*.md files under a single skill directory."""
+def _skill_doc_paths(skill_dir, repo_root):
+    """SKILL.md plus any operations/*.md files under a single skill directory.
+    Returns (docs, errors) — "errors" is a list of descriptive strings when the
+    operations/ subdirectory exists but can't be listed (OSError, e.g. unreadable);
+    docs still includes SKILL.md (if present) in that case."""
     docs = []
+    errors = []
     skill_md = os.path.join(skill_dir, "SKILL.md")
     if os.path.isfile(skill_md):
         docs.append(skill_md)
     ops_dir = os.path.join(skill_dir, "operations")
     if os.path.isdir(ops_dir):
-        for name in sorted(os.listdir(ops_dir)):
+        try:
+            names = sorted(os.listdir(ops_dir))
+        except OSError as exc:
+            errors.append(f"could not list {os.path.relpath(ops_dir, repo_root)}: {exc}")
+            names = []
+        for name in names:
             if name.endswith(".md"):
                 docs.append(os.path.join(ops_dir, name))
-    return docs
+    return docs, errors
 
 
 def check_dangling_references(repo_root):
@@ -191,19 +200,29 @@ def check_dangling_references(repo_root):
     "findings": [(doc_path, raw_ref, resolved_path)], "error": str | None} (paths relative
     to repo_root).
     "error" = set (and "drifted" forced True) when one or more docs can't be read (OSError,
-    e.g. unreadable) or decoded (UnicodeDecodeError, e.g. invalid UTF-8); those docs are
-    skipped rather than crashing the scan, and remaining docs are still checked."""
+    e.g. unreadable) or decoded (UnicodeDecodeError, e.g. invalid UTF-8), or when skills/ or
+    a skill's operations/ subdirectory can't be listed (OSError, e.g. unreadable); those docs
+    or directories are skipped rather than crashing the scan, and remaining docs are still
+    checked."""
     skills_dir = os.path.join(repo_root, "skills")
     findings = []
     errors = []
     if not os.path.isdir(skills_dir):
         return {"drifted": False, "count": 0, "findings": [], "error": None}
 
-    for skill_name in sorted(os.listdir(skills_dir)):
+    try:
+        skill_names = sorted(os.listdir(skills_dir))
+    except OSError as exc:
+        errors.append(f"could not list skills/: {exc}")
+        skill_names = []
+
+    for skill_name in skill_names:
         skill_dir = os.path.join(skills_dir, skill_name)
         if not os.path.isdir(skill_dir):
             continue
-        for doc_path in _skill_doc_paths(skill_dir):
+        docs, doc_list_errors = _skill_doc_paths(skill_dir, repo_root)
+        errors.extend(doc_list_errors)
+        for doc_path in docs:
             try:
                 with open(doc_path, "r", encoding="utf-8") as f:
                     text = f.read()
@@ -266,22 +285,25 @@ def check_registry_mismatches(repo_root):
     "missing_dirs" = marketplace.json entries whose dir doesn't exist.
     "error" = set (and "drifted" forced True) when marketplace.json exists but can't be
     read, parsed, or has an unexpected structure (e.g. "plugins" not a list, a plugin
-    entry not an object); the registry comparison is skipped in that case rather than
-    crashing."""
+    entry not an object), or when skills/ exists but can't be listed (OSError, e.g.
+    unreadable); the registry comparison is skipped in that case rather than crashing."""
     skills_dir = os.path.join(repo_root, "skills")
     marketplace_path = os.path.join(repo_root, ".claude-plugin", "marketplace.json")
 
     actual = set()
+    error = None
     if os.path.isdir(skills_dir):
-        actual = {
-            name
-            for name in os.listdir(skills_dir)
-            if os.path.isdir(os.path.join(skills_dir, name))
-        }
+        try:
+            actual = {
+                name
+                for name in os.listdir(skills_dir)
+                if os.path.isdir(os.path.join(skills_dir, name))
+            }
+        except OSError as exc:
+            error = f"could not list skills/: {exc}"
 
     registered = set()
-    error = None
-    if os.path.isfile(marketplace_path):
+    if error is None and os.path.isfile(marketplace_path):
         try:
             with open(marketplace_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
