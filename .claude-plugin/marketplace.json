@@ -53,6 +53,7 @@
         "./skills/skillify",
         "./skills/task-workflow",
         "./skills/testing-without-mocks",
+        "./skills/vault-cloud",
         "./skills/verify-inherited-premise"
       ]
     }
