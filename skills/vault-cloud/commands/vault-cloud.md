@@ -1,7 +1,7 @@
 # /vault-cloud — Record & search the Obsidian vault from a cloud session
 
-Read and write the Obsidian vault (`pfeff/obsidian-vault`) over git from a cloud/web/container
-session, where the macOS `obsidian` CLI is unavailable. Search is lexical (ripgrep); writes are
+Read and write the Obsidian vault (the repo configured in `OBSIDIAN_VAULT_REPO`) over git from a
+cloud/web/container session, where the macOS `obsidian` CLI is unavailable. Search is lexical (ripgrep); writes are
 vocabulary-compliant and land on a `cloud/<date>-<topic>` branch for the operator to merge.
 
 ## Usage

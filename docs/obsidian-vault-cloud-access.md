@@ -1,8 +1,10 @@
 # Recording & accessing the Obsidian vault from cloud sessions
 
-**Status:** design / options — recommendation pending operator decision on two points (see "Open decisions").
+**Status:** decisions resolved; implemented as the `vault-cloud` skill (grep search, dedicated-branch writes). See "Open decisions" for the resolutions.
 **Date:** 2026-08-02.
-**Context:** the vault is `pfeff/obsidian-vault` (private GitHub repo, `can_push: true` from cloud sessions).
+**Context:** the vault is a private GitHub repo (push-capable from cloud sessions). The concrete
+`<owner>/<repo>` is operator config, supplied via `OBSIDIAN_VAULT_REPO` — never hardcoded in this
+published plugin.
 
 ## Problem
 
@@ -97,16 +99,13 @@ win).
 ## Open decisions (operator)
 
 1. **Search fidelity.** Accept lexical-only (ripgrep) cloud search, or invest in cloud-side
-   embeddings so semantic retrieval works from the cloud too? (There's an old
-   `pfeff/obsidian-similarity-search` repo that could seed this.) Lexical-only is the cheap,
-   robust default.
+   embeddings so semantic retrieval works from the cloud too? (An existing similarity-search
+   project could seed this.) **Resolved:** start with grep; revisit semantic later after
+   analysis, without committing to a technology yet.
 2. **Write isolation.** How should cloud writes land so they don't race the local Obsidian app?
-   - **(a) dedicated branch** `cloud/<date>-<topic>`, operator/local merges — safest, keeps
-     `main` clean;
-   - **(b) cloud-inbox folder** (a `raw/`-style staging area) committed to `main`, local side
-     reconciles — lowest friction, mirrors how `kb-capture` already stages into `raw/`;
-   - **(c) straight to `main`**, pull-first — simplest, but cloud and local both writing `main`
-     invites conflicts.
+   **Resolved: (a) dedicated branch** `cloud/<date>-<topic>`, operator/local merges — safest,
+   keeps `main` clean. (Considered and not chosen: (b) a `raw/`-style cloud-inbox folder on
+   `main`; (c) straight to `main`, pull-first.)
 
 ## Constraints to preserve
 
@@ -115,5 +114,3 @@ win).
   cloud path must not reopen this.
 - **Off-limits subtrees.** `kb_core.OFF_LIMITS` = `DevOps Documentation/`, `Confluence/`; plus
   the contract's "never write `_meta/`, never reorganize." The cloud writer inherits all of it.
-</content>
-</invoke>

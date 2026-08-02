@@ -1,6 +1,6 @@
 ---
 name: vault-cloud
-description: "Record and search the Obsidian vault from a cloud session (Claude Code on the web), where the macOS-local obsidian CLI is unavailable but the vault is reachable as a git repo. Clones pfeff/obsidian-vault, searches it with ripgrep (lexical — QMD/semantic search stays on the Mac), and writes vocabulary-compliant notes that it commits to a dedicated cloud/<date>-<topic> branch for the operator to merge. Use in cloud/web/container sessions that lack the local vault. Not for the Mac — there the obsidian-notes CLI and compound/kb-* skills already own vault I/O."
+description: "Record and search the Obsidian vault from a cloud session (Claude Code on the web), where the macOS-local obsidian CLI is unavailable but the vault is reachable as a git repo. Clones the configured vault repo (OBSIDIAN_VAULT_REPO), searches it with ripgrep (lexical — QMD/semantic search stays on the Mac), and writes vocabulary-compliant notes that it commits to a dedicated cloud/<date>-<topic> branch for the operator to merge. Use in cloud/web/container sessions that lack the local vault. Not for the Mac — there the obsidian-notes CLI and compound/kb-* skills already own vault I/O."
 argument-hint: "[search <query> | write <note description> | setup]"
 allowed-tools:
   - Read
@@ -30,8 +30,8 @@ does not exist (or, sourced, leaves `OBSIDIAN_CLI` unset). That is this skill's 
 
 ## What git gives, and what it doesn't
 
-The vault (`pfeff/obsidian-vault`) is plain markdown + YAML frontmatter, ~12 MB, and clones in
-seconds. Once cloned:
+The vault (the repo named in `OBSIDIAN_VAULT_REPO` — see `operations/setup.md`) is plain
+markdown + YAML frontmatter and clones in seconds. Once cloned:
 
 - **Read/search works natively** via ripgrep over frontmatter and body.
 - **Writing works** by creating `YYYY/MM/YYYY-MM-DD-<slug>.md` and committing.
@@ -84,8 +84,8 @@ enforces this.
 - `scripts/vault_compliance.py` — pure, unit-tested primitives: `parse_vocabulary`,
   `slugify`/`note_path`, `emit_frontmatter` (fm-emit quoting discipline), `validate_frontmatter`.
   Tests: `scripts/test_vault_compliance.py` (stdlib `unittest`).
-- `pfeff/obsidian-vault` — the vault repo (private; `add_repo` + clone). `_meta/agent-contract.md`
-  and `_meta/vocabulary.md` are the compliance source of truth.
+- The vault repo (private; resolved from `OBSIDIAN_VAULT_REPO`, then `add_repo` + clone).
+  `_meta/agent-contract.md` and `_meta/vocabulary.md` are the compliance source of truth.
 - `docs/obsidian-vault-cloud-access.md` — the design/options doc this skill implements.
 - `references/compliance-contract.md` — the cloud-specific rules layered on the vault contract.
 
