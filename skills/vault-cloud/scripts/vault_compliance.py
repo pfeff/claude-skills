@@ -80,6 +80,8 @@ def note_path(date_str: str, slug: str) -> str:
     m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", date_str)
     if not m:
         raise ValueError(f"date must be YYYY-MM-DD, got {date_str!r}")
+    if not slug:
+        raise ValueError("slug must be non-empty (title slugified to nothing?)")
     year, month, _ = m.groups()
     return f"{year}/{month}/{date_str}-{slug}.md"
 
@@ -165,6 +167,10 @@ def emit_frontmatter(fields: dict) -> str:
 
     for key, value in fields.items():
         if key in _FIELD_ORDER or value is None:
+            continue
+        # Skip empty single-value extras, symmetric with the known-field loop above —
+        # an empty scalar contributes no information and shouldn't emit a blank `key: ""`.
+        if not isinstance(value, (list, tuple)) and str(value).strip() == "":
             continue
         emit_key(key, value)
 

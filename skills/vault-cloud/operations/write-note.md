@@ -35,17 +35,17 @@ VC="${CLAUDE_PLUGIN_ROOT}/skills/vault-cloud/scripts/vault_compliance.py"
 
    ```bash
    python3 - "$OBSIDIAN_VAULT_PATH" <<'PY'
-   import sys, json, subprocess, os
+   import sys, os, datetime
    sys.path.insert(0, os.path.join(os.environ["CLAUDE_PLUGIN_ROOT"], "skills/vault-cloud/scripts"))
    import vault_compliance as vc
    vault = sys.argv[1]
    vocab = vc.parse_vocabulary(open(f"{vault}/_meta/vocabulary.md").read())
-   fields = {
-       "type": "reference",            # <-- fill these in from step 1
+   fields = {                          # <-- fill these in from step 1; illustrative values only
+       "type": "reference",
        "area": "workflow",
        "project": "",
        "status": "active",
-       "date": "2026-08-02",
+       "date": datetime.date.today().isoformat(),   # resolved now — never a frozen literal
        "tags": ["example"],
    }
    violations = vc.validate_frontmatter(fields, vocab)

@@ -98,6 +98,11 @@ class TestNotePath(unittest.TestCase):
         with self.assertRaises(ValueError):
             vc.note_path("2026-8-2", "x")
 
+    def test_rejects_empty_slug(self):
+        # slugify("!!!") -> "" ; a note must not land at "…-.md"
+        with self.assertRaises(ValueError):
+            vc.note_path("2026-08-02", vc.slugify("!!!"))
+
 
 class TestQuoting(unittest.TestCase):
     def test_plain_scalar_unquoted(self):
@@ -167,6 +172,14 @@ class TestEmitFrontmatter(unittest.TestCase):
         self.assertNotIn("area:", fm)
         self.assertNotIn("project:", fm)
         self.assertIn("tags: []", fm)
+
+    def test_empty_extra_scalar_skipped(self):
+        # An extra (non-known) key with an empty value is skipped, symmetric with the
+        # known optional fields — no blank `key: ""` line.
+        fm = vc.emit_frontmatter({
+            "type": "reference", "date": "2026-08-02", "source_key": "",
+        })
+        self.assertNotIn("source_key", fm)
 
     def test_type_emitted_first(self):
         fm = vc.emit_frontmatter({"date": "2026-08-02", "type": "moc"})

@@ -24,9 +24,12 @@ cloud you get lexical matching only. When you report results, say so once — e.
      ```bash
      rg -i --type md -g '!.git' "<query>" "$OBSIDIAN_VAULT_PATH"
      ```
-   - **By frontmatter field** (e.g. all `reference` notes for the job search):
+   - **By frontmatter field** (e.g. all `reference` notes for the job search). Match your
+     vault's *actual* value casing — the live vault carries project values like `Job Search`
+     (spaced/title-case) even where `_meta/vocabulary.md` documents `job-search`; grep the note
+     you know exists first to see the real spelling, or use a case-insensitive `-i`:
      ```bash
-     rg -l --type md -U '(?s)^---.*\btype:\s*reference\b.*\bproject:\s*job-search\b.*?^---' \
+     rg -li --type md -U '(?s)^---.*\btype:\s*reference\b.*\bproject:\s*job.search\b.*?^---' \
         "$OBSIDIAN_VAULT_PATH"
      ```
      Simpler single-field forms are usually enough:
