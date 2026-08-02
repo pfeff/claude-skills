@@ -5,7 +5,7 @@ argument-hint: "[blank to check the whole skills estate]"
 allowed-tools:
   - Read
   - Bash
-version: 0.1.0
+version: 0.1.1
 ---
 
 # Drift Check
@@ -73,9 +73,10 @@ repos — no mocks (matches `kb-lint/scripts/test_kb_lint_git.py`'s convention).
   conventions exist in this repo. Both candidates are tried before flagging dangling, so
   this doesn't false-positive, but a reference could in principle resolve to the "wrong"
   one of two files that both happen to exist.
-- Illustrative example paths in doc prose (e.g. a placeholder skill name in a shell
-  snippet) can false-positive as dangling references — this check has no way to
-  distinguish a template placeholder from a real reference.
+- Placeholder paths inside fenced code blocks (e.g. a `my-skill` shell-snippet example)
+  are excluded by the fenced-block skip above, so they no longer false-positive. A
+  placeholder in *non-fenced* prose still can — this check has no way to distinguish a
+  template placeholder from a real reference outside a fence.
 - Check 1 assumes a roughly linear (rebase-merged) history on the checked-out branch,
   matching this repo's convention; it does not attempt merge-commit-specific traversal.
 

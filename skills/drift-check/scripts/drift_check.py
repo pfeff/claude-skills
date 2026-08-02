@@ -140,6 +140,39 @@ CLAUDE_PLUGIN_ROOT_RE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w\-./]+\.\w+)")
 SKILLS_REL_RE = re.compile(r"`(skills/[\w\-./]+\.\w+)`")
 SCRIPTS_REL_RE = re.compile(r"`(scripts/[\w\-./]+\.\w+)`")
 
+FENCE_OPEN_CLOSE_RE = re.compile(r"^(`{3,}|~{3,})")
+
+
+def strip_fenced_code_blocks(text):
+    """Return ``text`` with the contents of fenced code blocks (``` or ~~~ fences)
+    blanked to empty lines, so path references appearing only inside a fenced example
+    (e.g. a ``${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md`` placeholder in a shell
+    snippet) are not scanned. This honors the documented "references inside fenced code
+    blocks are not scanned" precision contract (see SKILL.md "Known limitations"), which
+    the whole-file regexes would otherwise violate.
+
+    Detection is line-based: a line whose first non-whitespace run is >=3 backticks or
+    >=3 tildes opens or closes a fence; the closing fence must be the same marker char.
+    Inline code spans (single backticks) are left intact — only fenced blocks are
+    stripped. Line count is preserved (each stripped line becomes ""), so this is safe
+    to run before any position-dependent scanning."""
+    out = []
+    fence_char = None
+    for line in text.split("\n"):
+        m = FENCE_OPEN_CLOSE_RE.match(line.lstrip())
+        if m:
+            marker = m.group(1)[0]
+            if fence_char is None:
+                fence_char = marker
+                out.append("")
+                continue
+            if marker == fence_char:
+                fence_char = None
+                out.append("")
+                continue
+        out.append("" if fence_char is not None else line)
+    return "\n".join(out)
+
 
 def extract_path_references(text):
     """Return a list of (raw_reference, kind) pairs found in ``text``. ``kind`` is
@@ -229,6 +262,7 @@ def check_dangling_references(repo_root):
             except (OSError, UnicodeDecodeError) as exc:
                 errors.append(f"could not read {os.path.relpath(doc_path, repo_root)}: {exc}")
                 continue
+            text = strip_fenced_code_blocks(text)
             for raw_ref, kind in extract_path_references(text):
                 candidates = resolve_candidates(raw_ref, kind, repo_root, skill_dir)
                 if not any(os.path.isfile(c) for c in candidates):

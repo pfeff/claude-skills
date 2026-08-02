@@ -260,6 +260,49 @@ class TestDanglingReferences(DriftCheckTestCase):
         self.assertFalse(result["drifted"])
         self.assertEqual(result["findings"], [])
 
+    def test_reference_inside_fenced_code_block_not_flagged(self):
+        # Modeled on the real task-workflow false positive: a ${CLAUDE_PLUGIN_ROOT}
+        # placeholder path inside a ```bash example. The documented contract is that
+        # references inside fenced code blocks are not scanned; the whole-file regex
+        # would otherwise flag the placeholder as dangling.
+        _write(
+            self._path("skills", "foo", "SKILL.md"),
+            "# foo\n\n"
+            "```bash\n"
+            "REAL_PATH=$(realpath ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md)\n"
+            "```\n",
+        )
+        result = drift_check.check_dangling_references(self.repo)
+        self.assertFalse(result["drifted"])
+        self.assertEqual(result["count"], 0)
+
+    def test_same_reference_in_prose_is_still_flagged(self):
+        # The fence-skip must not blunt Check 2: the identical dangling reference in
+        # prose (outside any fence) is still detected.
+        _write(
+            self._path("skills", "foo", "SKILL.md"),
+            "# foo\n\nSee `${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md` for the pattern.\n",
+        )
+        result = drift_check.check_dangling_references(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertEqual(result["count"], 1)
+
+    def test_dangling_reference_after_fence_still_scanned(self):
+        # A fenced block must not swallow the rest of the document: a dangling reference
+        # in prose *after* a closed fence is still scanned.
+        _write(
+            self._path("skills", "foo", "SKILL.md"),
+            "# foo\n\n"
+            "```bash\n"
+            "echo ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md\n"
+            "```\n\n"
+            "Then load `scripts/missing_module.py`.\n",
+        )
+        result = drift_check.check_dangling_references(self.repo)
+        self.assertTrue(result["drifted"])
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["findings"][0][1], "scripts/missing_module.py")
+
     def test_prose_without_backticks_not_flagged(self):
         # High-precision, not high-recall (documented limitation): unquoted mentions of a
         # path are not scanned, to avoid false positives.
@@ -574,6 +617,27 @@ class TestExtractAndResolve(unittest.TestCase):
         text = "`scripts/foo_core.py` — pure primitives."
         refs = drift_check.extract_path_references(text)
         self.assertIn(("scripts/foo_core.py", "skill-relative"), refs)
+
+    def test_strip_fenced_code_blocks_blanks_fence_content(self):
+        text = (
+            "before\n"
+            "```bash\n"
+            "${CLAUDE_PLUGIN_ROOT}/skills/my-skill/SKILL.md\n"
+            "```\n"
+            "after `scripts/keep.py`\n"
+        )
+        stripped = drift_check.strip_fenced_code_blocks(text)
+        self.assertNotIn("my-skill", stripped)
+        # Inline code span outside the fence is preserved.
+        self.assertIn("`scripts/keep.py`", stripped)
+        # Line count is preserved so line-based scanning stays aligned.
+        self.assertEqual(len(stripped.split("\n")), len(text.split("\n")))
+
+    def test_strip_fenced_code_blocks_handles_tilde_fences(self):
+        text = "a\n~~~\n${CLAUDE_PLUGIN_ROOT}/skills/gone/x.md\n~~~\nb\n"
+        stripped = drift_check.strip_fenced_code_blocks(text)
+        self.assertNotIn("gone", stripped)
+        self.assertIn("b", stripped)
 
     def test_resolve_plugin_root_is_repo_relative(self):
         candidates = drift_check.resolve_candidates(
