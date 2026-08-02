@@ -14,3 +14,17 @@
 # Example (remove the leading '#', use your real private hostnames):
 # my-private-laptop
 # my-corp-host
+#
+# Tokens are matched as literal substrings anywhere in published content, so
+# this file is also the place to block a private *repo slug* that must never be
+# committed — e.g. the Obsidian vault the `vault-cloud` skill talks to, which is
+# supplied at runtime via OBSIDIAN_VAULT_REPO precisely so its slug stays out of
+# this repo. Add the OWNER-QUALIFIED form so the guard targets the real leak and
+# nothing else:
+# <owner>/<private-vault-repo>
+#
+# Do NOT list the bare repo name on its own (e.g. just the '<private-vault-repo>'
+# half): it appears legitimately in generic prose and in the design doc's own
+# filename references, so a bare token would flag those as false positives. The
+# owner-qualified slug appears nowhere in the tree today, so it only fires on an
+# actual reintroduction.
