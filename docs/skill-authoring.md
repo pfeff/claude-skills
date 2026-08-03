@@ -94,13 +94,25 @@ only once an admin, in the repo's branch-protection / ruleset settings:
 
 - makes **`Version Gate / version-bump`** a **required status check** on
   `main`, and
-- enables the **merge queue** for `main` — recommended. The gate also runs on
-  `merge_group`, so the queue re-validates each PR against the serialized tip of
-  main before merging, closing even the exact-simultaneous-merge race (two PRs
-  merging in the same instant). As a lighter alternative to a merge queue,
-  enable **"Require branches to be up to date before merging"**: it forces the
-  trailing PR to rebase onto the freshly-bumped main, which re-runs the gate and
-  catches the collision — at the cost of more manual rebase churn than a queue.
+- **serializes merges** so each PR is re-validated against a main that already
+  includes the previous merge. Do this with **"Require branches to be up to date
+  before merging"** (recommended — provably closes the race): after one PR
+  merges and bumps main, every other PR is forced to update onto the new main
+  before it can merge. Updating collapses the trailing PR's byte-identical bump
+  into a no-op (its version now equals main's), so the gate re-runs and fails
+  the strictly-greater check — forcing a re-bump. The cost is manual update
+  churn (each merge invalidates the others).
+
+  A **merge queue** is only a safe substitute if it is configured to merge
+  **one PR at a time** (maximum group size = 1). Do **not** rely on a *batched*
+  merge queue for this: it stacks several queued PRs into a single `merge_group`
+  and checks them once against the pre-queue base, and two byte-identical bumps
+  to the same version collapse to one `X→X+1` transition in that combined tree
+  (git sees both sides making the identical edit — no conflict). The gate's
+  `version > base` check then passes for the whole group and both PRs merge
+  under one version — the exact collision we are trying to prevent. The gate
+  still runs on `merge_group` (so a size-1 queue re-validates correctly), but
+  batching defeats it.
 
 Without that admin step the gate still catches the common case (a branch behind
 main, or a within-PR desync); only the exact-simultaneous-merge race needs the

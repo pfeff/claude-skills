@@ -5,16 +5,18 @@ name: Version Gate
 # carry its own version bump, with both manifests in sync and the new version
 # strictly greater than main's CURRENT version.
 #
-# The `merge_group` trigger makes this gate re-validate inside a GitHub merge
-# queue, against the serialized tip of main. That is what closes the
-# exact-simultaneous-merge race: two PRs that both bumped to the same version
-# cannot both merge — the second one is measured against the first's already-
-# merged bump and fails, forcing a rebase-and-re-bump.
+# The `merge_group` trigger lets this gate re-validate inside a GitHub merge
+# queue. NOTE: it only closes the exact-simultaneous-merge race if merges are
+# SERIALIZED — either "Require branches to be up to date before merging"
+# (recommended) or a merge queue that merges one PR at a time (group size 1). A
+# BATCHED merge queue does NOT close it: it stacks several PRs into one
+# merge_group and two byte-identical bumps collapse to a single version bump in
+# that combined tree, so the whole group passes the > check and both merge under
+# one version. See docs/skill-authoring.md §2 "Enforcement" for the full
+# reasoning.
 #
 # To make this airtight, an admin must make "Version Gate / version-bump" a
-# required status check on main and enable the merge queue (or, as a lighter
-# alternative, "Require branches to be up to date before merging"). See
-# docs/skill-authoring.md §2 "Enforcement".
+# required status check on main AND serialize merges as above.
 on:
   pull_request:
     branches: [main]
