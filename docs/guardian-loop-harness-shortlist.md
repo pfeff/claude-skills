@@ -50,7 +50,8 @@ Derived directly from the pains and constraints. Weighted by how load-bearing th
 | C5 | **Cost ceiling** | A persistent/high-frequency loop can't blow up spend. | ★★ |
 | C6 | **Low-maintenance** | Operator won't hand-maintain fragile bespoke orchestration. | ★★ |
 | C7 | **KB compatibility** | Must work against the Obsidian knowledge base. Migrating the KB to the cloud is acceptable if it buys reliability. | ★★ |
-| C8 | **Billing fit + model portability** | A persistent loop wants *predictable* cost (a flat subscription beats metered), but the subscription must permit *unattended* use, and the harness should hot-swap models across vendors (cheap model for routine ticks, strong model for synthesis). See the Analysis of Alternatives below. | ★★ |
+| C8 | **Billing fit + model portability** | A persistent loop wants *predictable* cost (a flat **token-inclusive** subscription beats metered), but the subscription must permit *unattended* use, and the harness should hot-swap models across vendors (cheap model for routine ticks, strong model for synthesis). See the Analysis of Alternatives below. | ★★ |
+| C9 | **Remote control** | Drive/monitor/steer the loop away from the desk — **mobile first**, web second. For an unattended loop you want to be pinged and able to approve/redirect from your phone. | ★★ (mobile ≫ web) |
 
 **Design insight:** pains #1 and #2 are *not* "use a smarter model" problems — they are
 **control-flow** problems. A more capable single-agent CLI (Claude Code, Codex, Gemini
@@ -228,7 +229,15 @@ The headline: **these two goals normally conflict — but Hermes resolves them.*
 officially steered away from unattended automation. The only **cross-vendor subscription**
 that is *designed* for unattended agent use is **Nous Portal**, which Hermes uses natively.
 
-### Billing model — can it run unattended on a subscription?
+> **What counts as a "subscription" here (token-inclusive):** the flat fee must *cover the
+> model tokens/usage*, not just grant access to the harness software. A free/OSS harness
+> (Hermes, opencode) with **bring-your-own metered API key** is *not* a subscription for this
+> purpose — the tokens are still pay-per-use. Qualifying token-inclusive subscriptions:
+> **Nous Portal** (tokens across 300+ models bundled), **Claude Max** (Anthropic tokens
+> bundled), **ChatGPT Plus/Pro** (OpenAI usage bundled). The harness's own price (all the
+> finalists' software is free/OSS) is orthogonal — C8 is about *who bundles the tokens*.
+
+### Billing model — can it run unattended on a token-inclusive subscription?
 
 | Harness | Subscription option | Unattended/cron on that subscription? | Metered/API path |
 |---------|---------------------|----------------------------------------|------------------|
@@ -280,6 +289,35 @@ that is *designed* for unattended agent use is **Nous Portal**, which Hermes use
 
 ---
 
+## Remote Control — Mobile-First, Web-Second (C9)
+
+For an unattended loop, "remote control" means: get **pinged** when a tick finishes or needs
+a decision, and **steer it from your phone** (approve, redirect, ask a question) without
+sitting at the terminal. Priority: **mobile first, web second.**
+
+| Harness | Mobile (priority 1) | Web (priority 2) | Shape |
+|---------|---------------------|------------------|-------|
+| **Hermes** | **Best.** Native **messaging gateway** to ~20 platforms you already have on your phone — **Telegram, WhatsApp, Signal, iMessage, SMS, Slack, Discord, Teams, email, ntfy…** You *command the loop bidirectionally* by DM and cron *delivers results to the same channels*. One memory across all of them; allowlist + DM-pairing access control. | Browser is a first-class channel; a **Channels** page configures the gateway from the browser (pluggable auth: user/pass, OIDC, refresh-token rotation). | **Chat-native, bidirectional.** No bespoke app — you already carry the client. Fits a headless loop that pings you and takes replies. |
+| Claude Code (baseline) | **Good but Max-only preview.** *Remote Control* mirrors a **local interactive session** to the Claude iOS/Android app — approve permissions, get pinged, steer. | claude.ai/code mirrors the same session in-browser; conversations sync across devices. | Syncs a **running interactive session**, not a headless cron loop. Great for babysitting; not a fire-and-forget loop controller. |
+| Codex CLI | **Good, host-tied.** Codex in the **ChatGPT mobile app** (iOS/Android) remote-controls a Codex session on a **Mac** host — reviews, approvals, **model switching**, task mgmt. QR-code pairing; Windows host "coming soon". | Codex cloud / web console. | Phone as remote for a **desktop-hosted** session; OpenAI-only, macOS-host-bound today. |
+| opencode | **Weak.** TUI-centric; no first-party mobile remote control. | Web share/preview only. | Not built for phone-driven operation. |
+| Bespoke SDK (Finalist B) | **DIY.** You'd wire a Telegram/ntfy bot yourself — which is exactly the free, built-in capability Hermes hands you. | DIY. | Another reason the bespoke route is last: you rebuild what Hermes ships. |
+
+**Verdict (C9):** **Hermes wins the mobile-first axis decisively** — and it's the *right shape*
+for this use case, because the Guardian loop is meant to run headless and *reach out to you*,
+which is precisely what a messaging-gateway agent does (loop runs on a cadence → pings your
+Telegram/Signal → you reply to approve or redirect). Claude Code and Codex offer real mobile
+control but of an **interactive desktop session**, which is the model you're trying to move
+*away* from. This is a third independent reason Hermes leads, alongside cron/skills fit (C3/C7)
+and token-inclusive cross-vendor subscription (C8).
+
+**Spike addition (folds into the Hermes spike):** wire one messaging channel (Telegram is the
+quickest) during the Hermes trial; set the daily tick's `deliver:` target to it and confirm
+you can (a) receive the tick summary on your phone and (b) reply to steer the next tick. Pass
+= you ran a full day's loop from your phone without opening a terminal.
+
+---
+
 ## Decision Rubric (after the spikes)
 
 Run the spikes in this order — anchor first (operator's call, and it's the lowest-build
@@ -302,9 +340,10 @@ the personal loop** — cron + `SKILL.md` + local-vault + model-agnostic deliver
 requirements out of the box at low build cost, **and it is the only candidate whose billing
 model fits an always-on loop cleanly**: Nous Portal gives a *flat, cross-vendor subscription
 sanctioned for unattended use* (predictable cost ceiling) while still hot-swapping across
-OpenAI / Anthropic / xAI / Gemini per tick (C8). Fall through to Hermes' scripted-pipeline
-mode, then to a bespoke SDK harness (B), only if measured within-session drift proves the
-agent still can't be trusted to execute-not-edit.
+OpenAI / Anthropic / xAI / Gemini per tick (C8), **and it wins the mobile-first remote-control
+axis** via its messaging gateway (C9). Fall through to Hermes' scripted-pipeline mode, then to
+a bespoke SDK harness (B), only if measured within-session drift proves the agent still can't
+be trusted to execute-not-edit.
 
 **Billing recommendation:** prototype on **OpenRouter** (one metered key, hard spend cap,
 all four vendors) to keep the spike cheap and cancel-free; if Hermes wins, move the standing
@@ -350,5 +389,6 @@ off-machine.
 - [Sébastien Dubois — Hermes Agent overview](https://www.dsebastien.net/hermes-agent/)
 - [agentskills.io specification](https://agentskills.io/specification)
 - Billing/model portability: [Codex CLI pricing & auth (ChatGPT sign-in vs API key)](https://inventivehq.com/blog/codex-cli-pricing-explained) · [Codex ChatGPT login vs API key](https://www.toolcolumn.com/learn/codex-chatgpt-vs-api-access) · [OpenCode providers](https://opencode.ai/docs/providers/) · [Claude Code headless & ToS](https://autonomee.ai/blog/claude-code-terms-of-service-explained/) · [Claude Max vs API](https://runapi.ai/claude-max-vs-api)
+- Remote control (C9): [Hermes Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/) · [Claude Code Remote Control (Anthropic, mobile)](https://www.helpnetsecurity.com/2026/02/25/anthropic-remote-control-claude-code-feature/) · [Codex in the ChatGPT mobile app](https://9to5mac.com/2026/05/14/openai-brings-codex-control-to-chatgpt-for-iphone-and-android/) · [Codex remote connections](https://developers.openai.com/codex/remote-connections)
 - Internal: `docs/PRODUCT.md` (Agent-Coordinator / `hermes_mcp` — the *different* Hermes),
   `skills/cadence-goals/SKILL.md`, `skills/planning-workflow/` (the WIP SDLC applied here).
