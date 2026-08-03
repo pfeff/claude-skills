@@ -146,8 +146,12 @@ over your own files and skills.
   source of truth; Hermes' memory is additive. **No cloud KB migration required.**
 
 **Spike plan:**
-1. Install Hermes; point it at a provider via `hermes model` (Anthropic, or a cheaper model
-   to test cost).
+1. Install Hermes. **Billing = direct provider keys (decided).** Register **Anthropic, OpenAI,
+   and xAI** API keys via `hermes model` (each as a native provider; secrets land in
+   `~/.hermes/.env`). Set a **cheap model** as the default for routine ticks and a **strong
+   model** for weekly synthesis, and confirm `/model` hot-swaps between vendors. **Set a hard
+   spend/usage limit on each provider console** (Anthropic, OpenAI, xAI) — with direct keys
+   there's no single OpenRouter cap, so the per-provider limits *are* the cost ceiling (C5).
 2. Drop `cadence-goals` (and its refs) into `~/.hermes/skills/`; confirm it loads unmodified.
 3. Create a cron job for one tick — e.g. `0 6 * * *` "run the daily Guardian OODA tick" —
    attaching `cadence-goals`, workdir = the vault, deliver = local file + Telegram.
@@ -446,11 +450,23 @@ So: **take Hermes** unless its spike shows the agent actually skipping work to e
 fallback** for a maximal-determinism / no-learning preference, on metered OpenRouter with a
 spend cap. Bespoke SDK harness (B) only if *both* fail C1.
 
-**Billing recommendation:** prototype on **OpenRouter** (one metered key, hard spend cap,
-all four vendors) to keep the spike cheap and cancel-free; if Hermes wins, move the standing
-loop to **Nous Portal** for a flat monthly ceiling — pending the Portal limits/privacy check
-in Open Questions. Avoid pinning the loop to Claude Max / ChatGPT: single-vendor and
-off-label for unattended cron.
+**Billing decision (spike): direct provider keys.** Reuse existing **Anthropic + OpenAI + xAI**
+API accounts, keys registered directly in Hermes. Chosen over OpenRouter for **0% overhead and
+the best privacy** (prompts go straight to each provider — no aggregator in the data path, which
+matters for a personal vault). Trade-off accepted: **three keys/bills and no single cap**, so a
+**hard spend limit is set on each provider console** to hold the cost ceiling (C5). Reference on
+the paths considered:
+
+| Path | Overhead vs. direct | Cap | Data path | Verdict |
+|------|--------------------|-----|-----------|---------|
+| **Direct keys (chosen)** | **0%** | per-provider limits (3) | straight to provider | ✅ spike billing |
+| OpenRouter — credits | ~5.5% on top-ups | one hard cap | via aggregator | fallback if 3 caps annoy |
+| OpenRouter — BYOK | ~5% on usage | your provider bills | via aggregator | reuse keys + one dashboard |
+| Nous Portal | flat subscription | flat ceiling | via Nous gateway | **production** option if Hermes wins |
+
+Subscriptions (Claude Max / ChatGPT / Grok / Cursor) are **out** — locked to first-party apps,
+off-label or prohibited for a third-party unattended harness. Nous Portal stays deferred to the
+production decision (pending its limits/privacy check in Open Questions).
 
 **KB note:** All three run against the **local** Obsidian vault; **none require cloud KB
 migration** — Hermes accesses the vault as local files. Keep cloud migration as an option
