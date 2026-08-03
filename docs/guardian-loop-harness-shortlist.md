@@ -50,6 +50,7 @@ Derived directly from the pains and constraints. Weighted by how load-bearing th
 | C5 | **Cost ceiling** | A persistent/high-frequency loop can't blow up spend. | ★★ |
 | C6 | **Low-maintenance** | Operator won't hand-maintain fragile bespoke orchestration. | ★★ |
 | C7 | **KB compatibility** | Must work against the Obsidian knowledge base. Migrating the KB to the cloud is acceptable if it buys reliability. | ★★ |
+| C8 | **Billing fit + model portability** | A persistent loop wants *predictable* cost (a flat subscription beats metered), but the subscription must permit *unattended* use, and the harness should hot-swap models across vendors (cheap model for routine ticks, strong model for synthesis). See the Analysis of Alternatives below. | ★★ |
 
 **Design insight:** pains #1 and #2 are *not* "use a smarter model" problems — they are
 **control-flow** problems. A more capable single-agent CLI (Claude Code, Codex, Gemini
@@ -215,6 +216,70 @@ investing in A/B; if C succeeds, it buys relief for near-zero cost.
 
 ---
 
+## Analysis of Alternatives — Billing & Model Portability (C8)
+
+Two questions, because they interact: **(1)** does the harness let you run on a flat
+**subscription**, or does an unattended loop force **API/usage billing?** **(2)** can it
+**hot-swap models across OpenAI / Anthropic / xAI / Gemini** (so routine ticks use a cheap
+model and synthesis uses a strong one)?
+
+The headline: **these two goals normally conflict — but Hermes resolves them.** Every
+*first-party* subscription (Claude Max, ChatGPT Plus/Pro) is **single-vendor** *and*
+officially steered away from unattended automation. The only **cross-vendor subscription**
+that is *designed* for unattended agent use is **Nous Portal**, which Hermes uses natively.
+
+### Billing model — can it run unattended on a subscription?
+
+| Harness | Subscription option | Unattended/cron on that subscription? | Metered/API path |
+|---------|---------------------|----------------------------------------|------------------|
+| **Hermes** | **Nous Portal** — flat, OAuth, **cross-vendor** (Claude/GPT/Gemini/Grok + 296 more) | **Yes — purpose-built.** Nous Portal is the *recommended* way to run this unattended agent; no ToS gray area. | OpenRouter (one metered key, all vendors) or direct provider keys |
+| Codex CLI | ChatGPT Plus/Pro (OpenAI only) | Interactive-oriented; usage is capped to 5-hour windows and **OpenAI steers automation → API key**. | OpenAI API (metered) |
+| Claude Code (baseline) | Claude Pro/Max (Anthropic only) | **Gray.** Max covers *personal, on-device* headless cron, but **exporting OAuth tokens to a server is prohibited** and Anthropic recommends API for automation. | Anthropic API (metered) |
+| opencode | Can piggyback Claude Pro/Max, OpenAI, Gemini OAuth | **No for Anthropic** — Anthropic **explicitly prohibits** routing Max through non-Claude-Code harnesses (it flagged this as harness-spoofing). Fragile in general. | Per-provider keys / OpenRouter / Vercel AI Gateway (metered) |
+| Bespoke SDK (Finalist B) | None | n/a | Anthropic (or via gateway) API — metered |
+
+### Model hot-swapping — OpenAI ↔ Anthropic ↔ xAI ↔ Gemini
+
+| Harness | Cross-vendor hot-swap | How |
+|---------|-----------------------|-----|
+| **Hermes** | **Native, all four.** | `hermes model` (setup/OAuth), `/model` mid-session, `config.yaml` default, and per-cron-job model attach. Vendors reached via **Nous Portal** (all four in one subscription) *or* **OpenRouter** (all four, one metered key). |
+| opencode | **Native, all four.** | Config routing across 75+ providers; **Vercel AI Gateway** unifies OpenAI/Anthropic/Google/xAI. Strong model-agnostic CLI — but coding-agent shaped, not cron-native, and the Anthropic-subscription block above applies. |
+| Codex CLI | **No.** | OpenAI models only (local models via `--oss`). |
+| Claude Code | **No.** | Anthropic models only. |
+| Bespoke SDK | Possible, **but you build it** | Point the SDK at OpenRouter / Vercel AI Gateway and implement routing yourself. |
+
+### What this means for the Guardian loop
+
+- **The cost ceiling (C5) is best served by a flat subscription** — a hard, predictable
+  monthly number that a persistent multi-tick loop can't blow past. Among all candidates,
+  only **Nous Portal (via Hermes)** offers a flat subscription that is *both* cross-vendor
+  *and* sanctioned for unattended use. This is a genuine, specific reason to prefer Hermes
+  beyond the cron/skills fit already established.
+- **First-party subscriptions are a trap for this use case.** Claude Max and ChatGPT look
+  cheaper per month, but (a) each locks you to one vendor's models — no hot-swap — and
+  (b) both vendors point unattended/headless/cron workloads at **API billing**, and Anthropic
+  actively prohibits the third-party-harness and token-export paths. A Guardian loop on Max
+  is tolerable only as *personal, on-device* cron, and even then it's rate-limited and
+  off-label.
+- **OpenRouter is the pragmatic metered middle ground.** One key, all four vendors, hard
+  spend caps, native to both Hermes and opencode. Not flat-rate, but predictable-with-a-cap
+  and fully hot-swappable — the natural fallback if you don't want a Nous subscription.
+- **Hot-swap earns its keep in this loop specifically:** route routine daily ticks to a cheap
+  model and the weekly/monthly synthesis to a strong one — per-cron-job model attach makes
+  that a config choice, not a code change. Only the model-agnostic harnesses (Hermes,
+  opencode, or a bespoke SDK you wire yourself) can do it.
+
+### New open questions this raises
+
+- **Nous Portal limits & privacy:** any flat plan has throughput/rate caps — could a
+  multi-lane parallel tick hit them? And prompts route through Nous's gateway (a dependency
+  and a data-path consideration for a personal vault). Confirm caps + data policy before
+  committing the loop to it.
+- **Model quality via gateway:** verify the specific Claude/GPT/Gemini/Grok versions exposed
+  through Nous Portal match what you'd get direct, for the synthesis-critical ticks.
+
+---
+
 ## Decision Rubric (after the spikes)
 
 Run the spikes in this order — anchor first (operator's call, and it's the lowest-build
@@ -234,9 +299,18 @@ last:
 in its spike week **and** stays inside the cost ceiling **and** needs no more than occasional
 maintenance. Expected outcome given the criteria weights: **Hermes is the likely winner for
 the personal loop** — cron + `SKILL.md` + local-vault + model-agnostic delivers most of the
-requirements out of the box at low build cost. Fall through to Hermes' scripted-pipeline mode,
-then to a bespoke SDK harness (B), only if measured within-session drift proves the agent
-still can't be trusted to execute-not-edit.
+requirements out of the box at low build cost, **and it is the only candidate whose billing
+model fits an always-on loop cleanly**: Nous Portal gives a *flat, cross-vendor subscription
+sanctioned for unattended use* (predictable cost ceiling) while still hot-swapping across
+OpenAI / Anthropic / xAI / Gemini per tick (C8). Fall through to Hermes' scripted-pipeline
+mode, then to a bespoke SDK harness (B), only if measured within-session drift proves the
+agent still can't be trusted to execute-not-edit.
+
+**Billing recommendation:** prototype on **OpenRouter** (one metered key, hard spend cap,
+all four vendors) to keep the spike cheap and cancel-free; if Hermes wins, move the standing
+loop to **Nous Portal** for a flat monthly ceiling — pending the Portal limits/privacy check
+in Open Questions. Avoid pinning the loop to Claude Max / ChatGPT: single-vendor and
+off-label for unattended cron.
 
 **KB note:** All three run against the **local** Obsidian vault; **none require cloud KB
 migration** — Hermes accesses the vault as local files. Keep cloud migration as an option
@@ -271,8 +345,10 @@ off-machine.
 
 - [Hermes Agent — Nous Research (GitHub)](https://github.com/NousResearch/hermes-agent)
 - [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs/)
+- [Hermes Agent — AI Providers (Nous Portal, OpenRouter, billing)](https://hermes-agent.nousresearch.com/docs/integrations/providers)
 - [Hermes Agent — official site (memory, skills, cron)](https://hermes-agent.ai/)
 - [Sébastien Dubois — Hermes Agent overview](https://www.dsebastien.net/hermes-agent/)
 - [agentskills.io specification](https://agentskills.io/specification)
+- Billing/model portability: [Codex CLI pricing & auth (ChatGPT sign-in vs API key)](https://inventivehq.com/blog/codex-cli-pricing-explained) · [Codex ChatGPT login vs API key](https://www.toolcolumn.com/learn/codex-chatgpt-vs-api-access) · [OpenCode providers](https://opencode.ai/docs/providers/) · [Claude Code headless & ToS](https://autonomee.ai/blog/claude-code-terms-of-service-explained/) · [Claude Max vs API](https://runapi.ai/claude-max-vs-api)
 - Internal: `docs/PRODUCT.md` (Agent-Coordinator / `hermes_mcp` — the *different* Hermes),
   `skills/cadence-goals/SKILL.md`, `skills/planning-workflow/` (the WIP SDLC applied here).
