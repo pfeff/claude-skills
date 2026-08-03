@@ -66,23 +66,36 @@ scored first on C1/C2 for that reason.
 
 | Candidate | Class | One-line |
 |-----------|-------|----------|
-| **Hermes Agent (Nous Research)** | OSS model-agnostic personal-agent harness | Cron-native, `SKILL.md`-compatible, local-vault-native, subagents for parallel workstreams. The Guardian loop becomes scheduled cron jobs that attach `cadence-goals`. Anchor (operator asked to start here). *Not* the internal `hermes_mcp` / Agent-Coordinator. |
+| **Hermes Agent (Nous Research)** | OSS **personal-agent harness** | Cron-native, `SKILL.md`-compatible, local-vault-native, self-improving loop, Nous Portal subscription. The Guardian loop becomes cron jobs attaching `cadence-goals`. Anchor (operator asked to start here). *Not* the internal `hermes_mcp` / Agent-Coordinator. |
+| **OpenClaw** | OSS **personal-agent harness** (same class as Hermes) | Near-identical primitives; **static human-authored `SKILL.md`** (control-plane-first) → best default fit for the execute-don't-edit pain. 24+ channels, ClawHub marketplace. Co-anchor. See Category Comparison. |
 | **Deterministic harness on Claude Agent SDK** | Bespoke thin harness | Loop control flow is *code*; model called per-slice as a subordinate step. Directly targets C1. |
 | **Codex CLI swap** | CLI coding agent | Same skills/vault substrate, different runtime. Sync target already exists → cheapest A/B. |
-| Gemini CLI / opencode / Aider | CLI coding agents | Same class as Codex; deferred — one CLI A/B (Codex) is enough signal for now. |
+| opencode | CLI coding agent (model-agnostic) | Strongest model-agnostic coding CLI; but coding-shaped, not cron-native, and the Anthropic-subscription block applies. Deferred behind the Codex A/B. |
+| Gemini CLI / Aider | CLI coding agents | Same class as Codex; deferred — one CLI A/B (Codex) is enough signal for now. |
+| Letta / Khoj / QwenPaw | Personal-agent peers | Letta = memory framework (assemble-it-yourself); Khoj = KB-adjacent Obsidian second-brain; QwenPaw = niche. See Category Comparison. |
 | LangGraph / Temporal-style engine | Durable workflow engine | Heavier; overlaps the "deterministic harness" idea. Fold into finalist B rather than run separately. |
 
-Three finalists carry the shortlist. The rest are explicitly deferred (logged so we don't
-pretend the scan was exhaustive when it wasn't): the CLI peers collapse into the one Codex
-A/B, and the workflow-engine option collapses into the deterministic-harness spike.
+The shortlist is carried by the **personal-agent harness class** (Hermes + OpenClaw) plus the
+deterministic SDK harness and the Codex A/B. The rest are explicitly deferred (logged so we
+don't pretend the scan was exhaustive): the CLI peers collapse into the one Codex A/B, the
+workflow-engine option collapses into the deterministic-harness spike, and the personal-agent
+peers (Letta/Khoj/QwenPaw) are noted in the Category Comparison but not prototyped.
 
 ---
 
 ## Shortlist — 3 Finalists to Prototype
 
-### Finalist A — Hermes Agent (Nous Research) *(anchor — start here)*
+### Finalist A — Personal-agent harness: Hermes **and** OpenClaw *(anchor — start here)*
 
-**What it is:** An open-source, **model-agnostic agent harness** from Nous Research — a
+> **Read with the [Category Comparison](#category-comparison--personal-agent-harnesses-not-coding-clis).**
+> Finalist A is really the *personal-agent harness class*, with two leaders. **OpenClaw** is
+> the better *default* fit for your #1 pain (static human-authored `SKILL.md`, control-plane-
+> first — it executes your loop, it doesn't rewrite it), while **Hermes** adds a self-improving
+> loop (a C1 *risk* to constrain) plus the unique Nous Portal subscription (C8). Prototype
+> both — they share the `SKILL.md` substrate. The Hermes write-up below applies almost verbatim
+> to OpenClaw; the C1 row is where they differ.
+
+**What it is (Hermes):** An open-source, **model-agnostic agent harness** from Nous Research — a
 long-running personal assistant that runs in the terminal, desktop, IDEs, and messaging
 platforms. **Not** the Hermes LLMs and **not** your internal `hermes_mcp`/Agent-Coordinator.
 One-line install; a **gateway daemon** hosts a **built-in cron scheduler**, a **`SKILL.md`**
@@ -217,6 +230,58 @@ investing in A/B; if C succeeds, it buys relief for near-zero cost.
 
 ---
 
+## Category Comparison — Personal-Agent Harnesses (not coding CLIs)
+
+Finalist A (Hermes) isn't a lone product — it's one instance of a **general-purpose
+personal-agent harness** class distinct from the coding-CLI "Coding Nation" harnesses
+(Claude Code, Codex, opencode). This class is defined by: a **gateway daemon**, **`SKILL.md`
+skills**, **`cron` scheduling**, a **messaging gateway** (chat-app control), **file-backed
+memory**, **local-first**, and **model-agnostic** provider config. The Guardian loop *is* a
+personal-agent workload, so this is the category that actually fits — and the choice within
+it matters more than the choice against the coding CLIs.
+
+**The two leaders — Hermes and OpenClaw — are near-identical in primitives** (Hermes even
+imports OpenClaw skills into `~/.hermes/skills/openclaw-imports/`). They diverge on exactly
+your #1 pain.
+
+### Hermes vs OpenClaw — head to head
+
+| Axis | **Hermes (Nous Research)** | **OpenClaw** (fmr. ClawdBot/MoltBot) |
+|------|----------------------------|--------------------------------------|
+| **C1 — execute-don't-edit** | **Misaligned by default.** Its headline feature is a *self-improving loop*: it **autonomously creates and refines its own skills**. That is architecturally the same behavior as *"modifies the loop instead of executing it."* You must actively constrain/disable self-improvement for a fixed loop. | **Aligned by default.** *Control-plane-first*, **static human-authored `SKILL.md`** — "you write a SKILL.md, and the agent reads and executes it." Higher execution determinism; the agent runs your loop, it doesn't rewrite it. **This is the best structural fit for your #1 pain among the turnkey harnesses.** |
+| **Skills** | `SKILL.md` / agentskills.io; **auto-generated + self-refined** | `SKILL.md`; **static, human-authored**; **ClawHub** marketplace (larger ready-made ecosystem) |
+| **`cadence-goals` port** | Loads as-is | Loads as-is (same `SKILL.md` substrate) |
+| **Cron** | Built-in (`~/.hermes/cron/jobs.json`) | Built-in (`cron/jobs.json`) |
+| **Messaging / mobile (C9)** | ~9 channels | **24+ channels** (Discord, iMessage, Matrix, Teams, Signal, Slack, Telegram, WhatsApp, Zalo…) — *even stronger* mobile-first story |
+| **Model hot-swap (OpenAI/Anthropic/xAI/Gemini)** | Native, 40+ providers | Native (OpenAI, Anthropic, xAI/Grok, Gemini, OpenRouter, Kilo Gateway, Mistral, Groq, Cerebras, custom proxies) |
+| **Billing (C8)** | **Nous Portal — token-inclusive, cross-vendor subscription** (unique), or OpenRouter/keys | **BYO metered key** — no first-party token-inclusive subscription; OpenRouter/Kilo consolidate multi-provider but stay metered |
+| **Memory** | Procedural + facts, self-improving (`MEMORY.md` + FTS5) | File-backed explicit memory (Markdown/YAML under `~/.openclaw`) |
+| **Maturity** | Newer; self-improvement is the pitch | **Most mature OSS option** in this class; large community |
+
+**The decisive trade for *your* pains:** your #1 problem is *the agent editing the loop
+instead of running it*. **OpenClaw's static-human-authored-skill design is the better default
+fit for that**, while **Hermes' self-improving loop is the same failure mode as a feature** —
+usable only if constrained. Against that, Hermes' one clear edge is **Nous Portal** (the only
+token-inclusive cross-vendor subscription, C8). So: **prototype both** — they share the
+`SKILL.md` substrate so the `cadence-goals` port is done once and dropped into each.
+
+### Other peers in the category (noted, lower priority)
+
+- **Letta (MemGPT lineage)** — memory-first agent *framework/server*, strong persistent
+  memory + proactive reach-outs, but more a developer framework than a turnkey cron+messaging
+  harness. Closer to Finalist B (you assemble the loop) than to Hermes/OpenClaw.
+- **Khoj** — self-hosted "second brain" with **native Obsidian/markdown** search. Not a loop
+  harness, but **KB-adjacent**: could serve the vault as a retrieval layer *behind* whichever
+  harness wins (relevant to C7). Worth keeping in view for the knowledge-base side, not as a
+  runner of the loop.
+- **QwenPaw** and similar messaging-channel assistants — niche/ecosystem-specific (Qwen);
+  no advantage over Hermes/OpenClaw for this use case. Not pursued.
+
+*(Category facts corroborated across multiple write-ups; treat vanity metrics like star counts
+in those posts as unverified — the architecture claims are consistent, the numbers are not.)*
+
+---
+
 ## Analysis of Alternatives — Billing & Model Portability (C8)
 
 Two questions, because they interact: **(1)** does the harness let you run on a flat
@@ -324,26 +389,36 @@ Run the spikes in this order — anchor first (operator's call, and it's the low
 "real harness" that tests the whole loop natively), cheap A/B in parallel, bespoke fallback
 last:
 
-1. **A (Hermes)** — **start here.** ~an afternoon to install + wire one cron tick with
-   `cadence-goals` attached. Tests C1/C2/C3/C7 together against the actual loop.
+1. **A (personal-agent harness) — start here, and spike BOTH OpenClaw and Hermes.** Port
+   `cadence-goals` once (shared `SKILL.md`), drop it into each, wire one cron tick + one
+   Telegram channel. **Lead with OpenClaw** — its static-human-authored-skill / control-plane
+   design is the better *default* fit for your #1 pain (execute-don't-edit). Run **Hermes**
+   alongside with self-improvement constrained, to test whether Nous Portal (C8) + its loop
+   are worth the C1 risk. ~an afternoon each; they test C1/C2/C3/C7/C9 against the real loop.
 2. **C (Codex A/B)** — run in parallel; near-zero cost. Answers the cheap question: is any
    residual drift the *runtime* or the *architecture*?
-3. **B (deterministic SDK harness)** — only if A (and C) still drift on C1. It's the
+3. **B (deterministic SDK harness)** — only if the harness class still drifts on C1. It's the
    guaranteed-structural but highest-build fallback — and note Hermes' scripted-RPC-pipeline
-   mode can achieve much of B *without leaving Hermes*, so reach for a full bespoke harness
-   only if that in-Hermes lever also proves insufficient.
+   mode (or an OpenClaw skill that scripts the flow) can achieve much of B *without* leaving
+   the harness, so reach for a full bespoke build only if that in-harness lever also fails.
 
 **Choose by:** the finalist that eliminates C1 (execute-don't-edit) and C2 (fidelity) events
 in its spike week **and** stays inside the cost ceiling **and** needs no more than occasional
-maintenance. Expected outcome given the criteria weights: **Hermes is the likely winner for
-the personal loop** — cron + `SKILL.md` + local-vault + model-agnostic delivers most of the
-requirements out of the box at low build cost, **and it is the only candidate whose billing
-model fits an always-on loop cleanly**: Nous Portal gives a *flat, cross-vendor subscription
-sanctioned for unattended use* (predictable cost ceiling) while still hot-swapping across
-OpenAI / Anthropic / xAI / Gemini per tick (C8), **and it wins the mobile-first remote-control
-axis** via its messaging gateway (C9). Fall through to Hermes' scripted-pipeline mode, then to
-a bespoke SDK harness (B), only if measured within-session drift proves the agent still can't
-be trusted to execute-not-edit.
+maintenance. Expected outcome given the criteria weights: **the winner is a personal-agent
+harness, and the C1-vs-C8 tension between the two leaders decides which.** All of cron +
+`SKILL.md` + local-vault + model-agnostic + mobile-first remote control (C3/C7/C9) is shared
+by *both* Hermes and OpenClaw. They split on the two most load-bearing points:
+- **OpenClaw** wins **C1** by default — static human-authored skills, control-plane-first; it
+  runs your loop rather than rewriting it. Given C1 is your #1 pain (weight ★★★), **OpenClaw
+  is the front-runner** unless a spike shows otherwise.
+- **Hermes** wins **C8** — Nous Portal is the only *token-inclusive, cross-vendor subscription
+  sanctioned for unattended use* — but its self-improving loop is a C1 liability you must
+  constrain.
+
+So: if constrained-Hermes still drifts in its spike, take **OpenClaw** and accept metered
+billing (via OpenRouter with a spend cap). If OpenClaw's determinism plus OpenRouter cost is
+acceptable, it's the cleanest answer to the pains as stated. Fall through to the in-harness
+scripted-pipeline mode, then a bespoke SDK harness (B), only if *both* leaders drift on C1.
 
 **Billing recommendation:** prototype on **OpenRouter** (one metered key, hard spend cap,
 all four vendors) to keep the spike cheap and cancel-free; if Hermes wins, move the standing
@@ -377,6 +452,11 @@ off-machine.
 - **Vault write contract:** parallel subagent lanes writing periodic notes need a merge/lock
   discipline so concurrent write-backs don't clobber (`cadence-goals` prefers additive edits
   — encode that as a harness invariant).
+- **Constraining Hermes' self-improvement:** confirm auto-skill-creation/refinement can be
+  disabled or scoped so a constrained Hermes matches OpenClaw's execute-don't-edit posture —
+  this decides whether Hermes' Nous Portal edge (C8) is even reachable for this loop.
+- **OpenClaw billing under load:** with no token-inclusive subscription, price a month of the
+  real cadence on OpenRouter (metered) to confirm it stays inside the cost ceiling.
 
 ---
 
@@ -385,6 +465,7 @@ off-machine.
 - [Hermes Agent — Nous Research (GitHub)](https://github.com/NousResearch/hermes-agent)
 - [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs/)
 - [Hermes Agent — AI Providers (Nous Portal, OpenRouter, billing)](https://hermes-agent.nousresearch.com/docs/integrations/providers)
+- Category (personal-agent harnesses): [OpenClaw Docs](https://docs.openclaw.ai/) · [OpenClaw (GitHub)](https://github.com/openclaw/openclaw) · [OpenClaw model providers](https://github.com/openclaw/openclaw/blob/main/docs/concepts/model-providers.md) · [Hermes vs OpenClaw — Turing Post](https://www.turingpost.com/p/hermes) · [Anatomy of an Agent: Claude Code, OpenClaw, Hermes](https://medium.com/design-bootcamp/the-anatomy-of-an-agent-what-lives-inside-claude-code-openclaw-and-hermes-agent-41cc467f42a6) · [Best open-source personal AI assistants (Letta, Khoj, QwenPaw)](https://www.vellum.ai/blog/best-open-source-personal-ai-assistants)
 - [Hermes Agent — official site (memory, skills, cron)](https://hermes-agent.ai/)
 - [Sébastien Dubois — Hermes Agent overview](https://www.dsebastien.net/hermes-agent/)
 - [agentskills.io specification](https://agentskills.io/specification)
