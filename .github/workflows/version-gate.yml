@@ -1,0 +1,45 @@
+name: Version Gate
+
+# Enforces the atomic version-bump scheme (docs/skill-authoring.md §2): every PR
+# that changes the plugin's shipped surface (skills/** or .claude-plugin/**) must
+# carry its own version bump, with both manifests in sync and the new version
+# strictly greater than main's CURRENT version.
+#
+# The `merge_group` trigger lets this gate re-validate inside a GitHub merge
+# queue. NOTE: it only closes the exact-simultaneous-merge race if merges are
+# SERIALIZED — either "Require branches to be up to date before merging"
+# (recommended) or a merge queue that merges one PR at a time (group size 1). A
+# BATCHED merge queue does NOT close it: it stacks several PRs into one
+# merge_group and two byte-identical bumps collapse to a single version bump in
+# that combined tree, so the whole group passes the > check and both merge under
+# one version. See docs/skill-authoring.md §2 "Enforcement" for the full
+# reasoning.
+#
+# To make this airtight, an admin must make "Version Gate / version-bump" a
+# required status check on main AND serialize merges as above.
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + the base branch so the check can compare against
+          # origin/main's current version and diff the merge base.
+          fetch-depth: 0
+
+      - name: Unit tests for the version-bump validator
+        run: python3 -m unittest discover -s scripts -p 'test_check_version_bump.py'
+
+      - name: Ensure base branch ref is present
+        # fetch-depth: 0 already fetches origin/main, but a merge_group checkout
+        # targets the queue ref — refresh origin/main explicitly so the compare
+        # is against main's true current tip in both event types.
+        run: git fetch --no-tags origin main
+
+      - name: Enforce atomic version bump
+        run: python3 scripts/check-version-bump.py origin/main
