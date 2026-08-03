@@ -43,7 +43,7 @@ Derived directly from the pains and constraints. Weighted by how load-bearing th
 
 | # | Criterion | Why it matters | Weight |
 |---|-----------|----------------|--------|
-| C1 | **Execute-don't-edit separation** | The #1 failure. A harness where the *loop is code the model can't rewrite* structurally prevents meta-drift. | ★★★ |
+| C1 | **Faithful execution** | The #1 failure. Tasked with *running* a tick, the agent must do the work — not substitute *editing the loop/machinery* for executing it. **Note the distinction from C10:** the pain is "editing *instead of* executing," **not** improvement itself. | ★★★ |
 | C2 | **Instruction fidelity** | Misreading the spec is failure #2. Spec-driven dispatch + an evaluation gate (judge output vs. acceptance criteria) catches "correct-but-wrong." | ★★★ |
 | C3 | **Autonomy (low handholding)** | Must run a tick unattended and report done/blocked without babysitting. | ★★★ |
 | C4 | **Parallel dispatch** | Cadence model runs 3–4 active lanes; harness must fan out, not serialize. | ★★ |
@@ -52,13 +52,17 @@ Derived directly from the pains and constraints. Weighted by how load-bearing th
 | C7 | **KB compatibility** | Must work against the Obsidian knowledge base. Migrating the KB to the cloud is acceptable if it buys reliability. | ★★ |
 | C8 | **Billing fit + model portability** | A persistent loop wants *predictable* cost (a flat **token-inclusive** subscription beats metered), but the subscription must permit *unattended* use, and the harness should hot-swap models across vendors (cheap model for routine ticks, strong model for synthesis). See the Analysis of Alternatives below. | ★★ |
 | C9 | **Remote control** | Drive/monitor/steer the loop away from the desk — **mobile first**, web second. For an unattended loop you want to be pinged and able to approve/redirect from your phone. | ★★ (mobile ≫ web) |
+| C10 | **Controlled self-improvement** *(desirable)* | The harness should get **better at executing** over time — capturing procedures from *successful* runs as reusable skills — ideally in a **separate, gateable** phase so learning never comes at the cost of executing the current tick. **Operator wants this.** | ★★ |
 
-**Design insight:** pains #1 and #2 are *not* "use a smarter model" problems — they are
-**control-flow** problems. A more capable single-agent CLI (Claude Code, Codex, Gemini
-CLI) still owns its own control flow and can still wander off-spec. The structural fix is
-to move loop control *out* of the model and into the harness: the harness owns the loop;
-the model only fills in bounded steps against acceptance criteria. Every finalist below is
-scored first on C1/C2 for that reason.
+**Design insight — and a correction.** Pains #1/#2 are *not* "use a smarter model" problems;
+they are **execution-discipline** problems: the agent must *do the tick*, not wander into
+rewriting the machinery. But **execution discipline (C1) and self-improvement (C10) are
+different axes, not opposites.** An earlier draft of this doc conflated them and wrongly
+penalized Hermes' learning loop as if it *were* the C1 failure. It isn't: "improving how you
+execute, from traces, after the turn" is the desirable thing; "editing the loop instead of
+executing it" is the failure. A harness scores well when it **keeps execution faithful (C1)
+*and* learns in a separate, controllable phase (C10)** — which, per its docs, is exactly what
+Hermes is built to do (see Category Comparison).
 
 ---
 
@@ -88,12 +92,13 @@ peers (Letta/Khoj/QwenPaw) are noted in the Category Comparison but not prototyp
 ### Finalist A — Personal-agent harness: Hermes **and** OpenClaw *(anchor — start here)*
 
 > **Read with the [Category Comparison](#category-comparison--personal-agent-harnesses-not-coding-clis).**
-> Finalist A is really the *personal-agent harness class*, with two leaders. **OpenClaw** is
-> the better *default* fit for your #1 pain (static human-authored `SKILL.md`, control-plane-
-> first — it executes your loop, it doesn't rewrite it), while **Hermes** adds a self-improving
-> loop (a C1 *risk* to constrain) plus the unique Nous Portal subscription (C8). Prototype
-> both — they share the `SKILL.md` substrate. The Hermes write-up below applies almost verbatim
-> to OpenClaw; the C1 row is where they differ.
+> Finalist A is really the *personal-agent harness class*, with two leaders. **Hermes leads:**
+> it executes each tick to completion (faithful — C1) *and* self-improves in a separate,
+> gateable phase (C10) — the learning loop you actually want — plus the unique Nous Portal
+> subscription (C8). **OpenClaw** is the alternative for the *opposite* preference: static
+> human-authored `SKILL.md`, **no** autonomous learning — maximal determinism at the cost of a
+> loop that never improves itself. Prototype both (shared `SKILL.md` substrate); default
+> expectation is Hermes-first.
 
 **What it is (Hermes):** An open-source, **model-agnostic agent harness** from Nous Research — a
 long-running personal assistant that runs in the terminal, desktop, IDEs, and messaging
@@ -104,14 +109,19 @@ It is shaped for exactly this shape of work: recurring, unattended, personal-ass
 over your own files and skills.
 
 **How it scores against the pains:**
-- **C1 (execute-don't-edit): Better, configurable — not fully structural.** A cron tick
-  *"launches a fresh `AIAgent` session per due job, optionally injects attached skills,
-  executes the prompt to completion, delivers the response"* — the job's mandate is to
-  **execute the tick, not refactor the loop**. You can harden further: Hermes lets you
-  *"write Python scripts that call tools via RPC, collapsing multi-step pipelines into
-  zero-context-cost turns"* — encode the control flow as a script where the model only fills
-  bounded steps (the same lever as Finalist B, but native). Caveat: within a session the
-  agent still has latitude, so drift is *reduced*, not eliminated by construction — measure it.
+- **C1 (faithful execution): Aligned.** A cron tick *"launches a fresh `AIAgent` session per
+  due job, optionally injects attached skills, executes the prompt to completion, delivers the
+  response"* — the job's mandate is to **execute the tick**, and skill changes happen in a
+  *separate* background review **after** the turn, not mid-execution. So the agent does not
+  substitute loop-editing for doing the work. The **write-approval gate**
+  (`skills.write_approval: true`) stages every skill write in `~/.hermes/pending/skills/` for
+  sign-off if you want eyes on changes. You can harden execution further with scripted RPC
+  pipelines (bounded steps), but you don't *need* to — faithful execution is the default.
+- **C10 (controlled self-improvement): Yes — the reason to prefer Hermes.** Procedural memory
+  captures workflows from *successful* runs; the background review reads execution traces to
+  learn *why* something worked. Leave the gate open for autonomous learning, or on to review
+  each change. This is the desirable "gets better over time" loop — distinct from, and not in
+  tension with, C1.
 - **C2 (fidelity): Medium-strong.** Isolated per-job sessions with a fixed prompt + attached
   skill narrow the surface for misreading. **No native LLM-judge gate** (unlike your AC), so
   add a validation step (`self-verify` / the `cadence-goals` Light Validation checklist) as
@@ -144,18 +154,23 @@ over your own files and skills.
 4. Parallel test: extend the tick to spawn a subagent per active lane.
 5. Add a validation skill (`self-verify` / Light Validation) as the final step before
    note write-back.
+6. Start with **`skills.write_approval: true`** so the first week's self-improvement changes
+   stage in `~/.hermes/pending/skills/` for you to review; once the learning looks trustworthy,
+   open the gate for autonomous improvement (C10).
 
 **Pass/fail:**
-- ✅ A week of daily ticks runs unattended; `cadence-goals` loaded unmodified; note
+- ✅ A week of daily ticks runs unattended; each tick **executes to completion**; note
   write-backs correct.
-- ✅ **Zero unrequested edits to loop machinery** — the tick executes, doesn't refactor skills.
+- ✅ **The tick does the work** — no case of the agent editing the loop *instead of* running it
+  (C1). Any self-improvement appears as *staged, reviewable* skill changes, not as skipped work.
+- ✅ Staged improvements are *useful* — the loop measurably gets better at a recurring tick (C10).
 - ✅ Multi-lane tick runs lanes concurrently via subagents.
-- ❌ Within-session drift still rewrites the loop, or cron sessions need babysitting > once/week.
+- ❌ Cron sessions need babysitting > once/week, or staged skill changes are consistently noise.
 
-**Risks:** within-session latitude means C1 is mitigated, not guaranteed. No native judge —
-validation must be added. Parallelism needs design, not just config. You run a persistent
-daemon. (`SKILL.md` compatibility, cron model, and subagent behavior confirmed against the
-Hermes docs — see Sources.)
+**Risks:** no native LLM-judge — validation must be added. Parallelism needs design, not just
+config. You run a persistent daemon. (Faithful-execution timing, the write-approval gate,
+`SKILL.md` compatibility, cron model, and subagents all confirmed against the Hermes docs —
+see Sources.)
 
 ---
 
@@ -241,29 +256,38 @@ personal-agent workload, so this is the category that actually fits — and the 
 it matters more than the choice against the coding CLIs.
 
 **The two leaders — Hermes and OpenClaw — are near-identical in primitives** (Hermes even
-imports OpenClaw skills into `~/.hermes/skills/openclaw-imports/`). They diverge on exactly
-your #1 pain.
+imports OpenClaw skills into `~/.hermes/skills/openclaw-imports/`). They diverge on how they
+treat *learning* — and, correcting an earlier draft, that difference now favors **Hermes**,
+because controlled self-improvement (C10) is **desirable**, not a liability.
 
 ### Hermes vs OpenClaw — head to head
 
 | Axis | **Hermes (Nous Research)** | **OpenClaw** (fmr. ClawdBot/MoltBot) |
 |------|----------------------------|--------------------------------------|
-| **C1 — execute-don't-edit** | **Misaligned by default.** Its headline feature is a *self-improving loop*: it **autonomously creates and refines its own skills**. That is architecturally the same behavior as *"modifies the loop instead of executing it."* You must actively constrain/disable self-improvement for a fixed loop. | **Aligned by default.** *Control-plane-first*, **static human-authored `SKILL.md`** — "you write a SKILL.md, and the agent reads and executes it." Higher execution determinism; the agent runs your loop, it doesn't rewrite it. **This is the best structural fit for your #1 pain among the turnkey harnesses.** |
-| **Skills** | `SKILL.md` / agentskills.io; **auto-generated + self-refined** | `SKILL.md`; **static, human-authored**; **ClawHub** marketplace (larger ready-made ecosystem) |
+| **C1 — faithful execution** | **Aligned.** A cron tick loads the attached skill and **executes to completion**; skill changes are a *separate* background review **after** the turn — the agent does *not* stop executing to rewrite the loop. Optional **write-approval gate** (`skills.write_approval: true`) stages every skill write in `~/.hermes/pending/skills/` for human sign-off. So execution stays faithful *and* is protectable. | **Aligned, by a blunter route.** Static human-authored `SKILL.md`; the agent executes what you wrote. Determinism via *no* learning at all. |
+| **C10 — controlled self-improvement** *(desired)* | ✅ **Yes — its defining strength.** Procedural memory: captures workflows from successful runs, a background review reads execution traces to learn *why*, and the write-approval gate makes it autonomous-or-eyes-on. This is the learning loop the operator wants. | ❌ **No.** Static skills don't learn; every improvement is a manual `SKILL.md` edit by you. |
+| **Skills** | `SKILL.md` / agentskills.io; human-authored **+ self-refined (gateable)** | `SKILL.md`; **static, human-authored**; **ClawHub** marketplace (larger ready-made ecosystem) |
 | **`cadence-goals` port** | Loads as-is | Loads as-is (same `SKILL.md` substrate) |
 | **Cron** | Built-in (`~/.hermes/cron/jobs.json`) | Built-in (`cron/jobs.json`) |
 | **Messaging / mobile (C9)** | ~9 channels | **24+ channels** (Discord, iMessage, Matrix, Teams, Signal, Slack, Telegram, WhatsApp, Zalo…) — *even stronger* mobile-first story |
 | **Model hot-swap (OpenAI/Anthropic/xAI/Gemini)** | Native, 40+ providers | Native (OpenAI, Anthropic, xAI/Grok, Gemini, OpenRouter, Kilo Gateway, Mistral, Groq, Cerebras, custom proxies) |
 | **Billing (C8)** | **Nous Portal — token-inclusive, cross-vendor subscription** (unique), or OpenRouter/keys | **BYO metered key** — no first-party token-inclusive subscription; OpenRouter/Kilo consolidate multi-provider but stay metered |
 | **Memory** | Procedural + facts, self-improving (`MEMORY.md` + FTS5) | File-backed explicit memory (Markdown/YAML under `~/.openclaw`) |
-| **Maturity** | Newer; self-improvement is the pitch | **Most mature OSS option** in this class; large community |
+| **Maturity** | Newer; the self-improvement loop is the pitch | **Most mature OSS option** in this class; large community |
 
-**The decisive trade for *your* pains:** your #1 problem is *the agent editing the loop
-instead of running it*. **OpenClaw's static-human-authored-skill design is the better default
-fit for that**, while **Hermes' self-improving loop is the same failure mode as a feature** —
-usable only if constrained. Against that, Hermes' one clear edge is **Nous Portal** (the only
-token-inclusive cross-vendor subscription, C8). So: **prototype both** — they share the
-`SKILL.md` substrate so the `cadence-goals` port is done once and dropped into each.
+**The decisive trade for *your* pains (corrected):** the earlier draft treated Hermes'
+self-improvement as if it *were* your #1 pain. It isn't. Your pain was Claude Code **editing
+the loop instead of executing it** — a *failure to execute*. Hermes' learning is the opposite:
+it **executes the tick to completion, then improves separately and gateably** (C1 ✅). And
+since you *want* the loop to get better over time (C10), **Hermes' self-improvement is a
+feature you're buying, not a risk you're tolerating** — with the write-approval gate as the
+safety valve if a change ever looks wrong. That flips the recommendation: **Hermes leads**
+(faithful execution + desired, controllable learning + the unique **Nous Portal**
+token-inclusive cross-vendor subscription, C8). **OpenClaw becomes the alternative for the
+opposite preference** — if you'd rather have *zero* autonomous learning and every change be a
+manual edit (maximal determinism, at the cost of the loop never improving itself). So:
+**prototype both** — they share the `SKILL.md` substrate so the `cadence-goals` port is done
+once and dropped into each — but the default expectation is now Hermes-first.
 
 ### Other peers in the category (noted, lower priority)
 
@@ -389,36 +413,38 @@ Run the spikes in this order — anchor first (operator's call, and it's the low
 "real harness" that tests the whole loop natively), cheap A/B in parallel, bespoke fallback
 last:
 
-1. **A (personal-agent harness) — start here, and spike BOTH OpenClaw and Hermes.** Port
-   `cadence-goals` once (shared `SKILL.md`), drop it into each, wire one cron tick + one
-   Telegram channel. **Lead with OpenClaw** — its static-human-authored-skill / control-plane
-   design is the better *default* fit for your #1 pain (execute-don't-edit). Run **Hermes**
-   alongside with self-improvement constrained, to test whether Nous Portal (C8) + its loop
-   are worth the C1 risk. ~an afternoon each; they test C1/C2/C3/C7/C9 against the real loop.
+1. **A (personal-agent harness) — start here; lead with Hermes, spike OpenClaw alongside.**
+   Port `cadence-goals` once (shared `SKILL.md`), drop it into each, wire one cron tick + one
+   Telegram channel. **Lead with Hermes** — it gives faithful execution (C1) *and* the desired
+   self-improvement loop (C10) *and* Nous Portal (C8); run it first week with the
+   **write-approval gate on** to watch what it learns, then open the gate. Run **OpenClaw**
+   alongside as the *maximal-determinism / no-learning* comparison. ~an afternoon each; together
+   they test C1/C2/C3/C7/C9/C10 against the real loop.
 2. **C (Codex A/B)** — run in parallel; near-zero cost. Answers the cheap question: is any
    residual drift the *runtime* or the *architecture*?
-3. **B (deterministic SDK harness)** — only if the harness class still drifts on C1. It's the
-   guaranteed-structural but highest-build fallback — and note Hermes' scripted-RPC-pipeline
-   mode (or an OpenClaw skill that scripts the flow) can achieve much of B *without* leaving
-   the harness, so reach for a full bespoke build only if that in-harness lever also fails.
+3. **B (deterministic SDK harness)** — only if *both* harnesses fail C1 (the agent skipping
+   work to edit the loop). Highest-build fallback — and Hermes' scripted-RPC-pipeline mode (or
+   an OpenClaw skill that scripts the flow) can achieve much of B *without* leaving the harness,
+   so reach for a full bespoke build only if that in-harness lever also fails.
 
-**Choose by:** the finalist that eliminates C1 (execute-don't-edit) and C2 (fidelity) events
-in its spike week **and** stays inside the cost ceiling **and** needs no more than occasional
-maintenance. Expected outcome given the criteria weights: **the winner is a personal-agent
-harness, and the C1-vs-C8 tension between the two leaders decides which.** All of cron +
-`SKILL.md` + local-vault + model-agnostic + mobile-first remote control (C3/C7/C9) is shared
-by *both* Hermes and OpenClaw. They split on the two most load-bearing points:
-- **OpenClaw** wins **C1** by default — static human-authored skills, control-plane-first; it
-  runs your loop rather than rewriting it. Given C1 is your #1 pain (weight ★★★), **OpenClaw
-  is the front-runner** unless a spike shows otherwise.
-- **Hermes** wins **C8** — Nous Portal is the only *token-inclusive, cross-vendor subscription
-  sanctioned for unattended use* — but its self-improving loop is a C1 liability you must
-  constrain.
+**Choose by:** the finalist that keeps C1 (faithful execution) and C2 (fidelity) clean in its
+spike week **and** delivers useful self-improvement (C10) **and** stays inside the cost ceiling
+**and** needs no more than occasional maintenance. Expected outcome given the criteria weights:
+**Hermes is the front-runner.** All of cron + `SKILL.md` + local-vault + model-agnostic +
+mobile-first remote control (C3/C7/C9) is shared by *both* Hermes and OpenClaw. The two
+load-bearing splits both favor Hermes:
+- **C10 (self-improvement, desired):** **Hermes wins** — it executes each tick faithfully *and*
+  learns from successful runs in a separate, gateable phase. OpenClaw has *no* learning loop.
+- **C8 (billing):** **Hermes wins** — Nous Portal is the only token-inclusive cross-vendor
+  subscription sanctioned for unattended use.
+- **C1 (faithful execution):** **both are aligned** — Hermes via execute-to-completion +
+  post-turn review + write-approval gate; OpenClaw via static skills. So C1 is *not* the
+  differentiator it appeared to be in the earlier draft.
 
-So: if constrained-Hermes still drifts in its spike, take **OpenClaw** and accept metered
-billing (via OpenRouter with a spend cap). If OpenClaw's determinism plus OpenRouter cost is
-acceptable, it's the cleanest answer to the pains as stated. Fall through to the in-harness
-scripted-pipeline mode, then a bespoke SDK harness (B), only if *both* leaders drift on C1.
+So: **take Hermes** unless its spike shows the agent actually skipping work to edit the loop
+(it shouldn't, per the docs) or the staged self-improvements are noise. **OpenClaw is the
+fallback** for a maximal-determinism / no-learning preference, on metered OpenRouter with a
+spend cap. Bespoke SDK harness (B) only if *both* fail C1.
 
 **Billing recommendation:** prototype on **OpenRouter** (one metered key, hard spend cap,
 all four vendors) to keep the spike cheap and cancel-free; if Hermes wins, move the standing
@@ -435,10 +461,12 @@ off-machine.
 
 ## Open Questions
 
-- **Within-session drift (the load-bearing unknown for A):** does a fixed cron prompt +
-  attached skill actually stop Hermes editing the loop, or does within-session latitude still
-  let it wander? This is what the A spike must measure — it decides whether Hermes alone wins
-  or whether you fall through to its scripted-pipeline mode / a bespoke SDK harness.
+- **Faithful execution in practice (C1):** the docs say a tick executes to completion and
+  improvement is a *separate, post-turn* phase — confirm in the spike that no tick ever skips
+  the work to edit the loop. (Expected to pass; verify rather than assume.)
+- **Are the staged improvements useful (C10)?** With `write_approval` on, review the first
+  week's staged skill changes: are they genuine gains at recurring ticks, or noise? This
+  decides how quickly to open the gate for autonomous learning.
 - **Validation gate for A:** Hermes has no native LLM-judge. Is `self-verify` / the
   `cadence-goals` Light Validation checklist as the tick's final skill sufficient, or is a
   separate judge pass needed?
@@ -452,9 +480,9 @@ off-machine.
 - **Vault write contract:** parallel subagent lanes writing periodic notes need a merge/lock
   discipline so concurrent write-backs don't clobber (`cadence-goals` prefers additive edits
   — encode that as a harness invariant).
-- **Constraining Hermes' self-improvement:** confirm auto-skill-creation/refinement can be
-  disabled or scoped so a constrained Hermes matches OpenClaw's execute-don't-edit posture —
-  this decides whether Hermes' Nous Portal edge (C8) is even reachable for this loop.
+- **Write-approval workflow ergonomics:** approving staged skills from `~/.hermes/pending/skills/`
+  should itself be doable from mobile (C9) — confirm the gate can be worked from a messaging
+  channel, not only the terminal, so self-improvement review doesn't pull you back to the desk.
 - **OpenClaw billing under load:** with no token-inclusive subscription, price a month of the
   real cadence on OpenRouter (metered) to confirm it stays inside the cost ceiling.
 
@@ -465,6 +493,7 @@ off-machine.
 - [Hermes Agent — Nous Research (GitHub)](https://github.com/NousResearch/hermes-agent)
 - [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs/)
 - [Hermes Agent — AI Providers (Nous Portal, OpenRouter, billing)](https://hermes-agent.nousresearch.com/docs/integrations/providers)
+- Self-improvement / write-approval gate (C1 vs C10): [Hermes Skills System doc](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) · [The Self-Improvement Agent in Hermes: A Deep Dive](https://akjamie.github.io/post/2026-05-29-self-improvement-agent-deep-dive/)
 - Category (personal-agent harnesses): [OpenClaw Docs](https://docs.openclaw.ai/) · [OpenClaw (GitHub)](https://github.com/openclaw/openclaw) · [OpenClaw model providers](https://github.com/openclaw/openclaw/blob/main/docs/concepts/model-providers.md) · [Hermes vs OpenClaw — Turing Post](https://www.turingpost.com/p/hermes) · [Anatomy of an Agent: Claude Code, OpenClaw, Hermes](https://medium.com/design-bootcamp/the-anatomy-of-an-agent-what-lives-inside-claude-code-openclaw-and-hermes-agent-41cc467f42a6) · [Best open-source personal AI assistants (Letta, Khoj, QwenPaw)](https://www.vellum.ai/blog/best-open-source-personal-ai-assistants)
 - [Hermes Agent — official site (memory, skills, cron)](https://hermes-agent.ai/)
 - [Sébastien Dubois — Hermes Agent overview](https://www.dsebastien.net/hermes-agent/)
