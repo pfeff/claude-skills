@@ -64,7 +64,7 @@ scored first on C1/C2 for that reason.
 
 | Candidate | Class | One-line |
 |-----------|-------|----------|
-| **Hermes / Agent-Coordinator (AC)** | Own spec-driven dispatch system | Goal-tree + container dispatch + LLM-judge; the Guardian loop becomes a goal tree. Anchor candidate (operator asked to start here). |
+| **Hermes Agent (Nous Research)** | OSS model-agnostic personal-agent harness | Cron-native, `SKILL.md`-compatible, local-vault-native, subagents for parallel workstreams. The Guardian loop becomes scheduled cron jobs that attach `cadence-goals`. Anchor (operator asked to start here). *Not* the internal `hermes_mcp` / Agent-Coordinator. |
 | **Deterministic harness on Claude Agent SDK** | Bespoke thin harness | Loop control flow is *code*; model called per-slice as a subordinate step. Directly targets C1. |
 | **Codex CLI swap** | CLI coding agent | Same skills/vault substrate, different runtime. Sync target already exists → cheapest A/B. |
 | Gemini CLI / opencode / Aider | CLI coding agents | Same class as Codex; deferred — one CLI A/B (Codex) is enough signal for now. |
@@ -78,43 +78,69 @@ A/B, and the workflow-engine option collapses into the deterministic-harness spi
 
 ## Shortlist — 3 Finalists to Prototype
 
-### Finalist A — Hermes / Agent-Coordinator goal-tree dispatch *(anchor)*
+### Finalist A — Hermes Agent (Nous Research) *(anchor — start here)*
 
-**What it is:** The operator's own AC system, reached via the `hermes_mcp` interface.
-Goal trees (dependency-ordered task decomposition), spec-driven L0 dispatch into
-containers, LLM-as-judge evaluation against acceptance criteria, telemetry. Per
-`PRODUCT.md`, the autoresearch/Guardian work is "AC's first and most demanding customer."
+**What it is:** An open-source, **model-agnostic agent harness** from Nous Research — a
+long-running personal assistant that runs in the terminal, desktop, IDEs, and messaging
+platforms. **Not** the Hermes LLMs and **not** your internal `hermes_mcp`/Agent-Coordinator.
+One-line install; a **gateway daemon** hosts a **built-in cron scheduler**, a **`SKILL.md`**
+skills system, and a persistent **memory** layer (`MEMORY.md` + FTS5 cross-session search).
+It is shaped for exactly this shape of work: recurring, unattended, personal-assistant tasks
+over your own files and skills.
 
 **How it scores against the pains:**
-- **C1 (execute-don't-edit): Strong.** The loop lives in the goal-tree structure, not in
-  the L0 agent's head. An L0 node receives a spec with acceptance criteria and produces an
-  artifact; it has no mandate to rewrite the tree. Meta-drift is structurally out of scope.
-- **C2 (fidelity): Strong.** The evaluation engine (LLM judge + standing rules) is a first-
-  class gate — "did it meet the spec," not "did it run." This is the direct antidote to
-  misreading instructions.
-- **C4 (parallel): Strong.** Dispatch of multiple ready nodes is native — the cadence's
-  3–4 active lanes map onto parallel L0 nodes.
-- **C5 (cost): Weak-to-medium.** Container-per-node + judge passes multiply model calls.
-  Needs a budget guard for a daily/weekly cadence.
-- **C6 (maintenance): Weak (today).** `PRODUCT.md` flags real reliability gaps — the
-  `hermes_mcp` SSE race condition and container-dispatch fragility. This is the risk.
-- **C7 (KB): Medium.** L0 runs in a container with an injected workspace; the Obsidian
-  vault must be mounted or the relevant slice synced in. Cloud KB migration helps here.
+- **C1 (execute-don't-edit): Better, configurable — not fully structural.** A cron tick
+  *"launches a fresh `AIAgent` session per due job, optionally injects attached skills,
+  executes the prompt to completion, delivers the response"* — the job's mandate is to
+  **execute the tick, not refactor the loop**. You can harden further: Hermes lets you
+  *"write Python scripts that call tools via RPC, collapsing multi-step pipelines into
+  zero-context-cost turns"* — encode the control flow as a script where the model only fills
+  bounded steps (the same lever as Finalist B, but native). Caveat: within a session the
+  agent still has latitude, so drift is *reduced*, not eliminated by construction — measure it.
+- **C2 (fidelity): Medium-strong.** Isolated per-job sessions with a fixed prompt + attached
+  skill narrow the surface for misreading. **No native LLM-judge gate** (unlike your AC), so
+  add a validation step (`self-verify` / the `cadence-goals` Light Validation checklist) as
+  the tick's final skill.
+- **C3 (autonomy): Strongest of the three.** Native cron: natural language *or* cron syntax
+  (`0 6 * * *`), intervals (`every 2h`), ISO timestamps; the gateway ticks every 60s, runs
+  due jobs unattended, and delivers to origin / local files / Telegram / Discord / email.
+  The daily→weekly→monthly cadence maps 1:1 onto cron jobs. This directly kills the
+  handholding pain.
+- **C4 (parallel): Medium.** Parallelism is via **spawned isolated subagents / scripted RPC
+  pipelines *within* a session** — **not** cron fan-out (cron jobs run sequentially;
+  workdir jobs serialize deliberately). Parallel-lane execution is achievable but you design
+  it (a subagent per active lane), it isn't free.
+- **C5 (cost): Good.** Model-agnostic (`hermes model`, no lock-in) → run cheaper models per
+  job; isolated bounded-context sessions keep per-tick cost predictable.
+- **C6 (maintenance): Good.** Maintained OSS, one-line install, `hermes setup` — far less
+  than bespoke code. Cost: you run the gateway daemon.
+- **C7 (KB / skills): Strong.** Skills are **`SKILL.md` + YAML frontmatter, agentskills.io-
+  compatible** — *"existing SKILL.md files ... integrate directly without modification"*;
+  `cadence-goals` should port nearly as-is (Claude-only frontmatter like `allowed-tools` is
+  ignored, not fatal). Runs **locally** against the Obsidian vault as files → vault stays
+  source of truth; Hermes' memory is additive. **No cloud KB migration required.**
 
 **Spike plan:**
-1. Model **one cadence tick** (a single daily OODA slice, or a weekly rebalance) as a small
-   goal tree: 2–3 lane nodes + a synthesis node.
-2. Dispatch it through Hermes; let the judge evaluate node output against the cadence-note
-   acceptance criteria (`cadence-goals` Light Validation checklist makes a natural rubric).
-3. Mount/sync the vault slice the nodes need; write results back as periodic-note edits.
+1. Install Hermes; point it at a provider via `hermes model` (Anthropic, or a cheaper model
+   to test cost).
+2. Drop `cadence-goals` (and its refs) into `~/.hermes/skills/`; confirm it loads unmodified.
+3. Create a cron job for one tick — e.g. `0 6 * * *` "run the daily Guardian OODA tick" —
+   attaching `cadence-goals`, workdir = the vault, deliver = local file + Telegram.
+4. Parallel test: extend the tick to spawn a subagent per active lane.
+5. Add a validation skill (`self-verify` / Light Validation) as the final step before
+   note write-back.
 
 **Pass/fail:**
-- ✅ Tick completes unattended, nodes ran **in parallel**, judge caught ≥1 off-spec output.
-- ✅ Zero unrequested edits to loop machinery (skills/automation) — only note/state writes.
-- ❌ SSE race / dispatch flakiness forces manual intervention > once per tick.
+- ✅ A week of daily ticks runs unattended; `cadence-goals` loaded unmodified; note
+  write-backs correct.
+- ✅ **Zero unrequested edits to loop machinery** — the tick executes, doesn't refactor skills.
+- ✅ Multi-lane tick runs lanes concurrently via subagents.
+- ❌ Within-session drift still rewrites the loop, or cron sessions need babysitting > once/week.
 
-**Risks:** Reliability gaps are the operator's own known open work; prototyping Guardian on
-AC doubles as dogfooding AC. Cost per tick needs measuring before it runs on a cadence.
+**Risks:** within-session latitude means C1 is mitigated, not guaranteed. No native judge —
+validation must be added. Parallelism needs design, not just config. You run a persistent
+daemon. (`SKILL.md` compatibility, cron model, and subagent behavior confirmed against the
+Hermes docs — see Sources.)
 
 ---
 
@@ -191,35 +217,62 @@ investing in A/B; if C succeeds, it buys relief for near-zero cost.
 
 ## Decision Rubric (after the spikes)
 
-Run the spikes in this order — cheapest-falsifier first, structural fix second, anchor
-last (it doubles as AC dogfooding and needs the most setup):
+Run the spikes in this order — anchor first (operator's call, and it's the lowest-build
+"real harness" that tests the whole loop natively), cheap A/B in parallel, bespoke fallback
+last:
 
-1. **C (Codex A/B)** — 1 week, near-zero cost. Answers: is the pain the *runtime* or the
-   *architecture*?
-2. **B (deterministic harness)** — the structural fix for C1/C2; likely best cost/maintenance
-   fit for a personal cadence loop.
-3. **A (Hermes/AC)** — highest ceiling (native parallel + judge), highest setup + current
-   reliability risk; prototype once B has validated the execute-don't-edit pattern.
+1. **A (Hermes)** — **start here.** ~an afternoon to install + wire one cron tick with
+   `cadence-goals` attached. Tests C1/C2/C3/C7 together against the actual loop.
+2. **C (Codex A/B)** — run in parallel; near-zero cost. Answers the cheap question: is any
+   residual drift the *runtime* or the *architecture*?
+3. **B (deterministic SDK harness)** — only if A (and C) still drift on C1. It's the
+   guaranteed-structural but highest-build fallback — and note Hermes' scripted-RPC-pipeline
+   mode can achieve much of B *without leaving Hermes*, so reach for a full bespoke harness
+   only if that in-Hermes lever also proves insufficient.
 
 **Choose by:** the finalist that eliminates C1 (execute-don't-edit) and C2 (fidelity) events
 in its spike week **and** stays inside the cost ceiling **and** needs no more than occasional
-maintenance. Expected outcome given the criteria weights: **B for the near term** (cleanest
-structural fix, cheapest to run, local-KB-native), with **A as the scale-up path** once AC's
-reliability gaps close — B's deterministic control loop can later dispatch *into* AC nodes
-rather than being thrown away.
+maintenance. Expected outcome given the criteria weights: **Hermes is the likely winner for
+the personal loop** — cron + `SKILL.md` + local-vault + model-agnostic delivers most of the
+requirements out of the box at low build cost. Fall through to Hermes' scripted-pipeline mode,
+then to a bespoke SDK harness (B), only if measured within-session drift proves the agent
+still can't be trusted to execute-not-edit.
 
-**KB note:** All three work against the local Obsidian vault today. Only **A** materially
-benefits from a cloud KB migration (container workspaces prefer a network-reachable vault);
-B and C do not require it, so defer the migration until/unless A becomes the pick.
+**KB note:** All three run against the **local** Obsidian vault; **none require cloud KB
+migration** — Hermes accesses the vault as local files. Keep cloud migration as an option
+only if you later want Hermes' remote backends (Modal, Daytona, Vercel Sandbox) to run ticks
+off-machine.
 
 ---
 
 ## Open Questions
 
-- **Cost per tick** for A (containers × judge passes) — must be measured in the spike before
-  Guardian runs on a real cadence.
-- **Crash recovery**: does a missed/failed tick need durable resume (→ pushes B toward a
-  Temporal-style step engine) or is best-effort + next-tick reconciliation enough?
-- **Vault write contract**: parallel lanes writing periodic notes need a merge/lock
+- **Within-session drift (the load-bearing unknown for A):** does a fixed cron prompt +
+  attached skill actually stop Hermes editing the loop, or does within-session latitude still
+  let it wander? This is what the A spike must measure — it decides whether Hermes alone wins
+  or whether you fall through to its scripted-pipeline mode / a bespoke SDK harness.
+- **Validation gate for A:** Hermes has no native LLM-judge. Is `self-verify` / the
+  `cadence-goals` Light Validation checklist as the tick's final skill sufficient, or is a
+  separate judge pass needed?
+- **Parallelism need:** do cadence lanes genuinely need concurrent execution, or is
+  sequential-with-subagents fine? (Cron itself runs jobs sequentially.)
+- **`cadence-goals` port fidelity:** confirm the skill loads and behaves under Hermes with
+  Claude-only frontmatter (`allowed-tools`, `allowed-prompts`) ignored — verify no silent
+  behavior change.
+- **Crash recovery:** does a missed/failed tick need durable resume, or is best-effort +
+  next-tick reconciliation enough? (Hermes cron re-ticks; confirm failure semantics.)
+- **Vault write contract:** parallel subagent lanes writing periodic notes need a merge/lock
   discipline so concurrent write-backs don't clobber (`cadence-goals` prefers additive edits
   — encode that as a harness invariant).
+
+---
+
+## Sources
+
+- [Hermes Agent — Nous Research (GitHub)](https://github.com/NousResearch/hermes-agent)
+- [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs/)
+- [Hermes Agent — official site (memory, skills, cron)](https://hermes-agent.ai/)
+- [Sébastien Dubois — Hermes Agent overview](https://www.dsebastien.net/hermes-agent/)
+- [agentskills.io specification](https://agentskills.io/specification)
+- Internal: `docs/PRODUCT.md` (Agent-Coordinator / `hermes_mcp` — the *different* Hermes),
+  `skills/cadence-goals/SKILL.md`, `skills/planning-workflow/` (the WIP SDLC applied here).
