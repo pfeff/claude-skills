@@ -31,40 +31,80 @@ here?** A wrapper justified by host hooks (`/finish`) is not a reason to wrap a
 command that has no host hooks. Pick the *minimal correct* template, not the most
 visible one.
 
-## 2. Release hygiene when publishing a new skill
+## 2. Release hygiene: bump the version IN the PR that changes what ships
 
-Do this **in the same commit/PR** that adds the published skill — a new skill
-is not "published" until the manifest knows about it.
+The version bump is **atomic with the change that necessitates it** — it lands
+in the *same* PR, not in a separate maintainer step afterward. Do all of this
+in the one PR:
 
-1. **Register the skill** in `.claude-plugin/marketplace.json` under
-   `plugins[].skills`. Keep the list **alphabetical**.
-2. *(Optional)* Update the **README skills table** so the new skill is
+1. **Register the skill** (for a new skill) in
+   `.claude-plugin/marketplace.json` under `plugins[].skills`. Keep the list
+   **alphabetical**. Skip this and the skill ships in the tree but not in the
+   published plugin — it will not load for installed users.
+2. **Bump the version** in both manifests by running, from the repo root:
+
+   ```
+   scripts/bump-version.sh
+   ```
+
+   This minor-bumps `.claude-plugin/plugin.json` and
+   `.claude-plugin/marketplace.json` together, keeping them byte-in-sync.
+   Commit the result as part of the PR.
+3. *(Optional)* Update the **README skills table** so the new skill is
    discoverable from the front page.
 
-Skip step 1 and the skill ships in the tree but not in the published plugin —
-it will not load for installed users.
+Any PR that touches the **shipped surface** — `skills/**` or
+`.claude-plugin/**` — must carry its own bump. Docs-only, scripts-only, or
+CI-only PRs need not bump.
 
-**Do NOT bump the version** in `.claude-plugin/plugin.json` or
-`.claude-plugin/marketplace.json` as part of a skill-adding PR. That used to
-be step 2 here, and it caused a real defect: when multiple skill-adding PRs
-are open concurrently, each computes the same "next" version independently,
-so a batch of N concurrent PRs all claim the *same* version instead of
-leapfrogging it. The resulting text is byte-identical, so git's merge
-machinery sees no conflict — the pileup lands silently, with no signal that
-N releases got flattened into one version number. Concurrent additions to the
-`skills` array are fine (they touch distinct array positions and any real
-conflict there surfaces normally); the version fields are the collision
-point because every concurrent PR edits the exact same line.
+### Why hand-bumping used to be banned — and why it's safe now
 
-The version bump is a **separate, maintainer-run step**, done once after
-merging a batch of skill-adding PRs (or per merge, if you're not batching):
+The old doctrine kept the bump *out* of PRs because of a real defect: when two
+skill-adding PRs are open concurrently, each computes the same "next" version
+independently (both write `2.12.0`). The edits are byte-identical, so git's
+merge machinery sees no conflict and lets **both** land under one version
+number — N releases silently flatten into one. Deferring the bump to a manual
+post-merge script sidestepped the collision but decoupled the version from the
+change, and left the bump easy to forget (it was — see the vault-cloud gap that
+2.12.0 repaid).
 
-```
-scripts/bump-version.sh
-```
+We now keep the bump in the PR **and** make the collision fail loudly, via a
+required CI gate.
 
-This minor-bumps `plugin.json` and `marketplace.json` together and keeps them
-in sync — run it, then commit the result.
+### Enforcement — the version gate
+
+`scripts/check-version-bump.py`, wired in
+`.github/workflows/version-gate.yml`, runs on every PR and enforces:
+
+- both manifests are **in sync**;
+- if the PR changed the shipped surface, its version is **strictly greater than
+  main's *current* version** — compared against `origin/main`'s tip, not the
+  PR's stale branch point.
+
+That comparison is what turns the silent collision into a hard failure. The
+moment one PR merges and bumps main, every other open PR that reused that same
+version is measured against the new, equal base and **fails** the
+strictly-greater check — the author is told to rebase and re-run
+`scripts/bump-version.sh` so the bump leapfrogs main's new value. Two PRs can
+no longer share a version or clobber each other's bump silently; a stale bump
+is a visible, blocking error.
+
+**Admin setup (one-time, required for full coverage).** The gate is airtight
+only once an admin, in the repo's branch-protection / ruleset settings:
+
+- makes **`Version Gate / version-bump`** a **required status check** on
+  `main`, and
+- enables the **merge queue** for `main` — recommended. The gate also runs on
+  `merge_group`, so the queue re-validates each PR against the serialized tip of
+  main before merging, closing even the exact-simultaneous-merge race (two PRs
+  merging in the same instant). As a lighter alternative to a merge queue,
+  enable **"Require branches to be up to date before merging"**: it forces the
+  trailing PR to rebase onto the freshly-bumped main, which re-runs the gate and
+  catches the collision — at the cost of more manual rebase churn than a queue.
+
+Without that admin step the gate still catches the common case (a branch behind
+main, or a within-PR desync); only the exact-simultaneous-merge race needs the
+queue/up-to-date toggle to close.
 
 ## 3. Verify/validation steps that touch external resources must run bounded
 
@@ -110,12 +150,14 @@ mechanically.
 
 ## Related
 
-- `README.md` — the skills table (release-hygiene step 2).
+- `README.md` — the skills table (release-hygiene step 3).
 - `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — the
-  manifest step 1 updates; `scripts/bump-version.sh` bumps the version fields
-  separately.
-- `scripts/bump-version.sh` — the release-time version bump, run outside any
-  individual skill-adding PR.
+  manifests; step 1 registers the skill, step 2's `scripts/bump-version.sh`
+  bumps both version fields in sync.
+- `scripts/bump-version.sh` — the in-PR version bump (rule 2 step 2).
+- `scripts/check-version-bump.py` / `.github/workflows/version-gate.yml` — the
+  required CI gate that enforces the atomic bump and makes concurrent/stale
+  bumps fail loudly (rule 2 "Enforcement").
 - `skills/goal-tree/commands/inbox.md` — in-plugin command precedent (rule 1).
 - `skills/self-verify/references/bounded-external-waits.md` — canonical home
   of the bounded-wait recipe, the `inconclusive` outcome, and the

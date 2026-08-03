@@ -91,12 +91,15 @@ real failure mode in this repo: PR #133 had to retroactively register six
 skill directories that had sat on disk for a while with no entry in that
 array, so none of them resolved as slash commands despite looking complete.
 
-Do **not** bump `metadata.version` in `marketplace.json` or `version` in
-`plugin.json` as part of this PR — see `docs/skill-authoring.md` §2. That
-used to be required per-PR and caused concurrent skill-adding PRs to
-silently pile up on the same version number. The version bump is a separate
-maintainer step (`scripts/bump-version.sh`), run once after a batch of
-skill-adding PRs lands.
+**Bump the version in this same PR.** Run `scripts/bump-version.sh` — it
+minor-bumps `version` in `plugin.json` and `metadata.version` in
+`marketplace.json` together, keeping them in sync. The bump is atomic with the
+change that necessitates it; see `docs/skill-authoring.md` §2. The old doctrine
+kept the bump out of the PR to dodge byte-identical concurrent collisions; those
+are now caught loudly by the version gate
+(`.github/workflows/version-gate.yml`), which fails any PR whose version is not
+strictly greater than main's current version — so if a sibling PR bumps first,
+rebase and re-run the script.
 
 ## What this is NOT
 

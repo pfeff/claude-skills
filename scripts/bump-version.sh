@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
 # bump-version.sh — minor-bump the plugin version in both manifests, in sync.
 #
-# Defect this closes: individual skill-adding PRs used to hand-bump
-# .claude-plugin/plugin.json + .claude-plugin/marketplace.json themselves
-# (see docs/skill-authoring.md history). When multiple such PRs are open
-# concurrently, each computes the same "next" version independently — a
-# batch of N concurrent skill PRs all claim version X+1 instead of
-# leapfrogging X+1..X+N. Because the resulting text is byte-identical, git's
-# merge machinery sees no conflict and lets every PR land under the same
-# version number — a silent hygiene defect, not a merge failure.
+# Run this INSIDE the PR that changes what the plugin ships (see
+# docs/skill-authoring.md §2 "atomic release scheme"). It bumps
+# .claude-plugin/plugin.json + .claude-plugin/marketplace.json together, so the
+# version travels with the change that necessitates it and both manifests stay
+# byte-in-sync.
 #
-# Fix: skill-adding PRs register the skill in marketplace.json's `skills`
-# array (alphabetical) but do NOT touch either version field. A maintainer
-# runs this script once, as a separate step, after merging a batch of
-# skill-adding PRs to main — one minor bump covering the whole batch.
+# The historical hazard — concurrent PRs both hand-bumping to the same "next"
+# version, producing byte-identical edits that git merges with no conflict and
+# thereby flattening N releases into one — is NOT fixed by keeping the bump out
+# of PRs. It is fixed by the version gate (scripts/check-version-bump.py, wired
+# in .github/workflows/version-gate.yml): the gate measures each PR's version
+# against main's CURRENT tip, so once one PR merges and bumps main, any sibling
+# PR that reused that version fails the strictly-greater check and is forced to
+# rebase and re-run this script. The collision is now loud, not silent.
 #
 # Usage:
 #   scripts/bump-version.sh          # bump the minor version, print old/new
 #
 # Run from the repo root (or anywhere; paths are resolved relative to this
-# script's location).
+# script's location). After a sibling PR merges and the gate reports your bump
+# is no longer greater than main's, just rebase and run this again — it computes
+# the next minor from main's new value.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
