@@ -16,7 +16,7 @@ jobs:
   bounded-external-doc-script-equivalence:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Guards against drift between the teaching copy of run_bounded_external
       # (references/bounded-external-waits.md) and the executable copy
@@ -30,7 +30,7 @@ jobs:
   allowed-tools:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
