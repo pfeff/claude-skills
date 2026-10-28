@@ -9,6 +9,35 @@ Walks the user through the end-of-task sequence: commit, PR, knowledge capture, 
 ## Inputs
 
 - **--draft** (optional): Create PR as draft
+- **path** (optional): Directory to classify. Defaults to the current working directory.
+
+## Workspace Kind
+
+Before any other step, classify the working directory. Cursor-managed worktrees
+(`~/.cursor/worktrees/<repo>/<name>`) have no task-workflow `DESIGN.md`; a repo
+`CLAUDE.md` in that tree is not a workspace template.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/detect-workspace-kind.sh
+```
+
+Parse `KIND` (first line) and the `KEY=value` lines (`WORKSPACE_ROOT`, and for
+`cursor-worktree` also `WORKTREE_REPO`, `WORKTREE_NAME`). `WORKTREE_REPO` is
+the Cursor folder name (e.g. `claude-skills`), not a `gh --repo` owner/repo
+value.
+
+| KIND | Action |
+|------|--------|
+| `cursor-worktree` | Continue. The worktree **is** the repo. Skip issue checkboxes and gap capture. Close with `/delete-worktree`, not `/close-workspace`. |
+| `task-workspace` | Continue with the existing DESIGN.md / CLAUDE.md pipeline. |
+| `main-clone` | **Stop.** Main clones under `~/src/github/` are read-only. Tell the user to `/finish` from the Cursor worktree, not the clone. If `git worktree list` shows a tree under `~/.cursor/worktrees/`, name that path. |
+| `unknown` | **Stop.** Error: `"Not in a valid workspace. Run /create-workspace first."` |
+
+Do **not** write `dispatch_result.json` into a Cursor worktree — that path is
+the git root and the file would be committed.
+
+Do **not** run `/close-workspace` or `git worktree remove` on a Cursor-managed
+tree. Cursor owns cleanup (`/delete-worktree` or `cursor.worktreeMaxCount`).
 
 ## Coordinator Sync (Optional)
 
@@ -33,6 +62,8 @@ coord_report_completion() {
 
 Query `TaskList` and inspect task statuses.
 
+**If `TaskList` is unavailable** (typical in a Cursor worktree): Warn and proceed (assume complete).
+
 **If all tasks are completed**: Proceed to step 2.
 
 **If tasks remain incomplete**: Warn the user:
@@ -48,6 +79,8 @@ Continue with /finish anyway?
 Use `AskUserQuestion` to confirm. If the user declines, stop.
 
 ### 2. Issue Checkbox Reconciliation (R8)
+
+**If KIND is `cursor-worktree`**: Skip. There is no linked task-workspace issue.
 
 Fetch the linked GitHub issue body and reconcile its checkboxes against completed work.
 
@@ -88,7 +121,9 @@ Failed to update issue checkboxes. You can update manually:
 
 ### 2a. Gap Capture
 
-Before committing and creating the PR, prompt for known gaps or deferred items. These are structured into `dispatch_result.json` so the goal tree can automatically register them as new nodes.
+**If KIND is `cursor-worktree`**: Skip the rest of this subsection. Do not prompt for gaps. Do **not** write `dispatch_result.json` into the git root (that path is the repo and the file would be committed). Do not run the `jq` below.
+
+**If KIND is `task-workspace`**: Before committing and creating the PR, prompt for known gaps or deferred items. These are structured into `dispatch_result.json` so the goal tree can automatically register them as new nodes.
 
 ```
 AskUserQuestion: "Are there known gaps or deferred items from this work?"
@@ -127,8 +162,7 @@ For each gap:
 ```
 
 ```bash
-WORKSPACE_ROOT="$(pwd)"
-# Write dispatch_result.json (jq constructs the JSON from collected inputs)
+# task-workspace only. Never write this file into a Cursor worktree git root.
 jq -n \
   --arg status "completed" \
   --arg summary "$SUMMARY" \
@@ -157,7 +191,15 @@ Gap capture failed. You can manually create dispatch_result.json later.
 
 ### 3. Commit Phase (R2)
 
-Identify workspace repositories from the "Relevant Repositories" section in CLAUDE.md, then check each for uncommitted changes:
+**If KIND is `cursor-worktree`**: the worktree is the repo. Check only:
+
+```bash
+git -C "$WORKSPACE_ROOT" status --porcelain
+```
+
+Do not parse CLAUDE.md "Relevant Repositories" — that section belongs to a task-workspace template, not a repo `CLAUDE.md`.
+
+**If KIND is `task-workspace`**: identify workspace repositories from the "Relevant Repositories" section in CLAUDE.md, then check each for uncommitted changes:
 
 ```bash
 # For each known repo listed in CLAUDE.md
@@ -277,7 +319,7 @@ Read: skills/task-workflow/operations/dispatch-task.md
 ```
 
 Provide inputs:
-- `prompt`: Include the metrics collection instructions from step 6 below, plus all data already available: task_id, epic, task_count (from `TaskList`), started_at, pr_url. Instruct the subagent to write directly to `~/src/work/.metrics/finish.jsonl`.
+- `prompt`: Include the metrics collection instructions from step 6 below, plus all data already available: task_id, epic, task_count (from `TaskList`), started_at, pr_url, and KIND. For `cursor-worktree`, task_id is `WORKTREE_NAME` (string) and epic is `WORKTREE_REPO`. Instruct the subagent to write directly to `~/src/work/.metrics/finish.jsonl`.
 - `task_subject`: "Collect finish metrics"
 - `max_retries`: 0 (metrics are non-critical — no retry)
 
@@ -324,23 +366,38 @@ Check the background subagent dispatched in step 4c. If the dispatch completed s
 
 **Data to collect**:
 
-| Metric | Source |
-|--------|--------|
-| task_id | DESIGN.md first line (e.g., `57`) |
-| epic | Workspace path segment (e.g., `acme`) |
-| task_count | `TaskList` — count of completed tasks |
-| started_at | Workspace creation time from `.envrc` or directory mtime |
-| finished_at | Current timestamp |
-| elapsed_hours | `finished_at - started_at` |
-| pr_url | Captured from step 4 |
-| criteria_passed | `.metrics/evaluation.json` — number of acceptance criteria passed (optional) |
-| criteria_total | `.metrics/evaluation.json` — total acceptance criteria evaluated (optional) |
-| acceptance_rate | `.metrics/evaluation.json` — `criteria_passed / criteria_total` (optional) |
-| rules_passed | `.metrics/evaluation.json` — number of standing rules passed (optional) |
-| rules_total | `.metrics/evaluation.json` — total standing rules evaluated (optional) |
-| rules_pass_rate | `.metrics/evaluation.json` — `rules_passed / rules_total` (optional) |
+| Metric | Source (`task-workspace`) | Source (`cursor-worktree`) |
+|--------|---------------------------|----------------------------|
+| task_id | DESIGN.md first line (e.g., `57`) | `WORKTREE_NAME` (string) |
+| epic | Workspace path segment (e.g., `acme`) | `WORKTREE_REPO` |
+| task_count | `TaskList` — count of completed tasks | `TaskList` if available, else `0` |
+| started_at | Workspace creation time from `.envrc` or directory mtime | Worktree directory mtime |
+| finished_at | Current timestamp | Current timestamp |
+| elapsed_hours | `finished_at - started_at` | `finished_at - started_at` |
+| pr_url | Captured from step 4 | Captured from step 4 |
+| criteria_passed | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
+| criteria_total | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
+| acceptance_rate | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
+| rules_passed | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
+| rules_total | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
+| rules_pass_rate | `.metrics/evaluation.json` (optional) | Same, if the file already exists |
 
-**Evaluation metrics**: Check for `.metrics/evaluation.json` in the workspace root. This file is written by execute-tree step 4a (Scalar Metrics) when the task was dispatched via goal-tree. If the file exists, include `criteria_passed`, `criteria_total`, and `acceptance_rate` in the finish record. If the file also contains a non-empty `standing_rules` array, include `rules_passed`, `rules_total`, and `rules_pass_rate`. If absent (e.g., standalone task-workflow without goal-tree), omit these fields.
+**Evaluation metrics**: Check for `.metrics/evaluation.json` in the workspace root. This file is written by execute-tree step 4a (Scalar Metrics) when the task was dispatched via goal-tree. If the file exists, include `criteria_passed`, `criteria_total`, and `acceptance_rate` in the finish record. If the file also contains a non-empty `standing_rules` array, include `rules_passed`, `rules_total`, and `rules_pass_rate`. If absent (e.g., standalone task-workflow without goal-tree, or a Cursor worktree), omit these fields. Do not create `.metrics/evaluation.json` in a Cursor worktree.
+
+For `cursor-worktree`, `task_id` is a string — use `--arg task_id` (not `--argjson`):
+
+```bash
+jq -n \
+  --arg task_id "$WORKTREE_NAME" \
+  --arg epic "$WORKTREE_REPO" \
+  --argjson task_count "$task_count" \
+  --arg started_at "$started_at" \
+  --arg finished_at "$finished_at" \
+  --argjson elapsed_hours "$elapsed_hours" \
+  --arg pr_url "$pr_url" \
+  -c '{task_id: $task_id, epic: $epic, task_count: $task_count, started_at: $started_at, finished_at: $finished_at, elapsed_hours: $elapsed_hours, pr_url: $pr_url}' \
+  >> ~/src/work/.metrics/finish.jsonl
+```
 
 ```bash
 EVAL_METRICS="${WORKSPACE_ROOT}/.metrics/evaluation.json"
@@ -367,6 +424,8 @@ fi
 ```
 
 The `criteria_*` and `rules_*` fields are optional — omitted when no evaluation data exists or when no standing rules are defined.
+
+**task-workspace numeric `task_id`** (use `--argjson`). For `cursor-worktree`, use the `--arg task_id` recipe above — do not copy `--argjson task_id` onto a string worktree name.
 
 ```bash
 mkdir -p ~/src/work/.metrics && chmod 700 ~/src/work/.metrics
@@ -430,7 +489,17 @@ This mirrors the finish outcome (PR URL, task count) to the coordinator for visi
   gh pr create --title "<title>" --body "<body>"
 ```
 
-Print manual close instructions:
+**If KIND is `cursor-worktree`**, print:
+
+```
+All done! This is a Cursor-managed worktree.
+
+Do not run /close-workspace (that tears down ~/src/work task workspaces).
+When you are done with this checkout, run /delete-worktree
+(or leave it; Cursor auto-cleans oldest trees at cursor.worktreeMaxCount).
+```
+
+**If KIND is `task-workspace`**, print manual close instructions:
 
 ```
 All done! To close this workspace, run from your control session:
@@ -444,6 +513,8 @@ All done! To close this workspace, run from your control session:
 
 | Phase | Error | Response |
 |-------|-------|----------|
+| Kind detect | `main-clone` | Stop. Tell the user to `/finish` from the Cursor worktree |
+| Kind detect | `unknown` | Stop: "Not in a valid workspace. Run /create-workspace first." |
 | Task check | TaskList unavailable | Warn, proceed (assume complete) |
 | Checkbox reconciliation | gh CLI failure | Warn, continue |
 | Commit | Git failure | Print manual commit command, continue |
@@ -493,7 +564,38 @@ All done! To close this workspace, run from your control session:
 (This must run from outside this tmux session because it removes the worktree.)
 ```
 
-### Partial failure — PR creation fails
+### Cursor-managed worktree
+
+```
+User: /finish
+
+Workspace kind: cursor-worktree
+  WORKTREE_REPO=claude-skills  WORKTREE_NAME=finish-cursor-worktrees
+
+Checking tasks...
+  TaskList unavailable — continuing
+
+Checking for uncommitted changes...
+  claude-skills: 3 files changed
+  Committing... ✓  abc1234 feat: detect Cursor worktrees in /finish
+
+Creating PR...
+  ✓  https://github.com/pfeff/claude-skills/pull/99
+  Review chain dispatched (Standard: Change + Acceptance) via gh-pr-create Step 9
+
+Capture a reusable solution? (/compound)  → No
+Run a retrospective? (/lessons-learned)   → No
+
+Capturing metrics... ✓
+
+All done! This is a Cursor-managed worktree.
+
+Do not run /close-workspace (that tears down ~/src/work task workspaces).
+When you are done with this checkout, run /delete-worktree
+(or leave it; Cursor auto-cleans oldest trees at cursor.worktreeMaxCount).
+```
+
+### Partial failure — PR creation fails (`task-workspace`)
 
 ```
 User: /finish
@@ -517,6 +619,10 @@ To close this workspace, run from your control session:
 (This must run from outside this tmux session because it removes the worktree.)
 ```
 
+### Partial failure — PR creation fails (`cursor-worktree`)
+
+Same as above through the `gh pr create` fallback. Close with `/delete-worktree` (or leave the tree); do not print `/close-workspace`.
+
 ## Integration Points
 
 - **Git skill commit operation**: `skills/git/operations/commit.md`
@@ -524,7 +630,8 @@ To close this workspace, run from your control session:
 - **Review dispatch procedure**: `skills/lN-review-doctrine/references/dispatch-procedure.md` (step 4b)
 - **Compound skill**: `skills/compound/SKILL.md`
 - **Lessons learned skill**: `skills/lessons-learned/SKILL.md`
-- **Close workspace script**: `skills/task-workflow/scripts/close-workspace.sh`
+- **Workspace kind detector**: `skills/task-workflow/scripts/detect-workspace-kind.sh`
+- **Close workspace script**: `skills/task-workflow/scripts/close-workspace.sh` (task-workspace only; never on Cursor-managed trees)
 - **Close workspace operation**: `skills/task-workflow/operations/close-workspace.md`
 - **Dispatch result schema**: `skills/goal-tree/references/dispatch-result-schema.md`
 - **Metrics log**: `~/src/work/.metrics/finish.jsonl`

@@ -47,6 +47,8 @@ allowed-prompts:
   - tool: Bash
     prompt: create workspace from script
   - tool: Bash
+    prompt: detect workspace kind
+  - tool: Bash
     prompt: check git status
   - tool: Bash
     prompt: view GitHub PRs
@@ -226,7 +228,7 @@ Guided post-completion workflow: commit, PR, knowledge capture, metrics, close i
 
 **Implementation**: Load `operations/finish.md` for detailed steps.
 
-**Quick summary**: Checks task completion, auto-commits, creates PR, prompts for /claude-skills:compound and /claude-skills:lessons-learned, captures metrics, prints close instructions. Each phase fails gracefully with manual fallback.
+**Quick summary**: Detects workspace kind (`cursor-worktree` vs `task-workspace`). Checks task completion, auto-commits, creates PR, prompts for /claude-skills:compound and /claude-skills:lessons-learned, captures metrics, prints close instructions (`/delete-worktree` for Cursor-managed trees, `/close-workspace` for task workspaces). Each phase fails gracefully with manual fallback.
 
 ### 13. Auto-Advance
 
@@ -362,6 +364,7 @@ The skill requires these bash commands for workspace management:
 | list GitHub project items | `gh project item-list <number> --owner <owner>` | Fetch board items for ranking |
 | check existing workspaces | `ls ~/src/work/*/<id>-*/CLAUDE.md` | Detect existing workspace before creation |
 | create workspace from script | `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/create-workspace.sh` | Bootstrap workspace directory, worktrees, tmux |
+| detect workspace kind | `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/detect-workspace-kind.sh` | Classify Cursor worktree vs task workspace vs main clone during /finish |
 | check git status | `git -C <repo> status --porcelain` | Detect uncommitted changes during /finish |
 | view GitHub PRs | `gh pr view --json url,state` | Check for existing PR during /finish and auto-advance |
 | check GitHub PR CI status | `gh pr checks --watch --fail-fast` | Poll CI checks after auto-advance PR creation |
@@ -375,7 +378,7 @@ The skill requires these bash commands for workspace management:
 **Setup workspace**: Provide GitHub issue reference; infers parameters, delegates to create-workspace
 **Init workspace**: Auto-detects issue source, enriches docs, creates task list; idempotent
 **Resume work**: Provide task-id, optional epic for disambiguation; auto-restores from archive if needed; use `--verify` to check GitHub issue status
-**Finish workspace**: Guided post-completion: commit, PR, knowledge capture, metrics, close instructions
+**Finish workspace**: Guided post-completion: commit, PR, knowledge capture, metrics, close instructions. Works in Cursor-managed worktrees (`~/.cursor/worktrees/`) and in `~/src/work` task workspaces.
 **Close workspace**: Removes worktrees, kills tmux, archives to tarball; use `--no-archive` to skip archival
 **List workspaces**: Optionally filter by status (in-progress/completed/all)
 **Navigate tasks**: Use `TaskList` to find pending tasks
@@ -447,6 +450,7 @@ All scripts are in `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/`:
 - `create-tmuxp-session.sh "<session-name>" <workspace-dir>` - **Required** for tmux session creation
 - `list-tasks.sh` - Task discovery and status
 - `workspace-locator.sh` - Find workspace by task-id
+- `detect-workspace-kind.sh [path]` - Classify Cursor worktree vs task workspace vs main clone
 - `metadata-parser.sh` - Extract DESIGN.md metadata
 - `render_deps.py --task-list-id ID [--mermaid]` - Task dependency graph visualization
 - `scan-feedback.sh <work_dir> [--verbose]` - Scan workspaces for FEEDBACK.md entries
