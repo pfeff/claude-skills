@@ -22,7 +22,9 @@ ${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/scripts/detect-workspace-kind.sh
 ```
 
 Parse `KIND` (first line) and the `KEY=value` lines (`WORKSPACE_ROOT`, and for
-`cursor-worktree` also `REPO`, `WORKTREE_NAME`).
+`cursor-worktree` also `WORKTREE_REPO`, `WORKTREE_NAME`). `WORKTREE_REPO` is
+the Cursor folder name (e.g. `claude-skills`), not a `gh --repo` owner/repo
+value.
 
 | KIND | Action |
 |------|--------|
@@ -119,9 +121,9 @@ Failed to update issue checkboxes. You can update manually:
 
 ### 2a. Gap Capture
 
-**If KIND is `cursor-worktree`**: Skip. Do **not** write `dispatch_result.json` into the git root.
+**If KIND is `cursor-worktree`**: Skip the rest of this subsection. Do not prompt for gaps. Do **not** write `dispatch_result.json` into the git root (that path is the repo and the file would be committed). Do not run the `jq` below.
 
-Before committing and creating the PR, prompt for known gaps or deferred items. These are structured into `dispatch_result.json` so the goal tree can automatically register them as new nodes.
+**If KIND is `task-workspace`**: Before committing and creating the PR, prompt for known gaps or deferred items. These are structured into `dispatch_result.json` so the goal tree can automatically register them as new nodes.
 
 ```
 AskUserQuestion: "Are there known gaps or deferred items from this work?"
@@ -160,8 +162,7 @@ For each gap:
 ```
 
 ```bash
-WORKSPACE_ROOT="$(pwd)"
-# Write dispatch_result.json (jq constructs the JSON from collected inputs)
+# task-workspace only. Never write this file into a Cursor worktree git root.
 jq -n \
   --arg status "completed" \
   --arg summary "$SUMMARY" \
@@ -318,7 +319,7 @@ Read: skills/task-workflow/operations/dispatch-task.md
 ```
 
 Provide inputs:
-- `prompt`: Include the metrics collection instructions from step 6 below, plus all data already available: task_id, epic, task_count (from `TaskList`), started_at, pr_url, and KIND. For `cursor-worktree`, task_id is `WORKTREE_NAME` (string) and epic is `REPO`. Instruct the subagent to write directly to `~/src/work/.metrics/finish.jsonl`.
+- `prompt`: Include the metrics collection instructions from step 6 below, plus all data already available: task_id, epic, task_count (from `TaskList`), started_at, pr_url, and KIND. For `cursor-worktree`, task_id is `WORKTREE_NAME` (string) and epic is `WORKTREE_REPO`. Instruct the subagent to write directly to `~/src/work/.metrics/finish.jsonl`.
 - `task_subject`: "Collect finish metrics"
 - `max_retries`: 0 (metrics are non-critical — no retry)
 
@@ -368,7 +369,7 @@ Check the background subagent dispatched in step 4c. If the dispatch completed s
 | Metric | Source (`task-workspace`) | Source (`cursor-worktree`) |
 |--------|---------------------------|----------------------------|
 | task_id | DESIGN.md first line (e.g., `57`) | `WORKTREE_NAME` (string) |
-| epic | Workspace path segment (e.g., `acme`) | `REPO` |
+| epic | Workspace path segment (e.g., `acme`) | `WORKTREE_REPO` |
 | task_count | `TaskList` — count of completed tasks | `TaskList` if available, else `0` |
 | started_at | Workspace creation time from `.envrc` or directory mtime | Worktree directory mtime |
 | finished_at | Current timestamp | Current timestamp |
@@ -388,7 +389,7 @@ For `cursor-worktree`, `task_id` is a string — use `--arg task_id` (not `--arg
 ```bash
 jq -n \
   --arg task_id "$WORKTREE_NAME" \
-  --arg epic "$REPO" \
+  --arg epic "$WORKTREE_REPO" \
   --argjson task_count "$task_count" \
   --arg started_at "$started_at" \
   --arg finished_at "$finished_at" \
@@ -423,6 +424,8 @@ fi
 ```
 
 The `criteria_*` and `rules_*` fields are optional — omitted when no evaluation data exists or when no standing rules are defined.
+
+**task-workspace numeric `task_id`** (use `--argjson`). For `cursor-worktree`, use the `--arg task_id` recipe above — do not copy `--argjson task_id` onto a string worktree name.
 
 ```bash
 mkdir -p ~/src/work/.metrics && chmod 700 ~/src/work/.metrics
@@ -567,7 +570,7 @@ All done! To close this workspace, run from your control session:
 User: /finish
 
 Workspace kind: cursor-worktree
-  REPO=claude-skills  WORKTREE_NAME=finish-cursor-worktrees
+  WORKTREE_REPO=claude-skills  WORKTREE_NAME=finish-cursor-worktrees
 
 Checking tasks...
   TaskList unavailable — continuing
@@ -592,7 +595,7 @@ When you are done with this checkout, run /delete-worktree
 (or leave it; Cursor auto-cleans oldest trees at cursor.worktreeMaxCount).
 ```
 
-### Partial failure — PR creation fails
+### Partial failure — PR creation fails (`task-workspace`)
 
 ```
 User: /finish
@@ -615,6 +618,10 @@ To close this workspace, run from your control session:
 
 (This must run from outside this tmux session because it removes the worktree.)
 ```
+
+### Partial failure — PR creation fails (`cursor-worktree`)
+
+Same as above through the `gh pr create` fallback. Close with `/delete-worktree` (or leave the tree); do not print `/close-workspace`.
 
 ## Integration Points
 

@@ -8,13 +8,16 @@
 # Output (stdout):
 #   KIND
 #   WORKSPACE_ROOT=<absolute path>
-#   REPO=<repo>                 # cursor-worktree only
+#   WORKTREE_REPO=<repo>        # cursor-worktree only (not owner/repo)
 #   WORKTREE_NAME=<name>        # cursor-worktree only
 #
 # KIND is one of: cursor-worktree | task-workspace | main-clone | unknown
 #
+# Order: Cursor path prefix, then main-clone prefix, then DESIGN.md.
 # Cursor-managed trees are checked first so a repo CLAUDE.md inside
 # ~/.cursor/worktrees/<repo>/<name> is never mistaken for a task workspace.
+# Main clones are checked before DESIGN.md so a clone that happens to
+# contain DESIGN.md is still main-clone (read-only).
 #
 # Test overrides:
 #   CURSOR_WORKTREES_ROOT  default $HOME/.cursor/worktrees
@@ -69,16 +72,11 @@ if cursor_root=$(resolve_dir "$CURSOR_WORKTREES_ROOT" 2>/dev/null); then
       if [[ -n "$repo" && "$rest" != "$rel" && -n "${rest%%/*}" ]]; then
         name="${rest%%/*}"
         wt_root="$cursor_root/$repo/$name"
-        emit cursor-worktree "$wt_root" "REPO=$repo" "WORKTREE_NAME=$name"
+        emit cursor-worktree "$wt_root" "WORKTREE_REPO=$repo" "WORKTREE_NAME=$name"
         exit 0
       fi
       ;;
   esac
-fi
-
-if [[ -f "$resolved/DESIGN.md" ]]; then
-  emit task-workspace "$resolved"
-  exit 0
 fi
 
 github_root=""
@@ -89,6 +87,11 @@ if github_root=$(resolve_dir "$GITHUB_CLONES_ROOT" 2>/dev/null); then
       exit 0
       ;;
   esac
+fi
+
+if [[ -f "$resolved/DESIGN.md" ]]; then
+  emit task-workspace "$resolved"
+  exit 0
 fi
 
 emit unknown "$resolved"

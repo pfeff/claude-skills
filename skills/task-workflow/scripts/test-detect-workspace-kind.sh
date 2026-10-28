@@ -79,7 +79,7 @@ exit_code=$(run_detect "$wt" "$stdout")
 assert_exit_code 0 "$exit_code" "exits 0"
 assert_eq "cursor-worktree" "$(kind_of "$stdout")" "KIND is cursor-worktree"
 assert_line "$stdout" "WORKSPACE_ROOT=$(cd "$wt" && pwd -P)" "WORKSPACE_ROOT is the worktree"
-assert_line "$stdout" "REPO=dotfiles" "REPO=dotfiles"
+assert_line "$stdout" "WORKTREE_REPO=dotfiles" "WORKTREE_REPO=dotfiles"
 assert_line "$stdout" "WORKTREE_NAME=feat-1" "WORKTREE_NAME=feat-1"
 rm -rf "$cursor_root" "$github_root" "$stdout"
 
@@ -101,11 +101,11 @@ exit_code=$(run_detect "$ws" "$stdout")
 assert_exit_code 0 "$exit_code" "exits 0"
 assert_eq "task-workspace" "$(kind_of "$stdout")" "KIND is task-workspace"
 assert_line "$stdout" "WORKSPACE_ROOT=$(cd "$ws" && pwd -P)" "WORKSPACE_ROOT is the workspace"
-if grep -q '^REPO=' "$stdout"; then
-  echo "  FAIL: task-workspace should not emit REPO"
+if grep -q '^WORKTREE_REPO=' "$stdout"; then
+  echo "  FAIL: task-workspace should not emit WORKTREE_REPO"
   FAIL=$((FAIL + 1))
 else
-  echo "  PASS: no REPO line"
+  echo "  PASS: no WORKTREE_REPO line"
   PASS=$((PASS + 1))
 fi
 rm -rf "$cursor_root" "$github_root" "$ws" "$stdout"
@@ -164,7 +164,7 @@ stdout=$(mktemp)
 exit_code=$(run_detect "$wt" "$stdout")
 assert_exit_code 0 "$exit_code" "exits 0"
 assert_eq "cursor-worktree" "$(kind_of "$stdout")" "KIND is cursor-worktree"
-assert_line "$stdout" "REPO=claude-skills" "REPO=claude-skills"
+assert_line "$stdout" "WORKTREE_REPO=claude-skills" "WORKTREE_REPO=claude-skills"
 assert_line "$stdout" "WORKTREE_NAME=with-design" "WORKTREE_NAME=with-design"
 rm -rf "$cursor_root" "$github_root" "$stdout"
 
@@ -186,7 +186,7 @@ exit_code=$(run_detect "$wt/claude/commands" "$stdout")
 assert_exit_code 0 "$exit_code" "exits 0"
 assert_eq "cursor-worktree" "$(kind_of "$stdout")" "KIND is cursor-worktree"
 assert_line "$stdout" "WORKSPACE_ROOT=$(cd "$wt" && pwd -P)" "WORKSPACE_ROOT is the worktree root"
-assert_line "$stdout" "REPO=dotfiles" "REPO=dotfiles"
+assert_line "$stdout" "WORKTREE_REPO=dotfiles" "WORKTREE_REPO=dotfiles"
 assert_line "$stdout" "WORKTREE_NAME=feat-1" "WORKTREE_NAME=feat-1"
 rm -rf "$cursor_root" "$github_root" "$stdout"
 
@@ -224,6 +224,26 @@ assert_exit_code 0 "$exit_code" "exits 0"
 assert_eq "unknown" "$(kind_of "$stdout")" "KIND is unknown"
 assert_line "$stdout" "WORKSPACE_ROOT=$(cd "$empty" && pwd -P)" "WORKSPACE_ROOT is the empty dir"
 rm -rf "$cursor_root" "$github_root" "$empty" "$stdout"
+
+echo ""
+
+#------------------------------------------------------------------------------
+# Test 9: DESIGN.md inside a main clone is still main-clone
+#------------------------------------------------------------------------------
+echo "Test 9: github-clone prefix wins over DESIGN.md"
+cursor_root=$(mktemp -d)
+export CURSOR_WORKTREES_ROOT="$cursor_root"
+github_root=$(mktemp -d)
+export GITHUB_CLONES_ROOT="$github_root"
+clone="$github_root/pfeff/claude-skills"
+mkdir -p "$clone"
+echo "# 1: Should not be a task workspace" > "$clone/DESIGN.md"
+stdout=$(mktemp)
+exit_code=$(run_detect "$clone" "$stdout")
+assert_exit_code 0 "$exit_code" "exits 0"
+assert_eq "main-clone" "$(kind_of "$stdout")" "KIND is main-clone"
+assert_line "$stdout" "WORKSPACE_ROOT=$(cd "$clone" && pwd -P)" "WORKSPACE_ROOT is the clone"
+rm -rf "$cursor_root" "$github_root" "$stdout"
 
 echo ""
 
