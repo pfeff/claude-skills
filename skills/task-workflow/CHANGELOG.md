@@ -2,6 +2,14 @@
 
 All notable changes to the **task-workflow** skill will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `scripts/detect-workspace-kind.sh` — classifies a path as `cursor-worktree`, `task-workspace`, `main-clone`, or `unknown`. Cursor-managed trees under `~/.cursor/worktrees/<repo>/<name>` are detected first so a repo `CLAUDE.md` is not mistaken for a task workspace.
+- `/finish` runs in Cursor-managed worktrees without requiring `DESIGN.md`. Commit/PR/knowledge/metrics use the worktree as the repo; issue checkboxes and gap capture are skipped (no `dispatch_result.json` in the git root); close instructions print `/delete-worktree` instead of `/close-workspace`. `/finish` on a main clone under `~/src/github/` stops and points at the Cursor worktree.
+
+**Reasoning**: Cursor Agents Window `+` with Default Environment = New Worktree checks out at `~/.cursor/worktrees/`, which has no task-workflow `DESIGN.md`. The wrapper and operation previously aborted with "Not in a valid workspace", and close instructions sent the operator to `/close-workspace`, which rejects those trees.
+
 ## [1.9.0] - 2026-07-16
 
 ### Added
