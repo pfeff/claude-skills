@@ -1,6 +1,6 @@
 ---
 name: review
-description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes findings by severity. Use when the user requests a code review or invokes /claude-skills:review.
+description: Spawn parallel specialist review agents (security, simplicity, architecture, correctness) against a PR or branch diff. Synthesizes and publishes findings; owns authorized worker handoff and remediation through independent re-review. Use for code review, review handoff, or monitoring review fixes.
 argument-hint: "[PR number, branch name, owner/repo#number, or blank for current branch]"
 allowed-tools:
   - Bash(git diff:*)
@@ -19,7 +19,7 @@ allowed-tools:
   - Write
   - Grep
   - Glob
-version: 0.7.2
+version: 0.8.0
 ---
 
 # Review Skill
@@ -77,9 +77,16 @@ anchored regex that admits only that safe form.
 4. **Synthesize and classify findings** (blocking vs advisory)
 5. **Persist results** to `.claude/reviews/latest.md`
 6. **Display results** to user
-7. **Post sticky verdict comment** — when reviewing a PR, upsert a single review comment (edited in place on re-run, never appended) and, unless it is the reviewer's own PR, submit a formal `REQUEST_CHANGES`/`APPROVE` event
+7. **Post and read back the verdict** — when reviewing a PR, upsert a single review comment (edited in place on re-run, never appended) and, unless it is the reviewer's own PR, submit a formal `REQUEST_CHANGES`/`APPROVE` event
+
+8. **Complete the authorized handoff** — deliver the verified artifact directly to
+   the implementation worker, confirm receipt, and own authorized fixes through
+   independent re-review. A local report or sent message is not completion.
 
 **Implementation**: Load `operations/run-review.md` for full orchestration logic.
+For agent-to-agent handoff or monitoring of review fixes, load
+[Review handoff](operations/handoff-review.md). It defines the coordinator's
+ownership, evidence, and completion gates; review-only scope stays review-only.
 
 **Worktree discipline**: this skill only ever reads the diff (`git diff`,
 `gh pr diff`) — it never checks out, stashes, resets, or otherwise mutates
@@ -118,6 +125,16 @@ BLOCKING is restricted to **correctness failures, security vulnerabilities, and 
 **When**: Automatically called at the end of `run-review` when the target is a PR number. Can also be invoked independently after PR creation. Requires `$PR_NUMBER`.
 
 Posts a single **sticky verdict comment** (marked with `<!-- review:metadata -->`) that is edited in place on every re-run — never appended. When the reviewer is not the PR author, it also submits a lightweight `REQUEST_CHANGES`/`APPROVE` event carrying the same marker, dismissing its own prior blocking review so nothing stacks; that event, on the reviews API, is the authoritative cross-operator artifact (`l1-review` reads the marker there — the sticky comment is a visibility mirror). On a self-PR the event is skipped (GitHub blocks it); the comment stands alone.
+
+### Review Handoff
+**File**: `operations/handoff-review.md`
+**When**: The operator requests delivery to an implementation worker, addressing
+review findings, or monitoring fixes through re-review. Also applies when those
+actions are already authorized by the active assignment.
+
+The coordinator owns verified delivery, worker acknowledgement, the fix loop,
+and the verdict against the pushed revision. Use the existing worker as sole
+finisher; the operator is not an inter-agent messenger.
 
 ## Agent Prompts
 

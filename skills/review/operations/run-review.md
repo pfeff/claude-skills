@@ -123,6 +123,12 @@ and every expansion must be quoted.
   NOT construct the diff command by pasting the literal target string into it.
   Set `$PR_NUMBER` to empty.
 
+For PR targets, capture `$REVIEW_SHA` from the live PR's `headRefOid` immediately
+before fetching the diff, then re-read it after the fetch. If the two differ,
+refetch a consistent revision before reviewing. For branch/current-branch
+reviews, resolve the selected target with `$GIT rev-parse` as `$REVIEW_SHA`.
+Use this SHA throughout; cwd's HEAD may belong to a different branch.
+
 Capture the diff output. If the diff is empty, inform the user and stop.
 
 Carry `$REPO` forward to Step 10 so the verdict-comment posting step targets the same repo.
@@ -260,7 +266,7 @@ Write the file using this exact structure:
 ```markdown
 ---
 target: {branch name, PR #N, or "current branch"}
-sha: {full 40-char commit SHA reviewed — $GIT rev-parse HEAD}
+sha: {full 40-char commit SHA reviewed — $REVIEW_SHA}
 timestamp: {ISO 8601 UTC, e.g. 2026-02-23T14:30:00Z}
 agents: {$AGENT_COUNT}
 degraded: {true if degraded-mode, false otherwise}
@@ -288,9 +294,8 @@ verdict: {BLOCKING | CLEAN}
 
 Rules:
 - The YAML frontmatter must be machine-parseable. Use exact field names shown above.
-- `sha` is the full 40-char commit SHA of the reviewed HEAD (`$GIT rev-parse
-  HEAD`), captured at review time — never a short SHA, never the PR branch
-  name. This is what lets a later reader (or a re-review) tell this verdict
+- `sha` is `$REVIEW_SHA`, the full 40-char SHA of the revision actually
+  reviewed — never cwd's unrelated HEAD, a short SHA, or a branch name. This is what lets a later reader (or a re-review) tell this verdict
   apart from a stale one against an older commit (see
   `lN-review-doctrine/references/checklist.md`'s "Marker currency").
 - `verdict` in frontmatter is `BLOCKING` if any blocking findings exist, otherwise `CLEAN`.
@@ -300,9 +305,10 @@ Rules:
 - If no findings at all, write only the frontmatter and a single line: `No issues found across {$AGENT_COUNT} agents.`
 - Each finding line must preserve the `**file:line**` format exactly — downstream PR annotation depends on parsing this.
 
-## Step 9: Display Results
+## Step 9: Prepare the Summary
 
-Present the contents of `.claude/reviews/latest.md` to the user (without the YAML frontmatter).
+Prepare the user summary without YAML frontmatter. Do not end the turn here:
+for PR reviews, publication and verified delivery below are still required.
 
 ## Step 10: Post Verdict Comment
 
@@ -315,3 +321,13 @@ than cwd's repo; when `$REPO` is empty the operation runs in its identical in-re
 form. This upserts a single sticky verdict comment on the PR (edited in place on
 re-run, never appended) and, unless reviewing your own PR, submits a
 `REQUEST_CHANGES`/`APPROVE` event.
+
+
+## Step 11: Deliver and Close the Authorized Loop
+
+Read back the posted artifact per `post-review.md` before reporting publication
+as successful. For authorized worker handoff, remediation, or monitoring, load
+[Review Handoff](handoff-review.md) and own that loop through independent
+re-review or an explicit blocker. A summary in this chat is not worker delivery.
+For review-only or branch-only scope, report the completed review and delivery
+status without claiming fixes, push, merge, or deployment.

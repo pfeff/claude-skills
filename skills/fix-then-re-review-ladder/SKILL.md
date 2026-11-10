@@ -1,7 +1,7 @@
 ---
 name: fix-then-re-review-ladder
 description: Recovery loop driving a PR (or reviewed work product) from a NEEDS-WORK/findings-attached verdict back to CLEAN. Triggers when a /review, /l1-review, or /l2-review verdict is not CLEAN and the operator wants it resolved. Triages findings into fix-now vs operator-waivable, dispatches ONE scoped fix agent (sole-finisher on the branch/worktree, no rescoping), then re-runs the tier-appropriate ladder (/review -> /l1-review -> /l2-review) against the NEW HEAD, looping fix->re-review until clean or a residual is reported. Produces the clean state operator-review then presents. Invoked by `pr-review-fanout` on a needs-work verdict, or standalone.
-version: 1.0.1
+version: 1.1.0
 allowed-tools:
   - Task
   - AskUserQuestion
@@ -22,6 +22,11 @@ reads and re-triggers what already exists.
 Drive a PR whose posted review verdict is `NEEDS-WORK` or `BLOCKING` back to
 `CLEAN` at the tier that failed, then hand off to `operator-review`.
 
+For delivery, acknowledgement, monitoring, and the coordinator's completion
+contract, follow [Review Handoff](../review/operations/handoff-review.md).
+The coordinator retains ownership through the fix and independent re-review;
+a dispatch alone is not completion.
+
 ## Prerequisite
 
 A posted review marker at some tier — `<!-- review:metadata -->` (Change/L0),
@@ -38,9 +43,9 @@ it is per-host and not readable across operators.
 
 1. **Identify tier + current HEAD.** The failing marker names its `level`
    (0/1/2 -> Change/Acceptance/Objective) and its `sha` field — the exact
-   revision it reviewed. Compare against `git rev-parse HEAD` on the PR
-   branch: a verdict — CLEAN included — whose marker `sha` is older than
-   current HEAD is **stale**. Treat a stale marker as if no review ran at
+   revision it reviewed. Compare against the live remote PR head SHA, not
+   `git rev-parse HEAD` in a potentially outdated checkout: a verdict — CLEAN
+   included — whose marker `sha` differs from that remote head is **stale**. Treat a stale marker as if no review ran at
    that tier and restart the ladder against current HEAD rather than
    trusting it.
 2. **Extract findings** from the posted marker's body — the per-axis
@@ -49,17 +54,22 @@ it is per-host and not readable across operators.
    not from a local cache.
 3. **Triage** each finding into **fix-now** (a real defect: any `blocking`
    finding, or a `warning`/`info` finding that is actually a correctness or
-   scope-mismatch problem; fixing a fix-now item overrides a "don't touch X"
-   guard if the task carried one) vs **advisory/waivable** (a `warning`/`info`
-   finding the operator may accept as-is). Surface the split via one
-   `AskUserQuestion` batch — one finding per question, each with a
-   recommended default (fix-now findings default to "fix"; advisory findings
-   default to "waive"). A finding that is **structurally unfixable
+   scope-mismatch problem) vs **advisory/waivable** (a `warning`/`info`
+   finding the operator may accept as-is). Apply the operator's existing fix
+   authorization and explicit limits: proceed with already-authorized fixes
+   without another permission round. Do not override an explicit "don't touch X"
+   restriction merely because a finding concerns X. Surface only unresolved
+   scope/waiver decisions via one `AskUserQuestion` batch, with a recommended
+   default per decision. An advisory finding is never silently waived.
+   A finding that is **structurally unfixable
    pre-merge** (e.g. a check that only runs on the default branch) is neither
    fixed nor waived by this step — document it as a known residual now; do
    not hack around it later to force a green re-review.
-4. **Dispatch ONE scoped fix agent**, right-sized (Sonnet by default; escalate
-   the model only if the findings touch a load-bearing/doctrine-class
+4. **Assign ONE scoped fix agent.** Reuse the existing implementation worker
+   when it owns this PR. Send the verified artifact and scoped acceptance criteria
+   directly and observe its acknowledgement per Review Handoff. Only when no
+   suitable worker exists, dispatch one through `dispatch-gate`, right-sized
+   (Sonnet by default; escalate the model only for a load-bearing/doctrine-class
    surface). The fix agent is the **sole finisher** on the branch/worktree for
    this iteration — no parallel fix agents against the same PR, and no
    rescoping or redesign beyond what the triaged fix-now findings require.
@@ -72,21 +82,25 @@ it is per-host and not readable across operators.
    its scoped fix; a divergence beyond a mechanical rebase is an escalation
    condition (below), not something to force through.
 5. **Push.** The fix agent pushes its commit(s) to the PR's branch so the PR
-   updates in place. Record the new HEAD SHA via `TaskUpdate`.
+   updates in place. Verify the remote PR head and record that exact SHA via
+   `TaskUpdate`. Monitor the assigned worker through this result; do not ask the
+   operator to carry findings or status between agents.
 6. **Re-run the SAME tier** that failed, against the new HEAD, via a **fresh
    independent agent** — a new context window with no authoring trace of the
    fix, per the doctrine's reviewer-independence rule in `checklist.md`
    ("Reviewer independence"). This skill dispatches that agent; it does not
    run `/review`/`/l1-review`/`/l2-review` itself. The re-review posts its
    marker per the doctrine's find-or-update-by-marker protocol (update the
-   existing comment for that marker type in place); a pre-fix review verdict
-   never counts toward the new HEAD.
+   existing comment for that marker type in place). Read back the marker and
+   verify its SHA against the remote head; a pre-fix review verdict never counts
+   toward the new HEAD. If the head moved again, re-review before claiming CLEAN.
 7. **Loop or exit:**
    - New verdict `CLEAN` -> stop looping; hand off to `operator-review`
      (its Prerequisite is all tier-warranted markers posted; this loop's
      exit condition is what makes them CLEAN by the time of handoff).
-   - New verdict `NEEDS-WORK`/`BLOCKING` with new or narrowed findings ->
-     back to step 2, triage the new marker.
+   - New verdict `NEEDS-WORK`/`BLOCKING` while below the escalation limits ->
+     back to step 2, triage the new marker. This includes the first unchanged
+     re-review; a second consecutive no-progress attempt escalates as below.
    - An escalation condition below is met -> **stop**, do not loop further;
      surface to the operator.
 
@@ -95,7 +109,9 @@ it is per-host and not readable across operators.
 Escalate instead of dispatching another fix agent when any of:
 
 - **No forward progress**: two consecutive re-reviews (each after its own fix
-  attempt) report the same or overlapping findings.
+  attempt) show no resolved findings and no materially narrowed failure
+  conditions. Overlap alone is not a stall; narrowed findings continue within
+  the iteration budget.
 - **Iteration budget exhausted**: 3 fix -> re-review iterations complete
   against this PR without reaching `CLEAN`. Default; an overridable parameter
   recorded here, not hardcoded doctrine — retune via a follow-up PR if it
