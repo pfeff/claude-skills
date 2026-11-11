@@ -27,7 +27,9 @@ identical to the in-repo form.
   it), so the issue comment is the sole marker-bearing surface in that case.
 - **The formal review event is best-effort.** GitHub rejects `REQUEST_CHANGES` and
   `APPROVE` on your own PR (422). When the reviewer is the PR author, skip the event
-  silently — the sticky comment stands on its own.
+  silently — the sticky comment stands on its own. For a non-self PR, a failed
+  formal event leaves canonical tier publication incomplete even when the
+  sticky comment has been delivered; report that distinction explicitly.
 - **No inline line comments.** Findings live in the one readable comment, not
   scattered across the diff.
 
@@ -45,6 +47,9 @@ Extract from the YAML frontmatter:
 - `sha`: the full 40-char commit SHA reviewed — carried into the trailing
   marker unchanged (Step 5, item 7)
 - `target`, `agents`, `degraded`: for the comment header
+
+Set `$REVIEW_SHA` to the parsed `sha`; use it to bind the formal event to the
+reviewed commit rather than whatever HEAD happens to be when posting.
 
 Unlike the old behavior, **do not skip** when `blocking + advisory == 0`. A clean
 result still updates the sticky comment (so a previously-blocking comment flips to
@@ -178,7 +183,8 @@ nor an `APPROVE` event may accumulate across re-runs.
 
 1. **Read the reviewer's current review state.** Fetch the most-recent review this
    reviewer has left on the PR (used both to clear stale blocks and to suppress a
-   redundant `APPROVE`):
+   redundant `APPROVE`). Also parse `LAST_SHA` from that review's metadata marker;
+   an absent marker is not a match to the current reviewed SHA:
    ```bash
    LAST_STATE=$(gh api "/repos/$owner/$repo/pulls/$PR_NUMBER/reviews" --paginate \
      --jq "map(select(.user.login == \"$reviewer\")) | sort_by(.submitted_at) | last | .state // empty")
@@ -201,19 +207,37 @@ nor an `APPROVE` event may accumulate across re-runs.
    the one-liner alone here would leave the canonical surface marker-free even though
    the issue-comment mirror has it, which is the defect this step closes:
    - `BLOCKING` → submit `event: REQUEST_CHANGES`, one-liner `Changes requested — see the review summary comment.` (the prior block was just dismissed, so exactly one active `CHANGES_REQUESTED` remains).
-   - `CLEAN` → **skip entirely if `LAST_STATE == "APPROVED"`** (an approval is already standing; re-posting would stack a second "Approved" event). Otherwise submit `event: APPROVE`, one-liner `No blocking issues — see the review summary comment.`
+   - `CLEAN` → **skip only if `LAST_STATE == "APPROVED"` and `LAST_SHA` equals the reviewed `sha`**. An approval of an older revision does not carry a current marker; otherwise submit `event: APPROVE`, one-liner `No blocking issues — see the review summary comment.`
    ```bash
    EVENTBODYFILE=$(mktemp /tmp/review-event-body.XXXXXX.md)
    chmod 600 "$EVENTBODYFILE"
    { printf '%s\n\n' "$EVENT_BODY"; cat "$MARKERFILE"; } > "$EVENTBODYFILE"
    gh api -X POST "/repos/$owner/$repo/pulls/$PR_NUMBER/reviews" \
-     -f event="$EVENT" -F body=@"$EVENTBODYFILE"
+     -f event="$EVENT" -f commit_id="$REVIEW_SHA" -F body=@"$EVENTBODYFILE"
    ```
 
-## Step 8: Report
+## Step 8: Verify Publication and Report
+
+Retain the returned sticky-comment ID/URL and fetch it again. Verify the target
+PR, marker SHA, verdict, and finding content against the prepared review. If a
+formal event was submitted or an existing same-SHA approval was retained, fetch
+that event from the reviews API and verify its marker, verdict, and commit match
+the reviewed SHA. On a self-PR, verify the sticky-comment fallback instead.
+For a non-self PR with no verified canonical event, report comment delivery and
+canonical tier publication separately; the latter is incomplete, not CLEAN. A failed read-back means delivery
+is unverified, even if the write returned success. Check the live PR head again;
+a moved head does not invalidate historical findings but requires a fresh review
+before a current CLEAN claim.
+
+Run shell-based external verification under the bounded-check helper described
+in [Review Handoff](handoff-review.md#bounded-external-checks). Use bounded native
+connector calls when available.
 
 Tell the user: whether the sticky comment was created or updated, the verdict, and
 whether a formal `REQUEST_CHANGES`/`APPROVE` event was submitted or skipped (self-PR).
+Include the verified artifact link and reviewed SHA, or the specific delivery
+failure. If a worker handoff/fix loop is authorized, continue with
+[Review Handoff](handoff-review.md); do not end at publication.
 
 ## Error Handling
 
@@ -223,5 +247,5 @@ whether a formal `REQUEST_CHANGES`/`APPROVE` event was submitted or skipped (sel
 | `$PR_NUMBER` not a positive integer | Report error, stop |
 | `gh repo view` / `gh api user` / `gh pr view` fails | Report error, stop |
 | Comment lookup or upsert (Step 6) fails | Report the error and stop — never fall through to create on a failed lookup, or a transient error duplicates the comment. This is the authoritative artifact. |
-| Formal review event (Step 7) returns 422 | The reviewer is likely the PR author despite the check, or the PR state disallows it. Log it, skip the event, keep the sticky comment. Do not retry. |
+| Formal review event (Step 7) returns 422 | Recheck identity/PR state once without retrying the write. Only a confirmed self-PR uses the sticky-comment fallback. Otherwise keep any verified comment delivery but report canonical tier publication incomplete; do not claim a current canonical verdict. |
 | Dismissal (Step 7.2) fails | Log and continue to the submit step — a lingering stale review is cosmetic, not blocking |
